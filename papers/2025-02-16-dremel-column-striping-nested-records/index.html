@@ -96,8 +96,76 @@ any further restructuring of the data.</li>
 </ul>
 </li>
 </ul>
+<h2 id="nested-columnar-storage" tabindex="-1">Nested Columnar Storage <a class="direct-link" href="#nested-columnar-storage" aria-hidden="true">#</a></h2>
+<p>Challenges:</p>
+<ol>
+<li>Lossless representation of record structure in columnar format</li>
+<li>fast encoding</li>
+<li>efficient reassembly</li>
+</ol>
+<blockquote>
+<p>Values alone do not convey the structure of a record. Given two values of a<br>
+repeated field, we do not know at what ‘level’ the value repeated (e.g.,<br>
+whether<br>
+these values are from two different records, or two repeated values in the<br>
+same<br>
+record). Likewise, given a missing optional field, we do not know which<br>
+enclosing records were defined explicitly. (p. 3)</p>
+</blockquote>
 <h2 id="repetition-levels" tabindex="-1">Repetition Levels <a class="direct-link" href="#repetition-levels" aria-hidden="true">#</a></h2>
+<ul>
+<li>Repeated fields are represented as a list of items</li>
+</ul>
+<blockquote>
+<p>It tells us at what repeated field in the field’s path the value has<br>
+repeated. (p. 3)</p>
+</blockquote>
+<ul>
+<li>The simplest case is,
+<ul>
+<li>there are no nested repeated fields</li>
+<li>list items are scalar values</li>
+</ul>
+</li>
+<li>The repetition level then tells us,
+<ul>
+<li>the order of values in a list</li>
+<li>it also encodes record boundaries so we know which record a list item<br>
+belongs to</li>
+</ul>
+</li>
+<li>In the nested repeated case a path may contain multiple repeated fields</li>
+<li>A path can terminate early if the list is empty, but this is not encoded<br>
+by repetition levels</li>
+<li>How does that all look? (a concrete example for illustration)</li>
+<li>And repetition levels then tell us,
+<ul>
+<li>all the same as in the case of no nesting of repeated fields</li>
+<li>and also which paths in the tree a list item belongs to</li>
+</ul>
+</li>
+</ul>
+<blockquote>
+<p>In general though, determining the level up to which nested records exist<br>
+requires extra information.</p>
+</blockquote>
+<ul>
+<li>Is that a forward reference to definition levels?</li>
+</ul>
 <h2 id="definition-levels" tabindex="-1">Definition Levels <a class="direct-link" href="#definition-levels" aria-hidden="true">#</a></h2>
+<blockquote>
+<p>Each value of a field with path p, esp. every NULL, has a definition level<br>
+specifying how many fields in p that could be undefined (because they are<br>
+optional or repeated) are actually present in the record.</p>
+</blockquote>
+<blockquote>
+<p>We use integer definition levels as opposed to is-null bits so that the data<br>
+for a leaf field (e.g., Name.Language.Country) contains the information about<br>
+the occurrences of its parent fields; (p. 3)</p>
+</blockquote>
+<ul>
+<li>A concrete example for illustration</li>
+</ul>
 <h2 id="encoding" tabindex="-1">Encoding <a class="direct-link" href="#encoding" aria-hidden="true">#</a></h2>
 <h2 id="splitting-records-into-columns" tabindex="-1">Splitting Records into Columns <a class="direct-link" href="#splitting-records-into-columns" aria-hidden="true">#</a></h2>
 <h2 id="record-assembly" tabindex="-1">Record Assembly <a class="direct-link" href="#record-assembly" aria-hidden="true">#</a></h2>
