@@ -5,12 +5,207 @@
 	
 	<link href="https://jacobsherin.com/feed/feed.xml" rel="self"/>
 	<link href="https://jacobsherin.com/"/>
-	<updated>2018-09-30T00:00:00Z</updated>
+	<updated>2025-04-04T00:00:00Z</updated>
 	<id>https://example.com/</id>
 	<author>
 		<name>Your Name Here</name>
 		<email>youremailaddress@example.com</email>
 	</author>
+	
+	<entry>
+		<title>Flattening nested records into columns</title>
+		<link href="https://jacobsherin.com/posts/dremel-column-striping/"/>
+		<updated>2025-04-04T00:00:00Z</updated>
+		<id>https://jacobsherin.com/posts/dremel-column-striping/</id>
+		<content type="html">&lt;p&gt;The representation of relational data in columnar format is intuitive. Each&lt;br /&gt;
+column value is stored contiguously. To reassemble a record all you need is&lt;br /&gt;
+the index of the value in a column.&lt;/p&gt;
+&lt;p&gt;This is a logical representation of columnar storage for a relation with&lt;br /&gt;
+four columns - BookID, Title, Author &amp;amp; Year.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;BookIDs:    [101, 102, 103, 104]
+Titles:     [&amp;quot;Deep Work&amp;quot;, &amp;quot;Designing Data-Intensive Applications&amp;quot;, &amp;quot;The Soul of A New Machine&amp;quot;, &amp;quot;Hackers &amp;amp; Painters&amp;quot;]
+Authors:    [&amp;quot;Cal Newport&amp;quot;, &amp;quot;Martin Kleppmann&amp;quot;, &amp;quot;Tracy Kidder&amp;quot;, &amp;quot;Paul Graham&amp;quot;]
+Years:      [2016, 2017, 1981, 2004]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;To reassemble the third record, the column values at index 2 are retrieved:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;BookIDs[2]  = 103
+Titles[2]   = &amp;quot;The Soul of A New Machine&amp;quot;
+Authors[2]  = &amp;quot;Tracy Kidder&amp;quot;
+Years[2]    = 1981
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;A nested value is a tree structure with values found at the leaf node. The&lt;br /&gt;
+column name is the path from root to leaf node. There are as many columns as&lt;br /&gt;
+unique paths in the tree. Let us look at a sample nested value:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;DocId: 10
+Links
+  Forward: 20
+  Forward: 40
+  Forward: 60
+Name
+  Language
+    Code: &#39;en-us&#39;
+    Country: &#39;us&#39;
+  Language
+    Code: &#39;en&#39;
+  Url: &#39;http://A&#39;
+Name
+  Url: &#39;http://B&#39;
+Name
+  Language
+    Code: &#39;en-gb&#39;
+    Country: &#39;gb&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This value has the following unique columns:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;DocId&lt;/li&gt;
+&lt;li&gt;Links.Forward&lt;/li&gt;
+&lt;li&gt;Name.Language.Code&lt;/li&gt;
+&lt;li&gt;Name.Language.Country&lt;/li&gt;
+&lt;li&gt;Name.Url&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;After extracting the values from the leaf nodes it can be represented in a&lt;br /&gt;
+columnar format like the relational data:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;DocId:                [10]
+Links.Forward:        [20, 40, 60]
+Name.Language.Code:   [&#39;en-us&#39;, &#39;en&#39;, &#39;en-gb&#39;]
+Name.Language.Country:[&#39;us&#39;, &#39;gb&#39;]
+Name.Url:             [&#39;http://A&#39;, &#39;http://B&#39;]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;There are obvious problems with this column-striped representation of the&lt;br /&gt;
+nested value when we try to do it the same way as relational data. We have&lt;br /&gt;
+lost all structural information about the original nested value. So unlike&lt;br /&gt;
+relational data it is not possible to use an index to reassemble a record.&lt;/p&gt;
+&lt;p&gt;So how are nested values represented in columnar storage?&lt;/p&gt;
+&lt;p&gt;This is one of the novel contributions from&lt;br /&gt;
+the &lt;a href=&quot;https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf&quot;&gt;VLDB 2010 paper - Dremel: Interactive Analysis of&lt;br /&gt;
+Web-Scale Datasets&lt;/a&gt;.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;We describe a novel columnar storage format for nested&lt;br /&gt;
+data. We present algorithms for dissecting nested records&lt;br /&gt;
+into columns and reassembling them.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;hr /&gt;
+&lt;h2 id=&quot;scratch&quot; tabindex=&quot;-1&quot;&gt;Scratch &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#scratch&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;Name
+ Language
+  Code: &#39;en-us&#39;
+  Country: &#39;us&#39;
+ Language
+  Code: &#39;en&#39;
+Name
+Name
+ Language
+  Code: &#39;en-gb&#39;
+  Country: &#39;gb&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;See both above and below are the same thing&lt;/li&gt;
+&lt;li&gt;The bottom encoding looks weird because of the extra columns with some&lt;br /&gt;
+numbers. We&#39;ll soon get to how it is computed.&lt;/li&gt;
+&lt;li&gt;Those numbers make it possible for us to reassemble the original nested&lt;br /&gt;
+record shown above given the table below. It&#39;s neat!&lt;/li&gt;
+&lt;li&gt;NULL is used to signal the absence of a value in the nested record.&lt;/li&gt;
+&lt;li&gt;But why do we need this?&lt;/li&gt;
+&lt;li&gt;Interactive ad-hoc querying using a database engine built for the purpose of&lt;br /&gt;
+analytics like ClickHouse, DuckDB etc. Not PostgreSQL or MySQL.&lt;/li&gt;
+&lt;li&gt;Analytics queries are primarily aggregations. If you only need to find all&lt;br /&gt;
+the distinct Name.Language.Country you only need to read the Name.Language.&lt;br /&gt;
+Country column. Projections are efficient because you don&#39;t have to read&lt;br /&gt;
+the entire nested value just to get a single column.&lt;/li&gt;
+&lt;li&gt;Adopted by Parquet/Arrow though the encoding differs slightly, the&lt;br /&gt;
+principles remain the same. The principle is preserving the structure of&lt;br /&gt;
+the nested record&lt;/li&gt;
+&lt;/ul&gt;
+&lt;div style=&quot;display: flex; gap: 16px;&quot;&gt;
+&lt;div&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;Name.Language.Country&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;value&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;r&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;d&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;en-us&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;en&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;NULL&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;en-gb&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;NULL&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;div&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th&gt;&lt;strong&gt;Name.Language.Code&lt;/strong&gt;&lt;/th&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;th&gt;&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td&gt;&lt;strong&gt;value&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;r&lt;/strong&gt;&lt;/td&gt;
+&lt;td&gt;&lt;strong&gt;d&lt;/strong&gt;&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;us&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;3&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;NULL&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;td&gt;2&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;NULL&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;gb&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;td&gt;3&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td&gt;NULL&lt;/td&gt;
+&lt;td&gt;0&lt;/td&gt;
+&lt;td&gt;1&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;/div&gt;
+&lt;/div&gt;
+</content>
+	</entry>
 	
 	<entry>
 		<title>This is my fourth post.</title>

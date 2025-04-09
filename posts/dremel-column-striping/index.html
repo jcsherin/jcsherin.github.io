@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flattening nested records into columns</title>
+    <meta name="description" content="Dremel encoding of nested records into columnar values">
+    <meta name="generator" content="Eleventy v1.0.1">
+
+    <link rel="stylesheet" href="/css/index.css">
+    <link rel="stylesheet" href="/css/prism-base16-monokai.dark.css">
+    <link rel="stylesheet" href="/css/prism-diff.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="jcsherin">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="jcsherin">
+  </head>
+  <body>
+    <header>
+      <h1 class="home"><a href="/">jcsherin</a></h1>
+      <ul class="nav">
+        <li class="nav-item"><a href="/">Home</a></li>
+        <li class="nav-item"><a href="/posts/">Archive</a></li>
+        <li class="nav-item"><a href="/about/">About Me</a></li>
+      </ul>
+    </header>
+
+    <main class="tmpl-post">
+      <h1>Flattening nested records into columns</h1>
+
+<time datetime="2025-04-04">04 Apr 2025</time><a href="/tags/dremel/" class="post-tag">dremel</a><a href="/tags/column-striping/" class="post-tag">column striping</a>
+
+<p>The representation of relational data in columnar format is intuitive. Each<br>
+column value is stored contiguously. To reassemble a record all you need is<br>
+the index of the value in a column.</p>
+<p>This is a logical representation of columnar storage for a relation with<br>
+four columns - BookID, Title, Author &amp; Year.</p>
+<pre><code>BookIDs:    [101, 102, 103, 104]
+Titles:     [&quot;Deep Work&quot;, &quot;Designing Data-Intensive Applications&quot;, &quot;The Soul of A New Machine&quot;, &quot;Hackers &amp; Painters&quot;]
+Authors:    [&quot;Cal Newport&quot;, &quot;Martin Kleppmann&quot;, &quot;Tracy Kidder&quot;, &quot;Paul Graham&quot;]
+Years:      [2016, 2017, 1981, 2004]
+</code></pre>
+<p>To reassemble the third record, the column values at index 2 are retrieved:</p>
+<pre><code>BookIDs[2]  = 103
+Titles[2]   = &quot;The Soul of A New Machine&quot;
+Authors[2]  = &quot;Tracy Kidder&quot;
+Years[2]    = 1981
+</code></pre>
+<p>A nested value is a tree structure with values found at the leaf node. The<br>
+column name is the path from root to leaf node. There are as many columns as<br>
+unique paths in the tree. Let us look at a sample nested value:</p>
+<pre><code>DocId: 10
+Links
+  Forward: 20
+  Forward: 40
+  Forward: 60
+Name
+  Language
+    Code: 'en-us'
+    Country: 'us'
+  Language
+    Code: 'en'
+  Url: 'http://A'
+Name
+  Url: 'http://B'
+Name
+  Language
+    Code: 'en-gb'
+    Country: 'gb'
+</code></pre>
+<p>This value has the following unique columns:</p>
+<ol>
+<li>DocId</li>
+<li>Links.Forward</li>
+<li>Name.Language.Code</li>
+<li>Name.Language.Country</li>
+<li>Name.Url</li>
+</ol>
+<p>After extracting the values from the leaf nodes it can be represented in a<br>
+columnar format like the relational data:</p>
+<pre><code>DocId:                [10]
+Links.Forward:        [20, 40, 60]
+Name.Language.Code:   ['en-us', 'en', 'en-gb']
+Name.Language.Country:['us', 'gb']
+Name.Url:             ['http://A', 'http://B']
+</code></pre>
+<p>There are obvious problems with this column-striped representation of the<br>
+nested value when we try to do it the same way as relational data. We have<br>
+lost all structural information about the original nested value. So unlike<br>
+relational data it is not possible to use an index to reassemble a record.</p>
+<p>So how are nested values represented in columnar storage?</p>
+<p>This is one of the novel contributions from<br>
+the <a href="https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf">VLDB 2010 paper - Dremel: Interactive Analysis of<br>
+Web-Scale Datasets</a>.</p>
+<blockquote>
+<p>We describe a novel columnar storage format for nested<br>
+data. We present algorithms for dissecting nested records<br>
+into columns and reassembling them.</p>
+</blockquote>
+<hr>
+<h2 id="scratch" tabindex="-1">Scratch <a class="direct-link" href="#scratch" aria-hidden="true">#</a></h2>
+<pre><code>Name
+ Language
+  Code: 'en-us'
+  Country: 'us'
+ Language
+  Code: 'en'
+Name
+Name
+ Language
+  Code: 'en-gb'
+  Country: 'gb'
+</code></pre>
+<ul>
+<li>See both above and below are the same thing</li>
+<li>The bottom encoding looks weird because of the extra columns with some<br>
+numbers. We'll soon get to how it is computed.</li>
+<li>Those numbers make it possible for us to reassemble the original nested<br>
+record shown above given the table below. It's neat!</li>
+<li>NULL is used to signal the absence of a value in the nested record.</li>
+<li>But why do we need this?</li>
+<li>Interactive ad-hoc querying using a database engine built for the purpose of<br>
+analytics like ClickHouse, DuckDB etc. Not PostgreSQL or MySQL.</li>
+<li>Analytics queries are primarily aggregations. If you only need to find all<br>
+the distinct Name.Language.Country you only need to read the Name.Language.<br>
+Country column. Projections are efficient because you don't have to read<br>
+the entire nested value just to get a single column.</li>
+<li>Adopted by Parquet/Arrow though the encoding differs slightly, the<br>
+principles remain the same. The principle is preserving the structure of<br>
+the nested record</li>
+</ul>
+<div style="display: flex; gap: 16px;">
+<div>
+<table>
+<thead>
+<tr>
+<th><strong>Name.Language.Country</strong></th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>value</strong></td>
+<td><strong>r</strong></td>
+<td><strong>d</strong></td>
+</tr>
+<tr>
+<td>en-us</td>
+<td>0</td>
+<td>2</td>
+</tr>
+<tr>
+<td>en</td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>en-gb</td>
+<td>1</td>
+<td>2</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>0</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div>
+<table>
+<thead>
+<tr>
+<th><strong>Name.Language.Code</strong></th>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>value</strong></td>
+<td><strong>r</strong></td>
+<td><strong>d</strong></td>
+</tr>
+<tr>
+<td>us</td>
+<td>0</td>
+<td>3</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>2</td>
+<td>2</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>gb</td>
+<td>1</td>
+<td>3</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>0</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<hr>
+<ul><li>Previous: <a href="/posts/fourthpost/">This is my fourth post.</a></li>
+</ul>
+
+    </main>
+
+    <footer></footer>
+
+    <!-- Current page: /posts/dremel-column-striping/ -->
+  </body>
+</html>
