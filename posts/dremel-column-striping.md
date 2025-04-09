@@ -8,55 +8,91 @@ tags:
 layout: layouts/post.njk
 ---
 
-# Column Format
+The representation of relational data in columnar format is intuitive. Each
+column value is stored contiguously. To reassemble a record all you need is
+the index of the value in a column.
 
-| BookID | Title                                 | Author           | Year |
-|--------|---------------------------------------|------------------|------|
-| 101    | Deep Work                             | Cal Newport      | 2016 |
-| 102    | Designing Data-Intensive Applications | Martin Kleppmann | 2017 |
-| 103    | The Soul of A New Machine             | Tracy Kidder     | 1981 |
-| 104    | Hackers & Painters                    | Paul Graham      | 2004 |
-
-This data is stored in a row format in a transactional, database management
-system like PostgreSQL, or MySQL.
-
-A logical view of the row data layout (not how it is physically stored on disk):
+This is a logical representation of columnar storage for a relation with
+four columns - BookID, Title, Author & Year.
 
 ```
-[106, "Deep Work", "Cal Newport", 2016]
-[104, "Designing Data-Intensive Applications", "Martin Kleppmann", 2017]
-[112, "The Soul of A New Machine", "Tracy Kidder", 1981]
-[113, "Hackers & Painters", "Paul Graham", 2004]
-```
-
-In analytical, column-oriented database management system like ClickHouse or
-DuckDB, the data is stored in a columnar format.
-
-A logical view of the column data layout:
-
-```
-BookIDs:    [106, 104, 112, 113]
+BookIDs:    [101, 102, 103, 104]
 Titles:     ["Deep Work", "Designing Data-Intensive Applications", "The Soul of A New Machine", "Hackers & Painters"]
 Authors:    ["Cal Newport", "Martin Kleppmann", "Tracy Kidder", "Paul Graham"]
 Years:      [2016, 2017, 1981, 2004]
 ```
 
-Reassembling a record for the book "Hackers & Painters" is as simple as
-fetching the values at index 3 from all the columns.
+To reassemble the third record, the column values at index 2 are retrieved:
 
 ```
-[113, "Hackers & Painters", "Paul Graham", 2004]
+BookIDs[2]  = 103
+Titles[2]   = "The Soul of A New Machine"
+Authors[2]  = "Tracy Kidder"
+Years[2]    = 1981
 ```
 
-If we are interested in only a subset of the columns: `Titles`, `Years` then
-there is no need to scan the other columns to reassemble the record. This
-reduces the amount of I/O needed for scanning the data and makes query
-processing
-efficient.
+A nested value is a tree structure with values found at the leaf node. The
+column name is the path from root to leaf node. There are as many columns as
+unique paths in the tree. Let us look at a sample nested value:
 
 ```
-["Hackers & Painters", 2004]
+DocId: 10
+Links
+  Forward: 20
+  Forward: 40
+  Forward: 60
+Name
+  Language
+    Code: 'en-us'
+    Country: 'us'
+  Language
+    Code: 'en'
+  Url: 'http://A'
+Name
+  Url: 'http://B'
+Name
+  Language
+    Code: 'en-gb'
+    Country: 'gb'
 ```
+
+This value has the following unique columns:
+
+1. DocId
+2. Links.Forward
+3. Name.Language.Code
+4. Name.Language.Country
+5. Name.Url
+
+After extracting the values from the leaf nodes it can be represented in a
+columnar format like the relational data:
+
+```
+DocId:                [10]
+Links.Forward:        [20, 40, 60]
+Name.Language.Code:   ['en-us', 'en', 'en-gb']
+Name.Language.Country:['us', 'gb']
+Name.Url:             ['http://A', 'http://B']
+```
+
+There are obvious problems with this column-striped representation of the
+nested value when we try to do it the same way as relational data. We have
+lost all structural information about the original nested value. So unlike
+relational data it is not possible to use an index to reassemble a record.
+
+So how are nested values represented in columnar storage?
+
+This is one of the novel contributions from
+the [VLDB 2010 paper - Dremel: Interactive Analysis of
+Web-Scale Datasets](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf).
+
+> We describe a novel columnar storage format for nested
+> data. We present algorithms for dissecting nested records
+> into columns and reassembling them.
+
+---
+
+## Scratch
 
 ```
 Name
