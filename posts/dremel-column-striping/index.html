@@ -82,10 +82,21 @@ Name.Language.Code:   ['en-us', 'en', 'en-gb']
 Name.Language.Country:['us', 'gb']
 Name.Url:             ['http://A', 'http://B']
 </code></pre>
-<p>There are obvious problems with this column-striped representation of the<br>
-nested value when we try to do it the same way as relational data. We have<br>
-lost all structural information about the original nested value. So unlike<br>
-relational data it is not possible to use an index to reassemble a record.</p>
+<p>In the above representation the structural information is lost. It is<br>
+impossible to reassemble the nested value from the columns values like this:</p>
+<pre><code>Name[0].Language[0].Code[0] = 'en-us'
+Name[0].Language[1].Code[0] = 'en'
+Name[2].Language[0].Code[0] = 'en-gb'
+</code></pre>
+<p>Between 'en' and 'en-gb' the path Name[1] terminates early. This<br>
+representation contains only values which are present in the value. It does<br>
+not capture values which are missing because the path terminated early.</p>
+<p>TODO:</p>
+<p>-[ ] Data Model<br>
+-[ ] Missing Values<br>
+-[ ] Definition Levels<br>
+-[ ] Repetition Levels</p>
+<hr>
 <p>So how are nested values represented in columnar storage?</p>
 <p>This is one of the novel contributions from<br>
 the <a href="https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf">VLDB 2010 paper - Dremel: Interactive Analysis of<br>

@@ -71,10 +71,21 @@ Name.Language.Code:   [&#39;en-us&#39;, &#39;en&#39;, &#39;en-gb&#39;]
 Name.Language.Country:[&#39;us&#39;, &#39;gb&#39;]
 Name.Url:             [&#39;http://A&#39;, &#39;http://B&#39;]
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;There are obvious problems with this column-striped representation of the&lt;br /&gt;
-nested value when we try to do it the same way as relational data. We have&lt;br /&gt;
-lost all structural information about the original nested value. So unlike&lt;br /&gt;
-relational data it is not possible to use an index to reassemble a record.&lt;/p&gt;
+&lt;p&gt;In the above representation the structural information is lost. It is&lt;br /&gt;
+impossible to reassemble the nested value from the columns values like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;Name[0].Language[0].Code[0] = &#39;en-us&#39;
+Name[0].Language[1].Code[0] = &#39;en&#39;
+Name[2].Language[0].Code[0] = &#39;en-gb&#39;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Between &#39;en&#39; and &#39;en-gb&#39; the path Name[1] terminates early. This&lt;br /&gt;
+representation contains only values which are present in the value. It does&lt;br /&gt;
+not capture values which are missing because the path terminated early.&lt;/p&gt;
+&lt;p&gt;TODO:&lt;/p&gt;
+&lt;p&gt;-[ ] Data Model&lt;br /&gt;
+-[ ] Missing Values&lt;br /&gt;
+-[ ] Definition Levels&lt;br /&gt;
+-[ ] Repetition Levels&lt;/p&gt;
+&lt;hr /&gt;
 &lt;p&gt;So how are nested values represented in columnar storage?&lt;/p&gt;
 &lt;p&gt;This is one of the novel contributions from&lt;br /&gt;
 the &lt;a href=&quot;https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf&quot;&gt;VLDB 2010 paper - Dremel: Interactive Analysis of&lt;br /&gt;
