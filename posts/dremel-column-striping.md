@@ -75,10 +75,27 @@ Name.Language.Country:['us', 'gb']
 Name.Url:             ['http://A', 'http://B']
 ```
 
-There are obvious problems with this column-striped representation of the
-nested value when we try to do it the same way as relational data. We have
-lost all structural information about the original nested value. So unlike
-relational data it is not possible to use an index to reassemble a record.
+In the above representation the structural information is lost. It is
+impossible to reassemble the nested value from the columns values like this:
+
+```
+Name[0].Language[0].Code[0] = 'en-us'
+Name[0].Language[1].Code[0] = 'en'
+Name[2].Language[0].Code[0] = 'en-gb'
+```
+
+Between 'en' and 'en-gb' the path Name[1] terminates early. This
+representation contains only values which are present in the value. It does
+not capture values which are missing because the path terminated early.
+
+TODO:
+
+-[ ] Data Model
+-[ ] Missing Values
+-[ ] Definition Levels
+-[ ] Repetition Levels
+
+---
 
 So how are nested values represented in columnar storage?
 
