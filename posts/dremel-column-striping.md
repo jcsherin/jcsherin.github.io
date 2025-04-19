@@ -8,6 +8,213 @@ tags:
 layout: layouts/post.njk
 ---
 
+## Schema
+
+### Protobuf v2
+
+```
+message Product {
+  required int64 ProductId;                 // def_level: 0, rep_level: 0
+  
+  group ImageGallery {                      // def_level: 1, rep_level: 0
+    required int64 PrimaryImageId;          // def_level: 2, rep_level: 0
+    repeated int64 AdditionalImageId;       // def_level: 2, rep_level: 1
+  }
+  
+  repeated group AltText {                  // def_level: 1, rep_level: 1
+    repeated group Language {               // def_level: 2, rep_level: 2
+      required string Locale;               // def_level: 3, rep_level: 2
+      optional string Description;          // def_level: 3, rep_level: 2
+      repeated string Keyword;              // def_level: 3, rep_level: 3
+    }
+  }
+}
+```
+
+### Tree Diagram
+
+```
+Product
+│
+├─ ProductId [int64]
+│
+├─ ImageGallery
+│  ├─ PrimaryImageId [int64]
+│  └─ AdditionalImageId [int64]*
+│
+└─ AltText*
+   └─ Language*
+      ├─ Locale [string]
+      ├─ Description [string]?
+      └─ Keyword [string]*
+
+* = repeated
+? = optional
+```
+
+### R1
+
+```
+ProductId: 12345
+ImageGallery:
+  PrimaryImageId: 555
+  AdditionalImageId:
+    - 556
+    - 557
+AltText:
+  - Language:
+      - Locale: en-US
+        Description: Athletic running shoes with cushioned soles
+        Keyword:
+          - shoes
+          - running
+          - athletic
+  - Language:
+      - Locale: en-GB
+        Description: Athletic trainers with cushioned soles
+        Keyword:
+          - trainers
+          - running
+          - sport
+      - Locale: fr-FR
+      - Locale: de-DE
+  - Language:
+      - Locale: en-IN
+        Description: Sports running shoes with extra comfort
+        Keyword:
+          - shoes
+          - running
+          - sports
+          - comfort
+```
+
+### R2
+
+```
+ProductId: 67890
+ImageGallery:
+  PrimaryImageId: 987
+  AdditionalImageId:
+    - 988
+```
+
+---
+
+Parquet implements repetition/definition levels for nested data. But
+primarily it is used for storing and querying relational data. So if I write
+nested data into a Parquet file, does querying it from DuckDB, Apache
+DataFusion be similar to how querying works for relational data? In Dremel
+the query language is modified to run SQL queries on nested data which is
+column-striped and return results as nested data with a schema. This has
+better developer experience, but I suspect may not be supported in either
+DuckDB, DataFusion out of the box. In the case of DataFusion will I be able
+to extend the SQL to support querying and returning nested records instead
+of table values?
+
+---
+
+# Introduction
+
+__Nested Data__
+
+```
+DocId: 10
+Links
+  Forward: 20
+  Forward: 40
+  Forward: 60
+Name
+  Language
+    Code: 'en-us'
+    Country: 'us'
+  Language
+    Code: 'en'
+  Url: 'http://A'
+Name
+  Url: 'http://B'
+Name
+  Language
+    Code: 'en-gb'
+    Country: 'gb'
+```
+
+It is possible to directly represent nested data in columnar storage without
+applying any normalization (conversion of nested data structure into a
+relational form).
+
+A column begins at the root and ends at the leaf node. The concrete column
+value exists at the leaf node. If the path terminates early, or if it is
+missing then a NULL value is used to indicate the absence of a value for
+that column.
+
+In columnar st
+
+__Schema__
+
+```yaml
+Document:
+  DocId: int64  # required
+  Links?: # optional
+    Backward*: int64[]
+    Forward*: int64[]
+  Name*: # repeated
+    Language*:
+      Code: string  # required
+      Country?: string
+    Url?: string
+```
+
+```
+message Document {
+   required int64 DocId;
+   
+   optional group Links {
+      repeated int64 Backward;
+      repeated int64 Forward; 
+   }
+   
+   repeated group Name {
+      repeated group Language {
+        required string Code;
+        optional string Country; 
+      }
+      optional string Url; 
+   }
+} 
+```
+
+A column is composed of fields from the root to the leaf as per schema
+definition. The concrete value exists at the leaf of a path.
+
+__Nested Data As Columns__
+
+```
+DocId                 : [10]
+Links.Backward        : [NULL]
+Links.Forward         : [20, 40, 60]
+Name.Language.Code    : ['en-us', 'en', NULL, 'en-gb']
+Name.Language.Country : ['us', NULL, NULL, 'gb']
+Name.Url              : ['http://A', 'http://B', NULL]
+```
+
+This is a columnar representation of nested data without first normalizing
+it into a relational form.
+
+The concrete values exist at the leaf of the nested data. A path of fields
+from root to leaf maps to a column. This schema maps to the following
+columns:
+
+1. DocId
+2. Links.Backward
+3. Links.Forward
+4. Name.Language.Code
+5. Name.Language.Country
+6. Name.Url
+
+The schema contains
+
+---
+
 The representation of relational data in columnar format is intuitive. Each
 column value is stored contiguously. To reassemble a record all you need is
 the index of the value in a column.
