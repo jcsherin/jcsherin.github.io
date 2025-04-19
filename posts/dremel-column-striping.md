@@ -8,6 +8,69 @@ tags:
 layout: layouts/post.njk
 ---
 
+The Dremel(Google BigQuery) VLDB 2010 paper introduced the technique for
+__record shredding__ or __column striping__ of complex nested data structures
+into a columnar storage format. And a few years later the Parquet columnar
+file format was created with ground up support for nested data adopting the
+ideas described in the Dremel paper.
+
+The challenges involved in flattening a nested data structure into a
+columnar storage format are:
+
+- Preserving the structural hierarchy of the data,
+- Identifying where a record begins and ends in the column.
+
+Only if the structure is preserved can the process of shredding be reversed
+and the original nested value be reassembled back from columnar storage.
+This is made possible by deriving two integer values and stored together
+with each shredded column value:
+
+1. Definition Level
+2. Repetition Level
+
+This is remarkable because without any extra steps, the nested data can be
+queried using modern vectorized query execution engines using the same SQL
+or dataframe interface available for relational data. This includes increased
+I/O efficiency by reading only those columns which are projected in the query.
+
+The trade-off is the extra space to store the derived definition levels and
+repetition levels for every value. But in practice efficient encoding
+techniques and light-weight compression schemes are applied to reduce the
+storage requirements.
+
+## Data Model
+
+what is required, optional, repeated. what is structure. how is that related
+to definition level? what is the intuition for repetition levels? how do
+they interact together? maybe simple concrete examples will help. but why
+are leading with the data model here before talking about either the
+definition and repetition levels.
+
+```
+ProductImages
+│
+├─ ProductId [int64]
+│
+├─ ImageGallery
+│  ├─ PrimaryImageId [int64]
+│  └─ AdditionalImageId [int64]*
+│
+└─ AltText*
+   └─ Language*
+      ├─ Locale [string]
+      ├─ Description [string]?
+      └─ Keyword [string]*
+
+* = repeated
+? = optional
+```
+
+Fig. schema for product images and available translations of descriptive text
+
+The column `AltText.Language.Description`
+
+## Repetition Level
+
 ## Schema
 
 ### Protobuf v2
@@ -110,6 +173,26 @@ better developer experience, but I suspect may not be supported in either
 DuckDB, DataFusion out of the box. In the case of DataFusion will I be able
 to extend the SQL to support querying and returning nested records instead
 of table values?
+
+Cross Join vs Lateral Join for nested data
+
+```sql
+SELECT ProductId,
+       ARRAY_AGG(l.Locale) AS missing_description_locales
+FROM Product
+         CROSS JOIN UNNEST(AltText) AS a
+         CROSS JOIN UNNEST(a.Language) AS l
+WHERE l.Description IS NULL
+GROUP BY ProductId
+ORDER BY ProductId
+
+SELECT ProductId,
+       ARRAY_AGG(l.Locale) AS missing_description_locales
+FROM Product,
+     LATERAL (SELECT * FROM UNNEST(AltText)) AS a,
+     LATERAL (SELECT * FROM UNNEST(a.Language) AS l WHERE l.Description IS NULL)
+GROUP BY ProductId
+```
 
 ---
 
