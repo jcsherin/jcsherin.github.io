@@ -195,8 +195,8 @@ ProductImages                     # Document Name
 ├─ ImageGallery                   
 │  ├─ PrimaryImageId [int64]      
 │  └─ AdditionalImageId [int64]*  # repeated
-└─ AltText?                       # repeated
-   └─ Language?                   # repeated
+└─ AltText
+   └─ Language*                   # repeated
       ├─ Locale [string]          
       ├─ Description [string]?    # optional
       └─ Keyword [string]*        # repeated
@@ -248,8 +248,111 @@ because they have a repetition level of 1.
 In this example we were able to identify that the repeated values belonged
 to two separate nested values using the repetition levels.
 
-- Example for null values (definition levels)
-- Example for nested repetition levels
+Next let us look at a example which contains null values.
+
+```
+ProductId: 123
+ImageGallery:
+  PrimaryImageId: 555
+  AdditionalImageId:
+    - 556
+    - 557
+AltText:
+  - Language:
+      - Locale: en-US
+        Description: Athletic running shoes
+        Keyword:
+          - shoes
+          - athletic
+  - Language:
+      - Locale: en-GB
+        Description: Athletic trainers
+        Keyword:
+          - trainers
+          - sport
+  - Language:
+      - Locale: fr-FR
+  - Language:
+      - Locale: de-DE
+```
+
+The column `AltText.Language.Description` contains a repeated field and
+exactly two optional fields. The definition level therefore can be between 0
+and 3.
+
+- AltText: optional
+- Language: repeated
+- Description: optional
+
+After compiling the column values, there are two NULL values. This
+represents the missing `Description` in the 2nd and 3rd `Language`
+repetition which corresponds to the `Locale`: `fr-FR` and `de-DE`.
+
+```
+# AltText.Language.Description Column
+
+values: ["Athletic running shoes", "Athletic trainers", NULL, NULL] 
+```
+
+Next let us compute the definition levels. The definition level for both the
+NULL values is two because the path terminates at `AltText.Language` as the
+`Description` field is missing in both cases.
+
+```
+# AltText.Language.Description Column
+
+definition_levels : [3, 3, 2, 2]
+values            : ["Athletic running shoes", "Athletic trainers", NULL, NULL] 
+```
+
+Next let us compute the repetition levels. This column has a single repeated
+field which is `Language`. So repetition levels will be between 0 and 1 for
+all values.
+
+Here the repetition level of zero clearly identifies the first element in
+the repeated field `Language`, from the rest.
+
+```
+# AltText.Language.Description Column
+
+repetition_levels : [0, 1, 1, 1]
+definition_levels : [3, 3, 2, 2]
+values            : ["Athletic running shoes", "Athletic trainers", NULL, NULL] 
+```
+
+Next let us look at an example where there is more than one repeated field
+in a column. The `AltText.Language.Keyword` column has two repeated fields
+and a single optional field.
+
+Let us compile the values first. The final two NULL values represent the
+missing `Keyword` in the second and third repetition of `Language`.
+
+```
+# AltText.Language.Keywords
+
+values: ["shoes", "athletic", "trainers", "sport", NULL, NULL]
+```
+
+Next let us compute the definition levels. The NULL values have a definition
+level of two because `Keyword` field is missing.
+
+```
+# AltText.Language.Keywords
+
+values: ["shoes", "athletic", "trainers", "sport", NULL, NULL]
+def   : [3, 3, 3, 3, 2, 2] 
+```
+
+Next let us compute the repetition levels. This looks complicated, but you
+will soon see how this exactly reassembles the original nested data structure.
+
+```
+# AltText.Language.Keywords
+
+values: ["shoes", "athletic", "trainers", "sport", NULL, NULL]
+def   : [3, 3, 3, 3, 2, 2] 
+rep   : [0, 2, 1, 2, 1, 1]
+```
 
 ---
 
@@ -302,22 +405,24 @@ are leading with the data model here before talking about either the
 definition and repetition levels.
 
 ```
+
 ProductImages
 │
 ├─ ProductId [int64]
 │
 ├─ ImageGallery
-│  ├─ PrimaryImageId [int64]
-│  └─ AdditionalImageId [int64]*
+│ ├─ PrimaryImageId [int64]
+│ └─ AdditionalImageId [int64]*
 │
 └─ AltText*
-   └─ Language*
-      ├─ Locale [string]
-      ├─ Description [string]?
-      └─ Keyword [string]*
+└─ Language*
+├─ Locale [string]
+├─ Description [string]?
+└─ Keyword [string]*
 
 * = repeated
-? = optional
+  ? = optional
+
 ```
 
 Fig. schema for product images and available translations of descriptive text
@@ -331,91 +436,102 @@ The column `AltText.Language.Description`
 ### Protobuf v2
 
 ```
+
 message Product {
-  required int64 ProductId;                 // def_level: 0, rep_level: 0
-  
-  group ImageGallery {                      // def_level: 1, rep_level: 0
-    required int64 PrimaryImageId;          // def_level: 2, rep_level: 0
-    repeated int64 AdditionalImageId;       // def_level: 2, rep_level: 1
-  }
-  
-  repeated group AltText {                  // def_level: 1, rep_level: 1
-    repeated group Language {               // def_level: 2, rep_level: 2
-      required string Locale;               // def_level: 3, rep_level: 2
-      optional string Description;          // def_level: 3, rep_level: 2
-      repeated string Keyword;              // def_level: 3, rep_level: 3
-    }
-  }
+required int64 ProductId; // def_level: 0, rep_level: 0
+
+group ImageGallery { // def_level: 1, rep_level: 0
+required int64 PrimaryImageId; // def_level: 2, rep_level: 0
+repeated int64 AdditionalImageId; // def_level: 2, rep_level: 1
 }
+
+repeated group AltText { // def_level: 1, rep_level: 1
+repeated group Language { // def_level: 2, rep_level: 2
+required string Locale; // def_level: 3, rep_level: 2
+optional string Description; // def_level: 3, rep_level: 2
+repeated string Keyword; // def_level: 3, rep_level: 3
+}
+}
+}
+
 ```
 
 ### Tree Diagram
 
 ```
+
 Product
 │
 ├─ ProductId [int64]
 │
 ├─ ImageGallery?
-│  ├─ PrimaryImageId [int64]
-│  └─ AdditionalImageId [int64]*
+│ ├─ PrimaryImageId [int64]
+│ └─ AdditionalImageId [int64]*
 │
 └─ AltText*
-   └─ Language*
-      ├─ Locale [string]
-      ├─ Description [string]?
-      └─ Keyword [string]*
+└─ Language*
+├─ Locale [string]
+├─ Description [string]?
+└─ Keyword [string]*
 
 * = repeated
-? = optional
+  ? = optional
+
 ```
 
 ### R1
 
 ```
+
 ProductId: 12345
 ImageGallery:
-  PrimaryImageId: 555
-  AdditionalImageId:
-    - 556
-    - 557
-AltText:
-  - Language:
-      - Locale: en-US
-        Description: Athletic running shoes with cushioned soles
-        Keyword:
-          - shoes
-          - running
-          - athletic
-  - Language:
-      - Locale: en-GB
-        Description: Athletic trainers with cushioned soles
-        Keyword:
-          - trainers
-          - running
-          - sport
-      - Locale: fr-FR
-      - Locale: de-DE
-  - Language:
-      - Locale: en-IN
-        Description: Sports running shoes with extra comfort
-        Keyword:
-          - shoes
-          - running
-          - sports
-          - comfort
+PrimaryImageId: 555
+AdditionalImageId:
+
+- 556
+- 557
+  AltText:
+
+- Language:
+    - Locale: en-US
+      Description: Athletic running shoes with cushioned soles
+      Keyword:
+        - shoes
+        - running
+        - athletic
+- Language:
+    - Locale: en-GB
+      Description: Athletic trainers with cushioned soles
+      Keyword:
+        - trainers
+        - running
+        - sport
+    - Locale: fr-FR
+    - Locale: de-DE
+- Language:
+    - Locale: en-IN
+      Description: Sports running shoes with extra comfort
+      Keyword:
+        - shoes
+        - running
+        - sports
+        - comfort
+
 ```
 
 ### R2
 
 ```
+
 ProductId: 67890
 ImageGallery:
-  PrimaryImageId: 987
-  AdditionalImageId:
-    - 988
-    - 989
-    - 990
+PrimaryImageId: 987
+AdditionalImageId:
+
+- 988
+- 989
+- 990
+
 ```
 
 ---
