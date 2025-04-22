@@ -178,7 +178,7 @@ from root to leaf. Eg. &lt;code&gt;AltText.Language.Keyword&lt;/code&gt;&lt;/li&
 ├─ ImageGallery                   
 │  ├─ PrimaryImageId [int64]      
 │  └─ AdditionalImageId [int64]*  # repeated
-└─ AltText
+└─ AltText?                       # optional
    └─ Language*                   # repeated
       ├─ Locale [string]          
       ├─ Description [string]?    # optional
@@ -292,455 +292,127 @@ values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trai
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Next let us compute the definition levels. The NULL values have a definition&lt;br /&gt;
 level of two because &lt;code&gt;Keyword&lt;/code&gt; field is missing.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keywords
+&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
 
 values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
 def   : [3, 3, 3, 3, 2, 2] 
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Next let us compute the repetition levels. This looks complicated, but you&lt;br /&gt;
 will soon see how this exactly reassembles the original nested data structure.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keywords
+&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
 
 values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
 def   : [3, 3, 3, 3, 2, 2] 
 rep   : [0, 2, 1, 2, 1, 1]
 &lt;/code&gt;&lt;/pre&gt;
-&lt;hr /&gt;
-&lt;p&gt;In columnar storage values of a single column attribute are stored&lt;br /&gt;
-contiguously.&lt;/p&gt;
-&lt;p&gt;Nested data structures are tree shaped. In columnar storage values of a&lt;br /&gt;
-single column attribute is stored contiguously. For flat relational data it&lt;/p&gt;
-&lt;hr /&gt;
-&lt;p&gt;The Dremel(Google BigQuery) VLDB 2010 paper introduced the technique for&lt;br /&gt;
-&lt;strong&gt;record shredding&lt;/strong&gt; or &lt;strong&gt;column striping&lt;/strong&gt; of complex nested data structures&lt;br /&gt;
-into a columnar storage format. And a few years later the Parquet columnar&lt;br /&gt;
-file format was created with ground up support for nested data adopting the&lt;br /&gt;
-ideas described in the Dremel paper.&lt;/p&gt;
-&lt;p&gt;The challenges involved in flattening a nested data structure into a&lt;br /&gt;
-columnar storage format are:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Preserving the structural hierarchy of the data,&lt;/li&gt;
-&lt;li&gt;Identifying where a record begins and ends in the column.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Only if the structure is preserved can the process of shredding be reversed&lt;br /&gt;
-and the original nested value be reassembled back from columnar storage.&lt;br /&gt;
-This is made possible by deriving two integer values and stored together&lt;br /&gt;
-with each shredded column value:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;Definition Level&lt;/li&gt;
-&lt;li&gt;Repetition Level&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;This is remarkable because without any extra steps, the nested data can be&lt;br /&gt;
-queried using modern vectorized query execution engines using the same SQL&lt;br /&gt;
-or dataframe interface available for relational data. This includes increased&lt;br /&gt;
-I/O efficiency by reading only those columns which are projected in the query.&lt;/p&gt;
-&lt;p&gt;The trade-off is the extra space to store the derived definition levels and&lt;br /&gt;
-repetition levels for every value. But in practice efficient encoding&lt;br /&gt;
-techniques and light-weight compression schemes are applied to reduce the&lt;br /&gt;
-storage requirements.&lt;/p&gt;
-&lt;h2 id=&quot;data-model&quot; tabindex=&quot;-1&quot;&gt;Data Model &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#data-model&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;what is required, optional, repeated. what is structure. how is that related&lt;br /&gt;
-to definition level? what is the intuition for repetition levels? how do&lt;br /&gt;
-they interact together? maybe simple concrete examples will help. but why&lt;br /&gt;
-are leading with the data model here before talking about either the&lt;br /&gt;
+&lt;p&gt;Let us look at the nested column in isolation and give it index numbers.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;AltText:
+  - Language:         # Language[0]
+        - Keyword:
+          - shoes     # Language[0].Keyword[0]
+          - athletic  # Language[0].Keyword[0]
+  - Language:         # Language[1]
+        - Keyword:
+          - trainers  # Language[1].Keyword[0]
+          - sport     # Language[1].Keyword[1]
+  - Language:         # Language[2]
+  - Language:         # Language[3]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;There are two repeated fields &lt;code&gt;Alt.Language.Keyword&lt;/code&gt; which are &lt;code&gt;Language&lt;/code&gt;&lt;br /&gt;
+and then &lt;code&gt;Keyword&lt;/code&gt;. So values in this column may have repetition levels - 0,&lt;br /&gt;
+1 or 2.&lt;/p&gt;
+&lt;p&gt;The complete path for &lt;code&gt;shoes&lt;/code&gt; is &lt;code&gt;Language[0].Keyword[0]&lt;/code&gt;. This value is the&lt;br /&gt;
+first repeated value in the path of this nested data structure. The&lt;br /&gt;
+repetition level of &lt;code&gt;Language[0]&lt;/code&gt; is zero. The repetition level of &lt;code&gt;Keyword [0]&lt;/code&gt; is also zero. It inherits the repetition level of the nearest repeated&lt;br /&gt;
+ancestor.&lt;/p&gt;
+&lt;p&gt;The second value is &lt;code&gt;athletic&lt;/code&gt; with path &lt;code&gt;Language[0].Keyword[1]&lt;/code&gt;. The&lt;br /&gt;
+computed repetition level is two so that we can distinctly identify that&lt;br /&gt;
+this is not the first item in &lt;code&gt;Keyword&lt;/code&gt;. Because this is not the first item&lt;br /&gt;
+we do not have to consider the repetition level of a repeated ancestor. Here&lt;br /&gt;
+&lt;code&gt;Keyword&lt;/code&gt; field is the second repeated field of this column which is present&lt;br /&gt;
+and therefore the repetition level is two.&lt;/p&gt;
+&lt;p&gt;The third value is &lt;code&gt;trainers&lt;/code&gt;. It has the path &lt;code&gt;Language[1].Keyword[0]&lt;/code&gt;.&lt;br /&gt;
+Even though this is the first Keyword, it is the second repetition of&lt;br /&gt;
+Language. So the repetition level of &lt;code&gt;Language[1]&lt;/code&gt; is one. And since it is&lt;br /&gt;
+the first keyword, we inherit that value. So the computed repetition level&lt;br /&gt;
+is one.&lt;/p&gt;
+&lt;p&gt;The fourth value is &lt;code&gt;sport&lt;/code&gt; and the path is &lt;code&gt;Language[1].Keyword[1]&lt;/code&gt;. The&lt;br /&gt;
+computed repetition level is two here. This is the second keyword, and so&lt;br /&gt;
+the repetition level is same as the number of repeated fields in this path&lt;br /&gt;
+which happens to be two.&lt;/p&gt;
+&lt;p&gt;The fifth and sixth values are both NULL. They have the paths &lt;code&gt;Language[2]&lt;/code&gt;&lt;br /&gt;
+and &lt;code&gt;Language[3]&lt;/code&gt;. The &lt;code&gt;Keyword&lt;/code&gt; field is empty or missing. So we compute&lt;br /&gt;
+the repetition level up to &lt;code&gt;Language&lt;/code&gt; field. And the value is one.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
+
+values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
+def   : [3, 3, 3, 3, 2, 2] 
+rep   : [0, 2, 1, 2, 1, 1]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now that we know how definition and repetition levels are computed, it is&lt;br /&gt;
+possible to reassemble the nested data structure from the column values,&lt;br /&gt;
 definition and repetition levels.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;
-ProductImages
-│
-├─ ProductId [int64]
-│
-├─ ImageGallery
-│ ├─ PrimaryImageId [int64]
-│ └─ AdditionalImageId [int64]*
-│
-└─ AltText*
-└─ Language*
-├─ Locale [string]
-├─ Description [string]?
-└─ Keyword [string]*
+&lt;p&gt;From the column storage values we can also reassemble a partial projection of&lt;br /&gt;
+the nested data structure in its original form. For example if only the&lt;br /&gt;
+following columns are selected - [ProductId, AltText.Language.Locale] which&lt;br /&gt;
+is stored in columnar format as,&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# ProductId Column
+values            : [123, 456]
+definition_level  : [0, 0]
+repetition_level  : [0, 0]
 
-* = repeated
-  ? = optional
+# AltText.Language.Locale
+values            : [&#39;en-US&#39;, &#39;en-GB&#39;, &#39;fr-FR&#39;, &#39;de-DE&#39;, NULL]
+definition_level  : [2, 2, 2, 2, 0]
+repetition_level  : [0, 1, 1, 1, 0]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The reassembled nested data structure resembles the original but contains&lt;br /&gt;
+only the selected columns.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# Record 1
+ProductId: 123
+AltText:
+  - Language:
+      - Locale: en-US
+  - Language:
+      - Locale: en-GB
+  - Language:
+      - Locale: fr-FR
+  - Language:
+      - Locale: de-DE
 
+# Record 2
+ProductId: 678
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Fig. schema for product images and available translations of descriptive text&lt;/p&gt;
-&lt;p&gt;The column &lt;code&gt;AltText.Language.Description&lt;/code&gt;&lt;/p&gt;
-&lt;h2 id=&quot;repetition-level&quot; tabindex=&quot;-1&quot;&gt;Repetition Level &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#repetition-level&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;h2 id=&quot;schema&quot; tabindex=&quot;-1&quot;&gt;Schema &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#schema&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;h3 id=&quot;protobuf-v2&quot; tabindex=&quot;-1&quot;&gt;Protobuf v2 &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#protobuf-v2&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;
-message Product {
-required int64 ProductId; // def_level: 0, rep_level: 0
+&lt;p&gt;This is just a physical representation. In physical storage the NULL values&lt;br /&gt;
+can be omitted. Because we know that for the column &lt;code&gt;AltText.Language. Keyword&lt;/code&gt; has a max definition level of 3. It has an optional field &lt;code&gt;AltText&lt;/code&gt;&lt;br /&gt;
+and two repeated fields &lt;code&gt;Language&lt;/code&gt; and &lt;code&gt;Keyword&lt;/code&gt;. So when we see a&lt;br /&gt;
+definition level value lower than 3, we know that it stands for a NULL value.&lt;br /&gt;
+This way we can avoid storing the NULL values. This is a useful property for&lt;br /&gt;
+real world nested data structures which are sparse, and therefore has many&lt;br /&gt;
+NULL values need not be physically stored saving space.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
 
-group ImageGallery { // def_level: 1, rep_level: 0
-required int64 PrimaryImageId; // def_level: 2, rep_level: 0
-repeated int64 AdditionalImageId; // def_level: 2, rep_level: 1
-}
+# Logical representation
+# values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
 
-repeated group AltText { // def_level: 1, rep_level: 1
-repeated group Language { // def_level: 2, rep_level: 2
-required string Locale; // def_level: 3, rep_level: 2
-optional string Description; // def_level: 3, rep_level: 2
-repeated string Keyword; // def_level: 3, rep_level: 3
-}
-}
-}
-
+# Physical representation which does not store NULL values
+values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;]
+def   : [3, 3, 3, 3, 2, 2] 
+rep   : [0, 2, 1, 2, 1, 1]
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&quot;tree-diagram&quot; tabindex=&quot;-1&quot;&gt;Tree Diagram &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#tree-diagram&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;
-Product
-│
-├─ ProductId [int64]
-│
-├─ ImageGallery?
-│ ├─ PrimaryImageId [int64]
-│ └─ AdditionalImageId [int64]*
-│
-└─ AltText*
-└─ Language*
-├─ Locale [string]
-├─ Description [string]?
-└─ Keyword [string]*
-
-* = repeated
-  ? = optional
-
+&lt;p&gt;In this example &lt;code&gt;ProductId&lt;/code&gt; is a required field so there is no need to store&lt;br /&gt;
+the definition levels. The definition level is always zero for all values.&lt;br /&gt;
+Similarly, a definition level of zero implies that the repetition level is&lt;br /&gt;
+also zero. So we do not also need to store repetition levels.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# ProductId Column
+values            : [123, 456]
+definition_level  : [0, 0]
+repetition_level  : [0, 0]
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&quot;r1&quot; tabindex=&quot;-1&quot;&gt;R1 &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#r1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;
-ProductId: 12345
-ImageGallery:
-PrimaryImageId: 555
-AdditionalImageId:
-
-- 556
-- 557
-  AltText:
-
-- Language:
-    - Locale: en-US
-      Description: Athletic running shoes with cushioned soles
-      Keyword:
-        - shoes
-        - running
-        - athletic
-- Language:
-    - Locale: en-GB
-      Description: Athletic trainers with cushioned soles
-      Keyword:
-        - trainers
-        - running
-        - sport
-    - Locale: fr-FR
-    - Locale: de-DE
-- Language:
-    - Locale: en-IN
-      Description: Sports running shoes with extra comfort
-      Keyword:
-        - shoes
-        - running
-        - sports
-        - comfort
-
+&lt;p&gt;So in this encoding in physical storage we only write the column values.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# ProductId Column
+values            : [123, 456]
 &lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&quot;r2&quot; tabindex=&quot;-1&quot;&gt;R2 &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#r2&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;
-ProductId: 67890
-ImageGallery:
-PrimaryImageId: 987
-AdditionalImageId:
-
-- 988
-- 989
-- 990
-
-&lt;/code&gt;&lt;/pre&gt;
-&lt;hr /&gt;
-&lt;p&gt;Parquet implements repetition/definition levels for nested data. But&lt;br /&gt;
-primarily it is used for storing and querying relational data. So if I write&lt;br /&gt;
-nested data into a Parquet file, does querying it from DuckDB, Apache&lt;br /&gt;
-DataFusion be similar to how querying works for relational data? In Dremel&lt;br /&gt;
-the query language is modified to run SQL queries on nested data which is&lt;br /&gt;
-column-striped and return results as nested data with a schema. This has&lt;br /&gt;
-better developer experience, but I suspect may not be supported in either&lt;br /&gt;
-DuckDB, DataFusion out of the box. In the case of DataFusion will I be able&lt;br /&gt;
-to extend the SQL to support querying and returning nested records instead&lt;br /&gt;
-of table values?&lt;/p&gt;
-&lt;p&gt;Cross Join vs Lateral Join for nested data&lt;/p&gt;
-&lt;pre class=&quot;language-sql&quot;&gt;&lt;code class=&quot;language-sql&quot;&gt;&lt;span class=&quot;token keyword&quot;&gt;SELECT&lt;/span&gt; ProductId&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;       ARRAY_AGG&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;l&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;Locale&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;AS&lt;/span&gt; missing_description_locales&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;FROM&lt;/span&gt; Product&lt;br /&gt;         &lt;span class=&quot;token keyword&quot;&gt;CROSS&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;JOIN&lt;/span&gt; UNNEST&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;AltText&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;AS&lt;/span&gt; a&lt;br /&gt;         &lt;span class=&quot;token keyword&quot;&gt;CROSS&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;JOIN&lt;/span&gt; UNNEST&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;a&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;Language&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;AS&lt;/span&gt; l&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;WHERE&lt;/span&gt; l&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;Description &lt;span class=&quot;token operator&quot;&gt;IS&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;NULL&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;GROUP&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;BY&lt;/span&gt; ProductId&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;ORDER&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;BY&lt;/span&gt; ProductId&lt;br /&gt;&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;SELECT&lt;/span&gt; ProductId&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;       ARRAY_AGG&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;l&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;Locale&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;AS&lt;/span&gt; missing_description_locales&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;FROM&lt;/span&gt; Product&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;     LATERAL &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;SELECT&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;FROM&lt;/span&gt; UNNEST&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;AltText&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;AS&lt;/span&gt; a&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;     LATERAL &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;SELECT&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;*&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;FROM&lt;/span&gt; UNNEST&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;a&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;Language&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;AS&lt;/span&gt; l &lt;span class=&quot;token keyword&quot;&gt;WHERE&lt;/span&gt; l&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;Description &lt;span class=&quot;token operator&quot;&gt;IS&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;GROUP&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;BY&lt;/span&gt; ProductId&lt;/code&gt;&lt;/pre&gt;
-&lt;hr /&gt;
-&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;&lt;strong&gt;Nested Data&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;DocId: 10
-Links
-  Forward: 20
-  Forward: 40
-  Forward: 60
-Name
-  Language
-    Code: &#39;en-us&#39;
-    Country: &#39;us&#39;
-  Language
-    Code: &#39;en&#39;
-  Url: &#39;http://A&#39;
-Name
-  Url: &#39;http://B&#39;
-Name
-  Language
-    Code: &#39;en-gb&#39;
-    Country: &#39;gb&#39;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;It is possible to directly represent nested data in columnar storage without&lt;br /&gt;
-applying any normalization (conversion of nested data structure into a&lt;br /&gt;
-relational form).&lt;/p&gt;
-&lt;p&gt;A column begins at the root and ends at the leaf node. The concrete column&lt;br /&gt;
-value exists at the leaf node. If the path terminates early, or if it is&lt;br /&gt;
-missing then a NULL value is used to indicate the absence of a value for&lt;br /&gt;
-that column.&lt;/p&gt;
-&lt;p&gt;In columnar st&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Schema&lt;/strong&gt;&lt;/p&gt;
-&lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;Document&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;DocId&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; int64  &lt;span class=&quot;token comment&quot;&gt;# required&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;Links?&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token comment&quot;&gt;# optional&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token key atrule&quot;&gt;Backward*&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; int64&lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token key atrule&quot;&gt;Forward*&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; int64&lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;Name*&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token comment&quot;&gt;# repeated&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token key atrule&quot;&gt;Language*&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;Code&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; string  &lt;span class=&quot;token comment&quot;&gt;# required&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;Country?&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; string&lt;br /&gt;    &lt;span class=&quot;token key atrule&quot;&gt;Url?&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; string&lt;/code&gt;&lt;/pre&gt;
-&lt;pre&gt;&lt;code&gt;message Document {
-   required int64 DocId;
-   
-   optional group Links {
-      repeated int64 Backward;
-      repeated int64 Forward; 
-   }
-   
-   repeated group Name {
-      repeated group Language {
-        required string Code;
-        optional string Country; 
-      }
-      optional string Url; 
-   }
-} 
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;A column is composed of fields from the root to the leaf as per schema&lt;br /&gt;
-definition. The concrete value exists at the leaf of a path.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Nested Data As Columns&lt;/strong&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;DocId                 : [10]
-Links.Backward        : [NULL]
-Links.Forward         : [20, 40, 60]
-Name.Language.Code    : [&#39;en-us&#39;, &#39;en&#39;, NULL, &#39;en-gb&#39;]
-Name.Language.Country : [&#39;us&#39;, NULL, NULL, &#39;gb&#39;]
-Name.Url              : [&#39;http://A&#39;, &#39;http://B&#39;, NULL]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;This is a columnar representation of nested data without first normalizing&lt;br /&gt;
-it into a relational form.&lt;/p&gt;
-&lt;p&gt;The concrete values exist at the leaf of the nested data. A path of fields&lt;br /&gt;
-from root to leaf maps to a column. This schema maps to the following&lt;br /&gt;
-columns:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;DocId&lt;/li&gt;
-&lt;li&gt;Links.Backward&lt;/li&gt;
-&lt;li&gt;Links.Forward&lt;/li&gt;
-&lt;li&gt;Name.Language.Code&lt;/li&gt;
-&lt;li&gt;Name.Language.Country&lt;/li&gt;
-&lt;li&gt;Name.Url&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;The schema contains&lt;/p&gt;
-&lt;hr /&gt;
-&lt;p&gt;The representation of relational data in columnar format is intuitive. Each&lt;br /&gt;
-column value is stored contiguously. To reassemble a record all you need is&lt;br /&gt;
-the index of the value in a column.&lt;/p&gt;
-&lt;p&gt;This is a logical representation of columnar storage for a relation with&lt;br /&gt;
-four columns - BookID, Title, Author &amp;amp; Year.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;BookIDs:    [101, 102, 103, 104]
-Titles:     [&amp;quot;Deep Work&amp;quot;, &amp;quot;Designing Data-Intensive Applications&amp;quot;, &amp;quot;The Soul of A New Machine&amp;quot;, &amp;quot;Hackers &amp;amp; Painters&amp;quot;]
-Authors:    [&amp;quot;Cal Newport&amp;quot;, &amp;quot;Martin Kleppmann&amp;quot;, &amp;quot;Tracy Kidder&amp;quot;, &amp;quot;Paul Graham&amp;quot;]
-Years:      [2016, 2017, 1981, 2004]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;To reassemble the third record, the column values at index 2 are retrieved:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;BookIDs[2]  = 103
-Titles[2]   = &amp;quot;The Soul of A New Machine&amp;quot;
-Authors[2]  = &amp;quot;Tracy Kidder&amp;quot;
-Years[2]    = 1981
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;A nested value is a tree structure with values found at the leaf node. The&lt;br /&gt;
-column name is the path from root to leaf node. There are as many columns as&lt;br /&gt;
-unique paths in the tree. Let us look at a sample nested value:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;DocId: 10
-Links
-  Forward: 20
-  Forward: 40
-  Forward: 60
-Name
-  Language
-    Code: &#39;en-us&#39;
-    Country: &#39;us&#39;
-  Language
-    Code: &#39;en&#39;
-  Url: &#39;http://A&#39;
-Name
-  Url: &#39;http://B&#39;
-Name
-  Language
-    Code: &#39;en-gb&#39;
-    Country: &#39;gb&#39;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;This value has the following unique columns:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;DocId&lt;/li&gt;
-&lt;li&gt;Links.Forward&lt;/li&gt;
-&lt;li&gt;Name.Language.Code&lt;/li&gt;
-&lt;li&gt;Name.Language.Country&lt;/li&gt;
-&lt;li&gt;Name.Url&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;After extracting the values from the leaf nodes it can be represented in a&lt;br /&gt;
-columnar format like the relational data:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;DocId:                [10]
-Links.Forward:        [20, 40, 60]
-Name.Language.Code:   [&#39;en-us&#39;, &#39;en&#39;, &#39;en-gb&#39;]
-Name.Language.Country:[&#39;us&#39;, &#39;gb&#39;]
-Name.Url:             [&#39;http://A&#39;, &#39;http://B&#39;]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In the above representation the structural information is lost. It is&lt;br /&gt;
-impossible to reassemble the nested value from the columns values like this:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;Name[0].Language[0].Code[0] = &#39;en-us&#39;
-Name[0].Language[1].Code[0] = &#39;en&#39;
-Name[2].Language[0].Code[0] = &#39;en-gb&#39;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Between &#39;en&#39; and &#39;en-gb&#39; the path Name[1] terminates early. This&lt;br /&gt;
-representation contains only values which are present in the value. It does&lt;br /&gt;
-not capture values which are missing because the path terminated early.&lt;/p&gt;
-&lt;p&gt;TODO:&lt;/p&gt;
-&lt;p&gt;-[ ] Data Model&lt;br /&gt;
--[ ] Missing Values&lt;br /&gt;
--[ ] Definition Levels&lt;br /&gt;
--[ ] Repetition Levels&lt;/p&gt;
-&lt;hr /&gt;
-&lt;p&gt;So how are nested values represented in columnar storage?&lt;/p&gt;
-&lt;p&gt;This is one of the novel contributions from&lt;br /&gt;
-the &lt;a href=&quot;https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf&quot;&gt;VLDB 2010 paper - Dremel: Interactive Analysis of&lt;br /&gt;
-Web-Scale Datasets&lt;/a&gt;.&lt;/p&gt;
-&lt;blockquote&gt;
-&lt;p&gt;We describe a novel columnar storage format for nested&lt;br /&gt;
-data. We present algorithms for dissecting nested records&lt;br /&gt;
-into columns and reassembling them.&lt;/p&gt;
-&lt;/blockquote&gt;
-&lt;hr /&gt;
-&lt;h2 id=&quot;scratch&quot; tabindex=&quot;-1&quot;&gt;Scratch &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#scratch&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;pre&gt;&lt;code&gt;Name
- Language
-  Code: &#39;en-us&#39;
-  Country: &#39;us&#39;
- Language
-  Code: &#39;en&#39;
-Name
-Name
- Language
-  Code: &#39;en-gb&#39;
-  Country: &#39;gb&#39;
-&lt;/code&gt;&lt;/pre&gt;
-&lt;ul&gt;
-&lt;li&gt;See both above and below are the same thing&lt;/li&gt;
-&lt;li&gt;The bottom encoding looks weird because of the extra columns with some&lt;br /&gt;
-numbers. We&#39;ll soon get to how it is computed.&lt;/li&gt;
-&lt;li&gt;Those numbers make it possible for us to reassemble the original nested&lt;br /&gt;
-record shown above given the table below. It&#39;s neat!&lt;/li&gt;
-&lt;li&gt;NULL is used to signal the absence of a value in the nested record.&lt;/li&gt;
-&lt;li&gt;But why do we need this?&lt;/li&gt;
-&lt;li&gt;Interactive ad-hoc querying using a database engine built for the purpose of&lt;br /&gt;
-analytics like ClickHouse, DuckDB etc. Not PostgreSQL or MySQL.&lt;/li&gt;
-&lt;li&gt;Analytics queries are primarily aggregations. If you only need to find all&lt;br /&gt;
-the distinct Name.Language.Country you only need to read the Name.Language.&lt;br /&gt;
-Country column. Projections are efficient because you don&#39;t have to read&lt;br /&gt;
-the entire nested value just to get a single column.&lt;/li&gt;
-&lt;li&gt;Adopted by Parquet/Arrow though the encoding differs slightly, the&lt;br /&gt;
-principles remain the same. The principle is preserving the structure of&lt;br /&gt;
-the nested record&lt;/li&gt;
-&lt;/ul&gt;
-&lt;div style=&quot;display: flex; gap: 16px;&quot;&gt;
-&lt;div&gt;
-&lt;table&gt;
-&lt;thead&gt;
-&lt;tr&gt;
-&lt;th&gt;&lt;strong&gt;Name.Language.Country&lt;/strong&gt;&lt;/th&gt;
-&lt;th&gt;&lt;/th&gt;
-&lt;th&gt;&lt;/th&gt;
-&lt;/tr&gt;
-&lt;/thead&gt;
-&lt;tbody&gt;
-&lt;tr&gt;
-&lt;td&gt;&lt;strong&gt;value&lt;/strong&gt;&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;r&lt;/strong&gt;&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;d&lt;/strong&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;en-us&lt;/td&gt;
-&lt;td&gt;0&lt;/td&gt;
-&lt;td&gt;2&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;en&lt;/td&gt;
-&lt;td&gt;2&lt;/td&gt;
-&lt;td&gt;2&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;NULL&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;en-gb&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;td&gt;2&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;NULL&lt;/td&gt;
-&lt;td&gt;0&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;div&gt;
-&lt;table&gt;
-&lt;thead&gt;
-&lt;tr&gt;
-&lt;th&gt;&lt;strong&gt;Name.Language.Code&lt;/strong&gt;&lt;/th&gt;
-&lt;th&gt;&lt;/th&gt;
-&lt;th&gt;&lt;/th&gt;
-&lt;/tr&gt;
-&lt;/thead&gt;
-&lt;tbody&gt;
-&lt;tr&gt;
-&lt;td&gt;&lt;strong&gt;value&lt;/strong&gt;&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;r&lt;/strong&gt;&lt;/td&gt;
-&lt;td&gt;&lt;strong&gt;d&lt;/strong&gt;&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;us&lt;/td&gt;
-&lt;td&gt;0&lt;/td&gt;
-&lt;td&gt;3&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;NULL&lt;/td&gt;
-&lt;td&gt;2&lt;/td&gt;
-&lt;td&gt;2&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;NULL&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;gb&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;td&gt;3&lt;/td&gt;
-&lt;/tr&gt;
-&lt;tr&gt;
-&lt;td&gt;NULL&lt;/td&gt;
-&lt;td&gt;0&lt;/td&gt;
-&lt;td&gt;1&lt;/td&gt;
-&lt;/tr&gt;
-&lt;/tbody&gt;
-&lt;/table&gt;
-&lt;/div&gt;
-&lt;/div&gt;
 </content>
 	</entry>
 	

@@ -189,7 +189,7 @@ from root to leaf. Eg. <code>AltText.Language.Keyword</code></li>
 ├─ ImageGallery                   
 │  ├─ PrimaryImageId [int64]      
 │  └─ AdditionalImageId [int64]*  # repeated
-└─ AltText
+└─ AltText?                       # optional
    └─ Language*                   # repeated
       ├─ Locale [string]          
       ├─ Description [string]?    # optional
@@ -303,455 +303,127 @@ values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sp
 </code></pre>
 <p>Next let us compute the definition levels. The NULL values have a definition<br>
 level of two because <code>Keyword</code> field is missing.</p>
-<pre><code># AltText.Language.Keywords
+<pre><code># AltText.Language.Keyword
 
 values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
 def   : [3, 3, 3, 3, 2, 2] 
 </code></pre>
 <p>Next let us compute the repetition levels. This looks complicated, but you<br>
 will soon see how this exactly reassembles the original nested data structure.</p>
-<pre><code># AltText.Language.Keywords
+<pre><code># AltText.Language.Keyword
 
 values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
 def   : [3, 3, 3, 3, 2, 2] 
 rep   : [0, 2, 1, 2, 1, 1]
 </code></pre>
-<hr>
-<p>In columnar storage values of a single column attribute are stored<br>
-contiguously.</p>
-<p>Nested data structures are tree shaped. In columnar storage values of a<br>
-single column attribute is stored contiguously. For flat relational data it</p>
-<hr>
-<p>The Dremel(Google BigQuery) VLDB 2010 paper introduced the technique for<br>
-<strong>record shredding</strong> or <strong>column striping</strong> of complex nested data structures<br>
-into a columnar storage format. And a few years later the Parquet columnar<br>
-file format was created with ground up support for nested data adopting the<br>
-ideas described in the Dremel paper.</p>
-<p>The challenges involved in flattening a nested data structure into a<br>
-columnar storage format are:</p>
-<ul>
-<li>Preserving the structural hierarchy of the data,</li>
-<li>Identifying where a record begins and ends in the column.</li>
-</ul>
-<p>Only if the structure is preserved can the process of shredding be reversed<br>
-and the original nested value be reassembled back from columnar storage.<br>
-This is made possible by deriving two integer values and stored together<br>
-with each shredded column value:</p>
-<ol>
-<li>Definition Level</li>
-<li>Repetition Level</li>
-</ol>
-<p>This is remarkable because without any extra steps, the nested data can be<br>
-queried using modern vectorized query execution engines using the same SQL<br>
-or dataframe interface available for relational data. This includes increased<br>
-I/O efficiency by reading only those columns which are projected in the query.</p>
-<p>The trade-off is the extra space to store the derived definition levels and<br>
-repetition levels for every value. But in practice efficient encoding<br>
-techniques and light-weight compression schemes are applied to reduce the<br>
-storage requirements.</p>
-<h2 id="data-model" tabindex="-1">Data Model <a class="direct-link" href="#data-model" aria-hidden="true">#</a></h2>
-<p>what is required, optional, repeated. what is structure. how is that related<br>
-to definition level? what is the intuition for repetition levels? how do<br>
-they interact together? maybe simple concrete examples will help. but why<br>
-are leading with the data model here before talking about either the<br>
+<p>Let us look at the nested column in isolation and give it index numbers.</p>
+<pre><code>AltText:
+  - Language:         # Language[0]
+        - Keyword:
+          - shoes     # Language[0].Keyword[0]
+          - athletic  # Language[0].Keyword[0]
+  - Language:         # Language[1]
+        - Keyword:
+          - trainers  # Language[1].Keyword[0]
+          - sport     # Language[1].Keyword[1]
+  - Language:         # Language[2]
+  - Language:         # Language[3]
+</code></pre>
+<p>There are two repeated fields <code>Alt.Language.Keyword</code> which are <code>Language</code><br>
+and then <code>Keyword</code>. So values in this column may have repetition levels - 0,<br>
+1 or 2.</p>
+<p>The complete path for <code>shoes</code> is <code>Language[0].Keyword[0]</code>. This value is the<br>
+first repeated value in the path of this nested data structure. The<br>
+repetition level of <code>Language[0]</code> is zero. The repetition level of <code>Keyword [0]</code> is also zero. It inherits the repetition level of the nearest repeated<br>
+ancestor.</p>
+<p>The second value is <code>athletic</code> with path <code>Language[0].Keyword[1]</code>. The<br>
+computed repetition level is two so that we can distinctly identify that<br>
+this is not the first item in <code>Keyword</code>. Because this is not the first item<br>
+we do not have to consider the repetition level of a repeated ancestor. Here<br>
+<code>Keyword</code> field is the second repeated field of this column which is present<br>
+and therefore the repetition level is two.</p>
+<p>The third value is <code>trainers</code>. It has the path <code>Language[1].Keyword[0]</code>.<br>
+Even though this is the first Keyword, it is the second repetition of<br>
+Language. So the repetition level of <code>Language[1]</code> is one. And since it is<br>
+the first keyword, we inherit that value. So the computed repetition level<br>
+is one.</p>
+<p>The fourth value is <code>sport</code> and the path is <code>Language[1].Keyword[1]</code>. The<br>
+computed repetition level is two here. This is the second keyword, and so<br>
+the repetition level is same as the number of repeated fields in this path<br>
+which happens to be two.</p>
+<p>The fifth and sixth values are both NULL. They have the paths <code>Language[2]</code><br>
+and <code>Language[3]</code>. The <code>Keyword</code> field is empty or missing. So we compute<br>
+the repetition level up to <code>Language</code> field. And the value is one.</p>
+<pre><code># AltText.Language.Keyword
+
+values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
+def   : [3, 3, 3, 3, 2, 2] 
+rep   : [0, 2, 1, 2, 1, 1]
+</code></pre>
+<p>Now that we know how definition and repetition levels are computed, it is<br>
+possible to reassemble the nested data structure from the column values,<br>
 definition and repetition levels.</p>
-<pre><code>
-ProductImages
-│
-├─ ProductId [int64]
-│
-├─ ImageGallery
-│ ├─ PrimaryImageId [int64]
-│ └─ AdditionalImageId [int64]*
-│
-└─ AltText*
-└─ Language*
-├─ Locale [string]
-├─ Description [string]?
-└─ Keyword [string]*
+<p>From the column storage values we can also reassemble a partial projection of<br>
+the nested data structure in its original form. For example if only the<br>
+following columns are selected - [ProductId, AltText.Language.Locale] which<br>
+is stored in columnar format as,</p>
+<pre><code># ProductId Column
+values            : [123, 456]
+definition_level  : [0, 0]
+repetition_level  : [0, 0]
 
-* = repeated
-  ? = optional
+# AltText.Language.Locale
+values            : ['en-US', 'en-GB', 'fr-FR', 'de-DE', NULL]
+definition_level  : [2, 2, 2, 2, 0]
+repetition_level  : [0, 1, 1, 1, 0]
+</code></pre>
+<p>The reassembled nested data structure resembles the original but contains<br>
+only the selected columns.</p>
+<pre><code># Record 1
+ProductId: 123
+AltText:
+  - Language:
+      - Locale: en-US
+  - Language:
+      - Locale: en-GB
+  - Language:
+      - Locale: fr-FR
+  - Language:
+      - Locale: de-DE
 
+# Record 2
+ProductId: 678
 </code></pre>
-<p>Fig. schema for product images and available translations of descriptive text</p>
-<p>The column <code>AltText.Language.Description</code></p>
-<h2 id="repetition-level" tabindex="-1">Repetition Level <a class="direct-link" href="#repetition-level" aria-hidden="true">#</a></h2>
-<h2 id="schema" tabindex="-1">Schema <a class="direct-link" href="#schema" aria-hidden="true">#</a></h2>
-<h3 id="protobuf-v2" tabindex="-1">Protobuf v2 <a class="direct-link" href="#protobuf-v2" aria-hidden="true">#</a></h3>
-<pre><code>
-message Product {
-required int64 ProductId; // def_level: 0, rep_level: 0
+<p>This is just a physical representation. In physical storage the NULL values<br>
+can be omitted. Because we know that for the column <code>AltText.Language. Keyword</code> has a max definition level of 3. It has an optional field <code>AltText</code><br>
+and two repeated fields <code>Language</code> and <code>Keyword</code>. So when we see a<br>
+definition level value lower than 3, we know that it stands for a NULL value.<br>
+This way we can avoid storing the NULL values. This is a useful property for<br>
+real world nested data structures which are sparse, and therefore has many<br>
+NULL values need not be physically stored saving space.</p>
+<pre><code># AltText.Language.Keyword
 
-group ImageGallery { // def_level: 1, rep_level: 0
-required int64 PrimaryImageId; // def_level: 2, rep_level: 0
-repeated int64 AdditionalImageId; // def_level: 2, rep_level: 1
-}
+# Logical representation
+# values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
 
-repeated group AltText { // def_level: 1, rep_level: 1
-repeated group Language { // def_level: 2, rep_level: 2
-required string Locale; // def_level: 3, rep_level: 2
-optional string Description; // def_level: 3, rep_level: 2
-repeated string Keyword; // def_level: 3, rep_level: 3
-}
-}
-}
-
+# Physical representation which does not store NULL values
+values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;]
+def   : [3, 3, 3, 3, 2, 2] 
+rep   : [0, 2, 1, 2, 1, 1]
 </code></pre>
-<h3 id="tree-diagram" tabindex="-1">Tree Diagram <a class="direct-link" href="#tree-diagram" aria-hidden="true">#</a></h3>
-<pre><code>
-Product
-│
-├─ ProductId [int64]
-│
-├─ ImageGallery?
-│ ├─ PrimaryImageId [int64]
-│ └─ AdditionalImageId [int64]*
-│
-└─ AltText*
-└─ Language*
-├─ Locale [string]
-├─ Description [string]?
-└─ Keyword [string]*
-
-* = repeated
-  ? = optional
-
+<p>In this example <code>ProductId</code> is a required field so there is no need to store<br>
+the definition levels. The definition level is always zero for all values.<br>
+Similarly, a definition level of zero implies that the repetition level is<br>
+also zero. So we do not also need to store repetition levels.</p>
+<pre><code># ProductId Column
+values            : [123, 456]
+definition_level  : [0, 0]
+repetition_level  : [0, 0]
 </code></pre>
-<h3 id="r1" tabindex="-1">R1 <a class="direct-link" href="#r1" aria-hidden="true">#</a></h3>
-<pre><code>
-ProductId: 12345
-ImageGallery:
-PrimaryImageId: 555
-AdditionalImageId:
-
-- 556
-- 557
-  AltText:
-
-- Language:
-    - Locale: en-US
-      Description: Athletic running shoes with cushioned soles
-      Keyword:
-        - shoes
-        - running
-        - athletic
-- Language:
-    - Locale: en-GB
-      Description: Athletic trainers with cushioned soles
-      Keyword:
-        - trainers
-        - running
-        - sport
-    - Locale: fr-FR
-    - Locale: de-DE
-- Language:
-    - Locale: en-IN
-      Description: Sports running shoes with extra comfort
-      Keyword:
-        - shoes
-        - running
-        - sports
-        - comfort
-
+<p>So in this encoding in physical storage we only write the column values.</p>
+<pre><code># ProductId Column
+values            : [123, 456]
 </code></pre>
-<h3 id="r2" tabindex="-1">R2 <a class="direct-link" href="#r2" aria-hidden="true">#</a></h3>
-<pre><code>
-ProductId: 67890
-ImageGallery:
-PrimaryImageId: 987
-AdditionalImageId:
-
-- 988
-- 989
-- 990
-
-</code></pre>
-<hr>
-<p>Parquet implements repetition/definition levels for nested data. But<br>
-primarily it is used for storing and querying relational data. So if I write<br>
-nested data into a Parquet file, does querying it from DuckDB, Apache<br>
-DataFusion be similar to how querying works for relational data? In Dremel<br>
-the query language is modified to run SQL queries on nested data which is<br>
-column-striped and return results as nested data with a schema. This has<br>
-better developer experience, but I suspect may not be supported in either<br>
-DuckDB, DataFusion out of the box. In the case of DataFusion will I be able<br>
-to extend the SQL to support querying and returning nested records instead<br>
-of table values?</p>
-<p>Cross Join vs Lateral Join for nested data</p>
-<pre class="language-sql"><code class="language-sql"><span class="token keyword">SELECT</span> ProductId<span class="token punctuation">,</span><br>       ARRAY_AGG<span class="token punctuation">(</span>l<span class="token punctuation">.</span>Locale<span class="token punctuation">)</span> <span class="token keyword">AS</span> missing_description_locales<br><span class="token keyword">FROM</span> Product<br>         <span class="token keyword">CROSS</span> <span class="token keyword">JOIN</span> UNNEST<span class="token punctuation">(</span>AltText<span class="token punctuation">)</span> <span class="token keyword">AS</span> a<br>         <span class="token keyword">CROSS</span> <span class="token keyword">JOIN</span> UNNEST<span class="token punctuation">(</span>a<span class="token punctuation">.</span><span class="token keyword">Language</span><span class="token punctuation">)</span> <span class="token keyword">AS</span> l<br><span class="token keyword">WHERE</span> l<span class="token punctuation">.</span>Description <span class="token operator">IS</span> <span class="token boolean">NULL</span><br><span class="token keyword">GROUP</span> <span class="token keyword">BY</span> ProductId<br><span class="token keyword">ORDER</span> <span class="token keyword">BY</span> ProductId<br><br><span class="token keyword">SELECT</span> ProductId<span class="token punctuation">,</span><br>       ARRAY_AGG<span class="token punctuation">(</span>l<span class="token punctuation">.</span>Locale<span class="token punctuation">)</span> <span class="token keyword">AS</span> missing_description_locales<br><span class="token keyword">FROM</span> Product<span class="token punctuation">,</span><br>     LATERAL <span class="token punctuation">(</span><span class="token keyword">SELECT</span> <span class="token operator">*</span> <span class="token keyword">FROM</span> UNNEST<span class="token punctuation">(</span>AltText<span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token keyword">AS</span> a<span class="token punctuation">,</span><br>     LATERAL <span class="token punctuation">(</span><span class="token keyword">SELECT</span> <span class="token operator">*</span> <span class="token keyword">FROM</span> UNNEST<span class="token punctuation">(</span>a<span class="token punctuation">.</span><span class="token keyword">Language</span><span class="token punctuation">)</span> <span class="token keyword">AS</span> l <span class="token keyword">WHERE</span> l<span class="token punctuation">.</span>Description <span class="token operator">IS</span> <span class="token boolean">NULL</span><span class="token punctuation">)</span><br><span class="token keyword">GROUP</span> <span class="token keyword">BY</span> ProductId</code></pre>
-<hr>
-<h1 id="introduction" tabindex="-1">Introduction <a class="direct-link" href="#introduction" aria-hidden="true">#</a></h1>
-<p><strong>Nested Data</strong></p>
-<pre><code>DocId: 10
-Links
-  Forward: 20
-  Forward: 40
-  Forward: 60
-Name
-  Language
-    Code: 'en-us'
-    Country: 'us'
-  Language
-    Code: 'en'
-  Url: 'http://A'
-Name
-  Url: 'http://B'
-Name
-  Language
-    Code: 'en-gb'
-    Country: 'gb'
-</code></pre>
-<p>It is possible to directly represent nested data in columnar storage without<br>
-applying any normalization (conversion of nested data structure into a<br>
-relational form).</p>
-<p>A column begins at the root and ends at the leaf node. The concrete column<br>
-value exists at the leaf node. If the path terminates early, or if it is<br>
-missing then a NULL value is used to indicate the absence of a value for<br>
-that column.</p>
-<p>In columnar st</p>
-<p><strong>Schema</strong></p>
-<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">Document</span><span class="token punctuation">:</span><br>  <span class="token key atrule">DocId</span><span class="token punctuation">:</span> int64  <span class="token comment"># required</span><br>  <span class="token key atrule">Links?</span><span class="token punctuation">:</span> <span class="token comment"># optional</span><br>    <span class="token key atrule">Backward*</span><span class="token punctuation">:</span> int64<span class="token punctuation">[</span><span class="token punctuation">]</span><br>    <span class="token key atrule">Forward*</span><span class="token punctuation">:</span> int64<span class="token punctuation">[</span><span class="token punctuation">]</span><br>  <span class="token key atrule">Name*</span><span class="token punctuation">:</span> <span class="token comment"># repeated</span><br>    <span class="token key atrule">Language*</span><span class="token punctuation">:</span><br>      <span class="token key atrule">Code</span><span class="token punctuation">:</span> string  <span class="token comment"># required</span><br>      <span class="token key atrule">Country?</span><span class="token punctuation">:</span> string<br>    <span class="token key atrule">Url?</span><span class="token punctuation">:</span> string</code></pre>
-<pre><code>message Document {
-   required int64 DocId;
-   
-   optional group Links {
-      repeated int64 Backward;
-      repeated int64 Forward; 
-   }
-   
-   repeated group Name {
-      repeated group Language {
-        required string Code;
-        optional string Country; 
-      }
-      optional string Url; 
-   }
-} 
-</code></pre>
-<p>A column is composed of fields from the root to the leaf as per schema<br>
-definition. The concrete value exists at the leaf of a path.</p>
-<p><strong>Nested Data As Columns</strong></p>
-<pre><code>DocId                 : [10]
-Links.Backward        : [NULL]
-Links.Forward         : [20, 40, 60]
-Name.Language.Code    : ['en-us', 'en', NULL, 'en-gb']
-Name.Language.Country : ['us', NULL, NULL, 'gb']
-Name.Url              : ['http://A', 'http://B', NULL]
-</code></pre>
-<p>This is a columnar representation of nested data without first normalizing<br>
-it into a relational form.</p>
-<p>The concrete values exist at the leaf of the nested data. A path of fields<br>
-from root to leaf maps to a column. This schema maps to the following<br>
-columns:</p>
-<ol>
-<li>DocId</li>
-<li>Links.Backward</li>
-<li>Links.Forward</li>
-<li>Name.Language.Code</li>
-<li>Name.Language.Country</li>
-<li>Name.Url</li>
-</ol>
-<p>The schema contains</p>
-<hr>
-<p>The representation of relational data in columnar format is intuitive. Each<br>
-column value is stored contiguously. To reassemble a record all you need is<br>
-the index of the value in a column.</p>
-<p>This is a logical representation of columnar storage for a relation with<br>
-four columns - BookID, Title, Author &amp; Year.</p>
-<pre><code>BookIDs:    [101, 102, 103, 104]
-Titles:     [&quot;Deep Work&quot;, &quot;Designing Data-Intensive Applications&quot;, &quot;The Soul of A New Machine&quot;, &quot;Hackers &amp; Painters&quot;]
-Authors:    [&quot;Cal Newport&quot;, &quot;Martin Kleppmann&quot;, &quot;Tracy Kidder&quot;, &quot;Paul Graham&quot;]
-Years:      [2016, 2017, 1981, 2004]
-</code></pre>
-<p>To reassemble the third record, the column values at index 2 are retrieved:</p>
-<pre><code>BookIDs[2]  = 103
-Titles[2]   = &quot;The Soul of A New Machine&quot;
-Authors[2]  = &quot;Tracy Kidder&quot;
-Years[2]    = 1981
-</code></pre>
-<p>A nested value is a tree structure with values found at the leaf node. The<br>
-column name is the path from root to leaf node. There are as many columns as<br>
-unique paths in the tree. Let us look at a sample nested value:</p>
-<pre><code>DocId: 10
-Links
-  Forward: 20
-  Forward: 40
-  Forward: 60
-Name
-  Language
-    Code: 'en-us'
-    Country: 'us'
-  Language
-    Code: 'en'
-  Url: 'http://A'
-Name
-  Url: 'http://B'
-Name
-  Language
-    Code: 'en-gb'
-    Country: 'gb'
-</code></pre>
-<p>This value has the following unique columns:</p>
-<ol>
-<li>DocId</li>
-<li>Links.Forward</li>
-<li>Name.Language.Code</li>
-<li>Name.Language.Country</li>
-<li>Name.Url</li>
-</ol>
-<p>After extracting the values from the leaf nodes it can be represented in a<br>
-columnar format like the relational data:</p>
-<pre><code>DocId:                [10]
-Links.Forward:        [20, 40, 60]
-Name.Language.Code:   ['en-us', 'en', 'en-gb']
-Name.Language.Country:['us', 'gb']
-Name.Url:             ['http://A', 'http://B']
-</code></pre>
-<p>In the above representation the structural information is lost. It is<br>
-impossible to reassemble the nested value from the columns values like this:</p>
-<pre><code>Name[0].Language[0].Code[0] = 'en-us'
-Name[0].Language[1].Code[0] = 'en'
-Name[2].Language[0].Code[0] = 'en-gb'
-</code></pre>
-<p>Between 'en' and 'en-gb' the path Name[1] terminates early. This<br>
-representation contains only values which are present in the value. It does<br>
-not capture values which are missing because the path terminated early.</p>
-<p>TODO:</p>
-<p>-[ ] Data Model<br>
--[ ] Missing Values<br>
--[ ] Definition Levels<br>
--[ ] Repetition Levels</p>
-<hr>
-<p>So how are nested values represented in columnar storage?</p>
-<p>This is one of the novel contributions from<br>
-the <a href="https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf">VLDB 2010 paper - Dremel: Interactive Analysis of<br>
-Web-Scale Datasets</a>.</p>
-<blockquote>
-<p>We describe a novel columnar storage format for nested<br>
-data. We present algorithms for dissecting nested records<br>
-into columns and reassembling them.</p>
-</blockquote>
-<hr>
-<h2 id="scratch" tabindex="-1">Scratch <a class="direct-link" href="#scratch" aria-hidden="true">#</a></h2>
-<pre><code>Name
- Language
-  Code: 'en-us'
-  Country: 'us'
- Language
-  Code: 'en'
-Name
-Name
- Language
-  Code: 'en-gb'
-  Country: 'gb'
-</code></pre>
-<ul>
-<li>See both above and below are the same thing</li>
-<li>The bottom encoding looks weird because of the extra columns with some<br>
-numbers. We'll soon get to how it is computed.</li>
-<li>Those numbers make it possible for us to reassemble the original nested<br>
-record shown above given the table below. It's neat!</li>
-<li>NULL is used to signal the absence of a value in the nested record.</li>
-<li>But why do we need this?</li>
-<li>Interactive ad-hoc querying using a database engine built for the purpose of<br>
-analytics like ClickHouse, DuckDB etc. Not PostgreSQL or MySQL.</li>
-<li>Analytics queries are primarily aggregations. If you only need to find all<br>
-the distinct Name.Language.Country you only need to read the Name.Language.<br>
-Country column. Projections are efficient because you don't have to read<br>
-the entire nested value just to get a single column.</li>
-<li>Adopted by Parquet/Arrow though the encoding differs slightly, the<br>
-principles remain the same. The principle is preserving the structure of<br>
-the nested record</li>
-</ul>
-<div style="display: flex; gap: 16px;">
-<div>
-<table>
-<thead>
-<tr>
-<th><strong>Name.Language.Country</strong></th>
-<th></th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>value</strong></td>
-<td><strong>r</strong></td>
-<td><strong>d</strong></td>
-</tr>
-<tr>
-<td>en-us</td>
-<td>0</td>
-<td>2</td>
-</tr>
-<tr>
-<td>en</td>
-<td>2</td>
-<td>2</td>
-</tr>
-<tr>
-<td>NULL</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr>
-<td>en-gb</td>
-<td>1</td>
-<td>2</td>
-</tr>
-<tr>
-<td>NULL</td>
-<td>0</td>
-<td>1</td>
-</tr>
-</tbody>
-</table>
-</div>
-<div>
-<table>
-<thead>
-<tr>
-<th><strong>Name.Language.Code</strong></th>
-<th></th>
-<th></th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><strong>value</strong></td>
-<td><strong>r</strong></td>
-<td><strong>d</strong></td>
-</tr>
-<tr>
-<td>us</td>
-<td>0</td>
-<td>3</td>
-</tr>
-<tr>
-<td>NULL</td>
-<td>2</td>
-<td>2</td>
-</tr>
-<tr>
-<td>NULL</td>
-<td>1</td>
-<td>1</td>
-</tr>
-<tr>
-<td>gb</td>
-<td>1</td>
-<td>3</td>
-</tr>
-<tr>
-<td>NULL</td>
-<td>0</td>
-<td>1</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
 
 <hr>
 <ul><li>Previous: <a href="/posts/fourthpost/">This is my fourth post.</a></li>
