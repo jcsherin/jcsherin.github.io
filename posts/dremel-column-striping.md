@@ -1,12 +1,267 @@
 ---
-title: Flattening nested records into columns
-description: Dremel encoding of nested records into columnar values
-date: 2025-04-04
+title: Nested Record Shredding
+description: Shredding nested data for columnar storage
+date: 2025-04-21
 tags:
-  - dremel
+  - record shredding
   - column striping
+  - nested data
 layout: layouts/post.njk
 ---
+
+Notes:
+
+- A lot of engineering effort goes into building a correct, performant
+  vectorized query execution engine for analytical workloads. You can use
+  either SQL or DataFrames to run interactive analysis over very large
+  datasets. The data is ready to query in a relational form, and PAX storage
+  model on disk.
+
+In columnar storage values of a single column attribute are stored
+contiguously. In analytics databases the query optimizer can apply
+projection pushdown directly to the data source. This means only those columns
+which are specified in the query are read from storage. Analytical queries are
+often aggregations over the entire data source. So this can reduce the I/O
+required and make the queries run faster.
+
+It is easy to map flat relational data to columns. Given a projection of
+columns the original record can be reassembled by index or offset. A record
+has the same index or offset across all columns. This is not the case with
+nested data structures.
+
+If nested data structures can be shredded into columns, then it is possible
+to use a SQL or DataFrame interface to query nested data. All the built-in
+optimizations which are available for relational data also then becomes
+available to nested data structures. The ability to interactively query millions
+or billions of nested data becomes possible in a single node using a vectorized
+query execution engines like DuckDB, ClickHouse or Apache DataFusion.
+
+```
+# First record
+ProductId: 123
+ImageGallery:
+  PrimaryImageId: 555
+  AdditionalImageId:
+    - 556
+    - 557
+
+# Second record
+ProductId: 678
+ImageGallery:
+  PrimaryImageId: 987
+  AdditionalImageId:
+    - 988
+    - 989
+    - 990
+```
+
+Nested data structures are tree shaped. The atomic or primitive value is
+found at the leaf of the tree. And columns in the nested data structure is
+the path from root to leaf. The columns with their data type are:
+
+1. ProductId - Integer
+2. ImageGallery.PrimaryImageId - Integer
+3. ImageGallery.AdditionalImageId - Array[Integer]
+
+The two records above after being shredded into column values will look like
+this:
+
+```
+ProductId                       : [123, 678]
+ImageGallery.PrimaryImageId     : [555, 987]
+ImageGallery.AdditionalImageId  : [556, 557, 988, 989, 990]
+```
+
+In the absence of other metadata it is now impossible for us to reassemble
+the original records. The structural information is lost with this encoding.
+We are unable to identify where a record begins or ends when the nested data
+structure contains repeated (array) values. In this representation it is not
+possible anymore to know which values in `ImageGallery.AdditionalImageId`
+belongs to which records.
+
+```
+# First record
+ProductId: 123
+ImageGallery:
+  PrimaryImageId: 555
+  AdditionalImageId:
+    - 556
+    - 557
+AltText:
+  - Language:
+      - Locale: en-US
+        Description: Athletic running shoes
+        Keyword:
+          - shoes
+          - running
+          - athletic
+
+# Second record
+ProductId: 678
+ImageGallery:
+  PrimaryImageId: 987
+  AdditionalImageId:
+    - 988
+    - 989
+    - 990
+```
+
+Real world nested data structures are also sparse. In this example the
+first nested data contains descriptive text columns, but the second record
+does not. For partially or completely missing paths in a nested data
+structure NULL values are inserted. The more sparse the data because of
+missing column values, the more NULL values there will be.
+
+```
+ProductId                       : [123, 678]
+ImageGallery.PrimaryImageId     : [555, 987]
+ImageGallery.AdditionalImageId  : [556, 557, 988, 989, 990]
+
+# Columns present only in the first record
+AltText.Language.Locale         : ["en-US", NULL]
+AltText.Language.Description    : ["Athletic running shoes", NULL]
+AltText.Language.Keyword        : ["shoes", "running", "athletic", NULL]
+```
+
+The Dremel (Google BigQuery) paper (VLDB 2010) introduced a new
+representation for nested data in columnar storage which also stored the
+structural hierarchy of the nested data side by side with the column values.
+This metadata made it possible to reassemble the original nested data
+structure back from columnar format.
+
+The ability to represent nested data directly in a columnar format meant
+increased developer productivity. There is no need to normalize the nested
+data by extracting entities and joining multiple relations using foreign
+keys in some star or snowflake schema for data analysis. Developers could
+use the SQL query execution for interactive analysis of very large nested
+datasets.
+
+Later when Parquet was created it added ground up support nested data
+structures in its file format using the techniques and principles described
+in the Dremel paper.
+
+For the `ImageGallery.AdditionalImageId` it was impossible to reassemble the
+original two records by looking at only the stored column values. In Dremel
+they introduced metadata which encodes the structure of the values in the
+nested data. They are definition level and repetition level.
+
+In the below example by reading `d` (definition level) and `r` (repetition
+level) in tandem with the column values the original nested values can be
+reassembled.
+
+```
+# ImageGallery.AdditionalImageId Column  
+
+d       : [1, 1, 1, 1, 1]             # definition level
+r       : [0, 1, 0, 1, 1]             # repetition level
+values  : [556, 557, 988, 989, 990]
+```
+
+To compute the definition level of `ImageGallery.AdditionalImageId` we need
+to count all the optional and repeated fields in it. To compute the
+repetition level the index of the value must be known. If there are multiple
+repeated fields in column path, then the computed repetition level of the
+nearest repeated ancestor.
+
+The schema of the nested data is required for us to know if a field is
+defined as required, optional or repeated. So let us inspect the schema for
+`ProductImages` document before formalizing the computation of definition
+and repetition levels from the nested data.
+
+The schema for `ProductImages` is given below. From the schema we can see that
+this is a nested document which contains the display images for a product and
+language translations of the image descriptions.
+
+The data model is,
+
+- A field is either a struct type or a primitive type like an integer,
+  string, float, boolean etc.
+- A field with no explicit multiplicity labels is a required field. A
+  required field will always be present in the nested data.
+- An optional field is explicitly marked in the schema. In nested data this
+  field maybe present or absent.
+- A repeated field is represented as an array of values. The type of
+  repeated field can be either a struct type or a primitive type.
+- The ordering of repeated values is significant.
+- The leaf node is always a primitive type, or a repeated field of a
+  primitive type.
+- A column name is represented using dot notation by joining the field names
+  from root to leaf. Eg. `AltText.Language.Keyword`
+-
+
+```
+ProductImages                     # Document Name
+├─ ProductId [int64]               
+├─ ImageGallery                   
+│  ├─ PrimaryImageId [int64]      
+│  └─ AdditionalImageId [int64]*  # repeated
+└─ AltText?                       # repeated
+   └─ Language?                   # repeated
+      ├─ Locale [string]          
+      ├─ Description [string]?    # optional
+      └─ Keyword [string]*        # repeated
+
+* = repeated
+? = optional
+```
+
+A definition level for a column value is computed by counting the occurrence
+of optional and repeated fields which are present in the value. If an optional
+field is absent then we do not increment the definition level. If a repeated
+field is empty or missing we do not increment the definition level. So the
+definition level can tell us where the path in a tree terminated for any
+given column value.
+
+But this is not enough for us to reassemble repeated values. The repetition
+level is used to identify the beginning of an array from the rest of the
+array values. For computing repetition levels, only repeated fields in a
+path are counted.
+
+In `ImageGallery.AdditionalImageId`,
+
+- `ImageGallery` is a required field
+- `AdditionalImageId` is a repeated field
+
+```
+# ImageGallery.AdditionalImageId Column  
+
+definition_levels : [1, 1, 1, 1, 1]
+repetition_levels : [0, 1, 0, 1, 1]
+values            : [556, 557, 988, 989, 990]
+```
+
+From the definition levels we can see that for all values the path is
+`ImageGallery.AdditionalImageId` because the definition level is 1 which
+means the repeated field `AdditionalImageId` in the path is always present.
+
+There is only a single repeated field, so the repetition levels can be
+either zero or one. To identify the start of the array, the first element in
+this example will have a repetition level of zero. The remaining values in
+the array will have the repetition level zero. So `556` has repetition level
+of zero, and `557` has a repetition level of one.
+
+For the next value `988` we can infer that it belongs to the second record
+because it has a repetition level of zero. This means it has to be the first
+value in the array. And the remaining values in the second record `989`, `999`
+because they have a repetition level of 1.
+
+In this example we were able to identify that the repeated values belonged
+to two separate nested values using the repetition levels.
+
+- Example for null values (definition levels)
+- Example for nested repetition levels
+
+---
+
+
+In columnar storage values of a single column attribute are stored
+contiguously.
+
+Nested data structures are tree shaped. In columnar storage values of a
+single column attribute is stored contiguously. For flat relational data it
+
+---
+
 
 The Dremel(Google BigQuery) VLDB 2010 paper introduced the technique for
 __record shredding__ or __column striping__ of complex nested data structures
@@ -101,7 +356,7 @@ Product
 │
 ├─ ProductId [int64]
 │
-├─ ImageGallery
+├─ ImageGallery?
 │  ├─ PrimaryImageId [int64]
 │  └─ AdditionalImageId [int64]*
 │
@@ -159,6 +414,8 @@ ImageGallery:
   PrimaryImageId: 987
   AdditionalImageId:
     - 988
+    - 989
+    - 990
 ```
 
 ---
