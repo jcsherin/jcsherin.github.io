@@ -237,12 +237,12 @@ means the repeated field `AdditionalImageId` in the path is always present.
 There is only a single repeated field, so the repetition levels can be
 either zero or one. To identify the start of the array, the first element in
 this example will have a repetition level of zero. The remaining values in
-the array will have the repetition level zero. So `556` has repetition level
+the array will have the repetition level of one. So `556` has repetition level
 of zero, and `557` has a repetition level of one.
 
 For the next value `988` we can infer that it belongs to the second record
 because it has a repetition level of zero. This means it has to be the first
-value in the array. And the remaining values in the second record `989`, `999`
+value in the array. And the remaining values in the second record `989`, `989`
 because they have a repetition level of 1.
 
 In this example we were able to identify that the repeated values belonged
