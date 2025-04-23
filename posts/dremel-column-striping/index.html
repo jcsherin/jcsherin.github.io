@@ -28,14 +28,6 @@
 
 <time datetime="2025-04-21">21 Apr 2025</time><a href="/tags/record-shredding/" class="post-tag">record shredding</a><a href="/tags/column-striping/" class="post-tag">column striping</a><a href="/tags/nested-data/" class="post-tag">nested data</a>
 
-<p>Notes:</p>
-<ul>
-<li>A lot of engineering effort goes into building a correct, performant<br>
-vectorized query execution engine for analytical workloads. You can use<br>
-either SQL or DataFrames to run interactive analysis over very large<br>
-datasets. The data is ready to query in a relational form, and PAX storage<br>
-model on disk.</li>
-</ul>
 <p>In columnar storage values of a single column attribute are stored<br>
 contiguously. In analytics databases the query optimizer can apply<br>
 projection pushdown directly to the data source. This means only those columns<br>
@@ -225,11 +217,11 @@ means the repeated field <code>AdditionalImageId</code> in the path is always pr
 <p>There is only a single repeated field, so the repetition levels can be<br>
 either zero or one. To identify the start of the array, the first element in<br>
 this example will have a repetition level of zero. The remaining values in<br>
-the array will have the repetition level zero. So <code>556</code> has repetition level<br>
+the array will have the repetition level of one. So <code>556</code> has repetition level<br>
 of zero, and <code>557</code> has a repetition level of one.</p>
 <p>For the next value <code>988</code> we can infer that it belongs to the second record<br>
 because it has a repetition level of zero. This means it has to be the first<br>
-value in the array. And the remaining values in the second record <code>989</code>, <code>999</code><br>
+value in the array. And the remaining values in the second record <code>989</code>, <code>989</code><br>
 because they have a repetition level of 1.</p>
 <p>In this example we were able to identify that the repeated values belonged<br>
 to two separate nested values using the repetition levels.</p>
@@ -424,6 +416,97 @@ repetition_level  : [0, 0]
 <pre><code># ProductId Column
 values            : [123, 456]
 </code></pre>
+<hr>
+<p>Draft Notes:</p>
+<ul>
+<li>Improve definition level explanation: counting number of optional and<br>
+repeated fields in the path from root to where the value is found, or<br>
+where the path terminates for NULL values or paths which are entirely<br>
+missing which can happen if the first field in a path is optional and<br>
+therefore is a NULL value.</li>
+<li>In <code>AltText.Language.Keyword</code> the computation of repetition levels needs<br>
+improvement. For e.g. in the case of &quot;athletic&quot; the second repeated field<br>
+<code>Keyword</code> is repeating, therefore the repetition level switches from zero<br>
+to two.</li>
+<li>The path with index <code>Language[0].Keyword[1]</code> for demonstrating the<br>
+relationship with repetition levels can be compiled as a table or a nested<br>
+list. The key is to explicitly outline the repetition level no matter<br>
+which format is used for visualizing the relationship.</li>
+<li>A definition level less than maximum value means a NULL value at that<br>
+specific position in the schema. The count provides clues as to where the<br>
+path terminated.</li>
+<li>Add visual diagrams like in the Twitter blog post - Dremel made simple<br>
+with Parquet.</li>
+<li>Include an example of a flat schema with a required, optional and repeated<br>
+field.</li>
+<li>Include bit-level packing of definition, repetition levels.</li>
+<li>The twitter blog post includes examples of how useful data structures like<br>
+map (key, value) are implemented. It maybe useful to show the separation<br>
+between logical and physical types. Map is a logical type which is<br>
+rewritten to a struct physical type with a required key of type string,<br>
+and an optional value of a primitive type or a record type.</li>
+<li>The twitter blog post also includes a nested list example for<br>
+demonstrating repetition levels. I need to reference it again to check how<br>
+it is represented logically similar to the map type.</li>
+<li>Include a couple of practical SQL query examples over the column<br>
+shredded nested data structures using Apache DataFusion. The test data can<br>
+be generated and written using python to Parquet format.</li>
+<li>Parquet precomputed offset index which helps with deeply nested<br>
+documents where otherwise we have to scan the definition, repetition<br>
+levels from beginning to end to jump to a record. Include a concrete<br>
+example.</li>
+<li>Include record reassembly as a separate example instead of merging it with<br>
+the explanation of definition, and repetition levels.</li>
+<li>Schema merging in Parquet. Include an example.</li>
+<li>In proto3 there is a significant change. Fields are optional by default<br>
+and need not be marked as optional. They don't use the optional keyword<br>
+anymore. The paper uses the proto2 syntax and semantics. The optional<br>
+fields are explicitly marked. So proto3 removed required fields and uses<br>
+default values for missing fields instead of explicitly tracking presence.<br>
+This means it is not possible anymore to identify if a field which was<br>
+explicitly set to default value vs one which was not set at all. But this<br>
+change was included to make it possible to mark an optional field as<br>
+required (dangerous) made it challenging for schema evolution. But proto3<br>
+reintroduced the optional keyword again.</li>
+<li>Include concrete SQL example for predicate pushdown.</li>
+<li>Include Zero-Copy Optimization when reading from Parquet to Arrow.<br>
+Remapping definition levels to validity bitmaps, and repetition levels to<br>
+offset indexes. The last entry (n+1 for n items) indicates position after<br>
+the last element. This also has to do with point access when you want to<br>
+read all the values for record N, you can do offset[N-1] - offset[N] and<br>
+directly read only those values from offset[N-1].</li>
+<li>This is not a post about light-weight compression schemes, so I am not<br>
+adding anything about dictionary encoding, run-length encoding etc.</li>
+</ul>
+<hr>
+<p>Predicate Pushdown for Nested Fields - Concrete Example<br>
+Consider a schema with nested e-commerce orders:<br>
+Order<br>
+├─ OrderId<br>
+├─ Customer<br>
+│ ├─ CustomerId<br>
+│ ├─ Name<br>
+│ └─ PremiumStatus<br>
+└─ Items [array]<br>
+├─ ProductId<br>
+├─ Quantity<br>
+└─ Price<br>
+Let's say we want all orders where any item has a price over $100:</p>
+<pre class="language-sql"><code class="language-sql"><span class="token keyword">SELECT</span> <span class="token operator">*</span><br><span class="token keyword">FROM</span> orders<br><span class="token keyword">WHERE</span> <span class="token keyword">EXISTS</span> <span class="token punctuation">(</span><span class="token keyword">SELECT</span> <span class="token number">1</span> <span class="token keyword">FROM</span> UNNEST<span class="token punctuation">(</span>items<span class="token punctuation">)</span> <span class="token keyword">WHERE</span> price <span class="token operator">></span> <span class="token number">100</span><span class="token punctuation">)</span></code></pre>
+<p>Traditional Approach:</p>
+<p>Read all columns for all Order records<br>
+Reconstruct the full nested structure<br>
+Apply the filter to each record<br>
+Return matching records</p>
+<p>Predicate Pushdown with Nested Fields:</p>
+<p>The query engine identifies that only the Items.Price column needs examining<br>
+first<br>
+It reads only the Items.Price column with its definition and repetition levels<br>
+It creates a bitmap of which Orders have at least one item with price &gt; $100<br>
+It then only reads the remaining columns for Orders that matched the filter</p>
+<p>For a dataset with 1 million orders but only 5% having items over $100, this<br>
+approach reads only 5% of the data for most columns.</p>
+<hr>
 
 <hr>
 <ul><li>Previous: <a href="/posts/fourthpost/">This is my fourth post.</a></li>
