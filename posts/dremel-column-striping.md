@@ -9,14 +9,6 @@ tags:
 layout: layouts/post.njk
 ---
 
-Notes:
-
-- A lot of engineering effort goes into building a correct, performant
-  vectorized query execution engine for analytical workloads. You can use
-  either SQL or DataFrames to run interactive analysis over very large
-  datasets. The data is ready to query in a relational form, and PAX storage
-  model on disk.
-
 In columnar storage values of a single column attribute are stored
 contiguously. In analytics databases the query optimizer can apply
 projection pushdown directly to the data source. This means only those columns
@@ -490,3 +482,108 @@ So in this encoding in physical storage we only write the column values.
 # ProductId Column
 values            : [123, 456]
 ```
+
+---
+
+Draft Notes:
+
+- Improve definition level explanation: counting number of optional and
+  repeated fields in the path from root to where the value is found, or
+  where the path terminates for NULL values or paths which are entirely
+  missing which can happen if the first field in a path is optional and
+  therefore is a NULL value.
+- In `AltText.Language.Keyword` the computation of repetition levels needs
+  improvement. For e.g. in the case of "athletic" the second repeated field
+  `Keyword` is repeating, therefore the repetition level switches from zero
+  to two.
+- The path with index `Language[0].Keyword[1]` for demonstrating the
+  relationship with repetition levels can be compiled as a table or a nested
+  list. The key is to explicitly outline the repetition level no matter
+  which format is used for visualizing the relationship.
+- A definition level less than maximum value means a NULL value at that
+  specific position in the schema. The count provides clues as to where the
+  path terminated.
+- Add visual diagrams like in the Twitter blog post - Dremel made simple
+  with Parquet.
+- Include an example of a flat schema with a required, optional and repeated
+  field.
+- Include bit-level packing of definition, repetition levels.
+- The twitter blog post includes examples of how useful data structures like
+  map (key, value) are implemented. It maybe useful to show the separation
+  between logical and physical types. Map is a logical type which is
+  rewritten to a struct physical type with a required key of type string,
+  and an optional value of a primitive type or a record type.
+- The twitter blog post also includes a nested list example for
+  demonstrating repetition levels. I need to reference it again to check how
+  it is represented logically similar to the map type.
+- Include a couple of practical SQL query examples over the column
+  shredded nested data structures using Apache DataFusion. The test data can
+  be generated and written using python to Parquet format.
+- Parquet precomputed offset index which helps with deeply nested
+  documents where otherwise we have to scan the definition, repetition
+  levels from beginning to end to jump to a record. Include a concrete
+  example.
+- Include record reassembly as a separate example instead of merging it with
+  the explanation of definition, and repetition levels.
+- Schema merging in Parquet. Include an example.
+- In proto3 there is a significant change. Fields are optional by default
+  and need not be marked as optional. They don't use the optional keyword
+  anymore. The paper uses the proto2 syntax and semantics. The optional
+  fields are explicitly marked. So proto3 removed required fields and uses
+  default values for missing fields instead of explicitly tracking presence.
+  This means it is not possible anymore to identify if a field which was
+  explicitly set to default value vs one which was not set at all. But this
+  change was included to make it possible to mark an optional field as
+  required (dangerous) made it challenging for schema evolution. But proto3
+  reintroduced the optional keyword again.
+- Include concrete SQL example for predicate pushdown.
+- Include Zero-Copy Optimization when reading from Parquet to Arrow.
+  Remapping definition levels to validity bitmaps, and repetition levels to
+  offset indexes. The last entry (n+1 for n items) indicates position after
+  the last element. This also has to do with point access when you want to
+  read all the values for record N, you can do offset[N-1] - offset[N] and
+  directly read only those values from offset[N-1].
+- This is not a post about light-weight compression schemes, so I am not
+  adding anything about dictionary encoding, run-length encoding etc.
+
+---
+
+Predicate Pushdown for Nested Fields - Concrete Example
+Consider a schema with nested e-commerce orders:
+Order
+├─ OrderId
+├─ Customer
+│ ├─ CustomerId
+│ ├─ Name
+│ └─ PremiumStatus
+└─ Items [array]
+├─ ProductId
+├─ Quantity
+└─ Price
+Let's say we want all orders where any item has a price over $100:
+
+```sql
+SELECT *
+FROM orders
+WHERE EXISTS (SELECT 1 FROM UNNEST(items) WHERE price > 100)
+```
+
+Traditional Approach:
+
+Read all columns for all Order records
+Reconstruct the full nested structure
+Apply the filter to each record
+Return matching records
+
+Predicate Pushdown with Nested Fields:
+
+The query engine identifies that only the Items.Price column needs examining
+first
+It reads only the Items.Price column with its definition and repetition levels
+It creates a bitmap of which Orders have at least one item with price > $100
+It then only reads the remaining columns for Orders that matched the filter
+
+For a dataset with 1 million orders but only 5% having items over $100, this
+approach reads only 5% of the data for most columns.
+
+---
