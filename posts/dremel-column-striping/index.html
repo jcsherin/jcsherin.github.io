@@ -28,6 +28,70 @@
 
 <time datetime="2025-04-21">21 Apr 2025</time><a href="/tags/record-shredding/" class="post-tag">record shredding</a><a href="/tags/column-striping/" class="post-tag">column striping</a><a href="/tags/nested-data/" class="post-tag">nested data</a>
 
+<h1 id="introduction" tabindex="-1">Introduction <a class="direct-link" href="#introduction" aria-hidden="true">#</a></h1>
+<p>The main issue with flattening nested data structures is ensuring the<br>
+process is reversible. The flattened representation needs to contain both data<br>
+and the metadata which encodes the structure. From this representation, one<br>
+should be able to correctly reconstruct the original nested data structure.</p>
+<p>Typically, a query reads only a few attributes. Therefore, it is more<br>
+efficient to read only those specific attributes, rather than the entire<br>
+nested data structure. Consequently, a core desirable property of<br>
+such flattening is the ability to partially reconstruct the nested data<br>
+structure, skipping any attributes not mentioned in the query.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Create illustration for partial projection
+<ul>
+<li><strong>Objective:</strong> Original and partial side by side</li>
+<li><strong>Details</strong>:
+<ul>
+<li><strong>Original</strong>
+<ul>
+<li>Clear, compact (YAML over JSON)</li>
+<li>Example has 2 or more levels of nesting</li>
+<li>Clearly labelled as original</li>
+</ul>
+</li>
+<li><strong>Partial Projection</strong>
+<ul>
+<li>Briefly state the query (e.g. query for product id and English(US)<br>
+description of first image)</li>
+<li>Show the result partial projection from original</li>
+<li>Clearly labelled as partial</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>Placement:</strong> Insert after paragraph discussing partial reconstruction</li>
+</ul>
+</li>
+</ul>
+<h1 id="data-model" tabindex="-1">Data Model <a class="direct-link" href="#data-model" aria-hidden="true">#</a></h1>
+<p>For a moment consider a nested data model with the following restrictions:</p>
+<ol>
+<li>All fields are mandatory. There are never any null values.</li>
+<li>This model disallows list or array types, permitting only struct types and<br>
+scalar types (includes integers, floating-point, boolean, characters and<br>
+strings).</li>
+</ol>
+<p>Here we do not have to explicitly track field presence because no field can<br>
+ever be null. Furthermore, since all fields are mandatory and this model<br>
+disallows lists (meaning each field is a single scalar or struct, not a<br>
+collection), the cardinality of every field is exactly one. Consequently, we<br>
+do not have to determine if a list is empty.</p>
+<p>In such a model, the structure of any data instance perfectly mirrors its<br>
+schema. Consequently, the schema alone is sufficient to reconstruct the<br>
+original nested data structure from its flattened representation.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Concrete example with a nested value + schema</li>
+</ul>
+<p>These restrictions limit our ability to represent most real-world nested<br>
+datasets. But at the same time, this simplified model demonstrates which<br>
+structural properties must be encoded as metadata.</p>
+<ol>
+<li>Is an optional field present or not?</li>
+<li>Is a list empty or not?</li>
+</ol>
+<hr>
 <p>In columnar storage values of a single column attribute are stored<br>
 contiguously. In analytics databases the query optimizer can apply<br>
 projection pushdown directly to the data source. This means only those columns<br>
@@ -141,7 +205,7 @@ nested data. They are definition level and repetition level.</p>
 <p>In the below example by reading <code>d</code> (definition level) and <code>r</code> (repetition<br>
 level) in tandem with the column values the original nested values can be<br>
 reassembled.</p>
-<pre><code># ImageGallery.AdditionalImageId Column  
+<pre><code># ImageGallery.AdditionalImageId Column
 
 d       : [1, 1, 1, 1, 1]             # definition level
 r       : [0, 1, 0, 1, 1]             # repetition level
@@ -177,13 +241,13 @@ from root to leaf. Eg. <code>AltText.Language.Keyword</code></li>
 <li></li>
 </ul>
 <pre><code>ProductImages                     # Document Name
-├─ ProductId [int64]               
-├─ ImageGallery                   
-│  ├─ PrimaryImageId [int64]      
+├─ ProductId [int64]
+├─ ImageGallery
+│  ├─ PrimaryImageId [int64]
 │  └─ AdditionalImageId [int64]*  # repeated
 └─ AltText?                       # optional
    └─ Language*                   # repeated
-      ├─ Locale [string]          
+      ├─ Locale [string]
       ├─ Description [string]?    # optional
       └─ Keyword [string]*        # repeated
 
@@ -205,7 +269,7 @@ path are counted.</p>
 <li><code>ImageGallery</code> is a required field</li>
 <li><code>AdditionalImageId</code> is a repeated field</li>
 </ul>
-<pre><code># ImageGallery.AdditionalImageId Column  
+<pre><code># ImageGallery.AdditionalImageId Column
 
 definition_levels : [1, 1, 1, 1, 1]
 repetition_levels : [0, 1, 0, 1, 1]
@@ -263,7 +327,7 @@ represents the missing <code>Description</code> in the 2nd and 3rd <code>Languag
 repetition which corresponds to the <code>Locale</code>: <code>fr-FR</code> and <code>de-DE</code>.</p>
 <pre><code># AltText.Language.Description Column
 
-values: [&quot;Athletic running shoes&quot;, &quot;Athletic trainers&quot;, NULL, NULL] 
+values: [&quot;Athletic running shoes&quot;, &quot;Athletic trainers&quot;, NULL, NULL]
 </code></pre>
 <p>Next let us compute the definition levels. The definition level for both the<br>
 NULL values is two because the path terminates at <code>AltText.Language</code> as the<br>
@@ -271,7 +335,7 @@ NULL values is two because the path terminates at <code>AltText.Language</code> 
 <pre><code># AltText.Language.Description Column
 
 definition_levels : [3, 3, 2, 2]
-values            : [&quot;Athletic running shoes&quot;, &quot;Athletic trainers&quot;, NULL, NULL] 
+values            : [&quot;Athletic running shoes&quot;, &quot;Athletic trainers&quot;, NULL, NULL]
 </code></pre>
 <p>Next let us compute the repetition levels. This column has a single repeated<br>
 field which is <code>Language</code>. So repetition levels will be between 0 and 1 for<br>
@@ -282,7 +346,7 @@ the repeated field <code>Language</code>, from the rest.</p>
 
 repetition_levels : [0, 1, 1, 1]
 definition_levels : [3, 3, 2, 2]
-values            : [&quot;Athletic running shoes&quot;, &quot;Athletic trainers&quot;, NULL, NULL] 
+values            : [&quot;Athletic running shoes&quot;, &quot;Athletic trainers&quot;, NULL, NULL]
 </code></pre>
 <p>Next let us look at an example where there is more than one repeated field<br>
 in a column. The <code>AltText.Language.Keyword</code> column has two repeated fields<br>
@@ -298,14 +362,14 @@ level of two because <code>Keyword</code> field is missing.</p>
 <pre><code># AltText.Language.Keyword
 
 values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 </code></pre>
 <p>Next let us compute the repetition levels. This looks complicated, but you<br>
 will soon see how this exactly reassembles the original nested data structure.</p>
 <pre><code># AltText.Language.Keyword
 
 values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 </code></pre>
 <p>Let us look at the nested column in isolation and give it index numbers.</p>
@@ -349,7 +413,7 @@ the repetition level up to <code>Language</code> field. And the value is one.</p
 <pre><code># AltText.Language.Keyword
 
 values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 </code></pre>
 <p>Now that we know how definition and repetition levels are computed, it is<br>
@@ -400,7 +464,7 @@ NULL values need not be physically stored saving space.</p>
 
 # Physical representation which does not store NULL values
 values: [&quot;shoes&quot;, &quot;athletic&quot;, &quot;trainers&quot;, &quot;sport&quot;]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 </code></pre>
 <p>In this example <code>ProductId</code> is a required field so there is no need to store<br>

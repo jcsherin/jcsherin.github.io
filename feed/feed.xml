@@ -17,7 +17,71 @@
 		<link href="https://jacobsherin.com/posts/dremel-column-striping/"/>
 		<updated>2025-04-21T00:00:00Z</updated>
 		<id>https://jacobsherin.com/posts/dremel-column-striping/</id>
-		<content type="html">&lt;p&gt;In columnar storage values of a single column attribute are stored&lt;br /&gt;
+		<content type="html">&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;The main issue with flattening nested data structures is ensuring the&lt;br /&gt;
+process is reversible. The flattened representation needs to contain both data&lt;br /&gt;
+and the metadata which encodes the structure. From this representation, one&lt;br /&gt;
+should be able to correctly reconstruct the original nested data structure.&lt;/p&gt;
+&lt;p&gt;Typically, a query reads only a few attributes. Therefore, it is more&lt;br /&gt;
+efficient to read only those specific attributes, rather than the entire&lt;br /&gt;
+nested data structure. Consequently, a core desirable property of&lt;br /&gt;
+such flattening is the ability to partially reconstruct the nested data&lt;br /&gt;
+structure, skipping any attributes not mentioned in the query.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Create illustration for partial projection
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Objective:&lt;/strong&gt; Original and partial side by side&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Details&lt;/strong&gt;:
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;Original&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Clear, compact (YAML over JSON)&lt;/li&gt;
+&lt;li&gt;Example has 2 or more levels of nesting&lt;/li&gt;
+&lt;li&gt;Clearly labelled as original&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Partial Projection&lt;/strong&gt;
+&lt;ul&gt;
+&lt;li&gt;Briefly state the query (e.g. query for product id and English(US)&lt;br /&gt;
+description of first image)&lt;/li&gt;
+&lt;li&gt;Show the result partial projection from original&lt;/li&gt;
+&lt;li&gt;Clearly labelled as partial&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;Placement:&lt;/strong&gt; Insert after paragraph discussing partial reconstruction&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&quot;data-model&quot; tabindex=&quot;-1&quot;&gt;Data Model &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#data-model&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;For a moment consider a nested data model with the following restrictions:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;All fields are mandatory. There are never any null values.&lt;/li&gt;
+&lt;li&gt;This model disallows list or array types, permitting only struct types and&lt;br /&gt;
+scalar types (includes integers, floating-point, boolean, characters and&lt;br /&gt;
+strings).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Here we do not have to explicitly track field presence because no field can&lt;br /&gt;
+ever be null. Furthermore, since all fields are mandatory and this model&lt;br /&gt;
+disallows lists (meaning each field is a single scalar or struct, not a&lt;br /&gt;
+collection), the cardinality of every field is exactly one. Consequently, we&lt;br /&gt;
+do not have to determine if a list is empty.&lt;/p&gt;
+&lt;p&gt;In such a model, the structure of any data instance perfectly mirrors its&lt;br /&gt;
+schema. Consequently, the schema alone is sufficient to reconstruct the&lt;br /&gt;
+original nested data structure from its flattened representation.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Concrete example with a nested value + schema&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;These restrictions limit our ability to represent most real-world nested&lt;br /&gt;
+datasets. But at the same time, this simplified model demonstrates which&lt;br /&gt;
+structural properties must be encoded as metadata.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Is an optional field present or not?&lt;/li&gt;
+&lt;li&gt;Is a list empty or not?&lt;/li&gt;
+&lt;/ol&gt;
+&lt;hr /&gt;
+&lt;p&gt;In columnar storage values of a single column attribute are stored&lt;br /&gt;
 contiguously. In analytics databases the query optimizer can apply&lt;br /&gt;
 projection pushdown directly to the data source. This means only those columns&lt;br /&gt;
 which are specified in the query are read from storage. Analytical queries are&lt;br /&gt;
@@ -130,7 +194,7 @@ nested data. They are definition level and repetition level.&lt;/p&gt;
 &lt;p&gt;In the below example by reading &lt;code&gt;d&lt;/code&gt; (definition level) and &lt;code&gt;r&lt;/code&gt; (repetition&lt;br /&gt;
 level) in tandem with the column values the original nested values can be&lt;br /&gt;
 reassembled.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# ImageGallery.AdditionalImageId Column  
+&lt;pre&gt;&lt;code&gt;# ImageGallery.AdditionalImageId Column
 
 d       : [1, 1, 1, 1, 1]             # definition level
 r       : [0, 1, 0, 1, 1]             # repetition level
@@ -166,13 +230,13 @@ from root to leaf. Eg. &lt;code&gt;AltText.Language.Keyword&lt;/code&gt;&lt;/li&
 &lt;li&gt;&lt;/li&gt;
 &lt;/ul&gt;
 &lt;pre&gt;&lt;code&gt;ProductImages                     # Document Name
-├─ ProductId [int64]               
-├─ ImageGallery                   
-│  ├─ PrimaryImageId [int64]      
+├─ ProductId [int64]
+├─ ImageGallery
+│  ├─ PrimaryImageId [int64]
 │  └─ AdditionalImageId [int64]*  # repeated
 └─ AltText?                       # optional
    └─ Language*                   # repeated
-      ├─ Locale [string]          
+      ├─ Locale [string]
       ├─ Description [string]?    # optional
       └─ Keyword [string]*        # repeated
 
@@ -194,7 +258,7 @@ path are counted.&lt;/p&gt;
 &lt;li&gt;&lt;code&gt;ImageGallery&lt;/code&gt; is a required field&lt;/li&gt;
 &lt;li&gt;&lt;code&gt;AdditionalImageId&lt;/code&gt; is a repeated field&lt;/li&gt;
 &lt;/ul&gt;
-&lt;pre&gt;&lt;code&gt;# ImageGallery.AdditionalImageId Column  
+&lt;pre&gt;&lt;code&gt;# ImageGallery.AdditionalImageId Column
 
 definition_levels : [1, 1, 1, 1, 1]
 repetition_levels : [0, 1, 0, 1, 1]
@@ -252,7 +316,7 @@ represents the missing &lt;code&gt;Description&lt;/code&gt; in the 2nd and 3rd &
 repetition which corresponds to the &lt;code&gt;Locale&lt;/code&gt;: &lt;code&gt;fr-FR&lt;/code&gt; and &lt;code&gt;de-DE&lt;/code&gt;.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;# AltText.Language.Description Column
 
-values: [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL] 
+values: [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Next let us compute the definition levels. The definition level for both the&lt;br /&gt;
 NULL values is two because the path terminates at &lt;code&gt;AltText.Language&lt;/code&gt; as the&lt;br /&gt;
@@ -260,7 +324,7 @@ NULL values is two because the path terminates at &lt;code&gt;AltText.Language&l
 &lt;pre&gt;&lt;code&gt;# AltText.Language.Description Column
 
 definition_levels : [3, 3, 2, 2]
-values            : [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL] 
+values            : [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Next let us compute the repetition levels. This column has a single repeated&lt;br /&gt;
 field which is &lt;code&gt;Language&lt;/code&gt;. So repetition levels will be between 0 and 1 for&lt;br /&gt;
@@ -271,7 +335,7 @@ the repeated field &lt;code&gt;Language&lt;/code&gt;, from the rest.&lt;/p&gt;
 
 repetition_levels : [0, 1, 1, 1]
 definition_levels : [3, 3, 2, 2]
-values            : [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL] 
+values            : [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Next let us look at an example where there is more than one repeated field&lt;br /&gt;
 in a column. The &lt;code&gt;AltText.Language.Keyword&lt;/code&gt; column has two repeated fields&lt;br /&gt;
@@ -287,14 +351,14 @@ level of two because &lt;code&gt;Keyword&lt;/code&gt; field is missing.&lt;/p&gt
 &lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
 
 values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Next let us compute the repetition levels. This looks complicated, but you&lt;br /&gt;
 will soon see how this exactly reassembles the original nested data structure.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
 
 values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Let us look at the nested column in isolation and give it index numbers.&lt;/p&gt;
@@ -338,7 +402,7 @@ the repetition level up to &lt;code&gt;Language&lt;/code&gt; field. And the valu
 &lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
 
 values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Now that we know how definition and repetition levels are computed, it is&lt;br /&gt;
@@ -389,7 +453,7 @@ NULL values need not be physically stored saving space.&lt;/p&gt;
 
 # Physical representation which does not store NULL values
 values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In this example &lt;code&gt;ProductId&lt;/code&gt; is a required field so there is no need to store&lt;br /&gt;
