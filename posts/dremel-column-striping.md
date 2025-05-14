@@ -9,6 +9,35 @@ tags:
 layout: layouts/post.njk
 ---
 
+# Introduction
+
+The main issue with flattening nested data structures is ensuring the
+process is reversible. The flattened representation needs to contain both data
+and the metadata which encodes the structure. From this representation, one
+should be able to correctly reconstruct the original nested data structure.
+
+Typically, a query reads only a few attributes. Therefore, it is more
+efficient to read only those specific attributes, rather than the entire
+nested data structure. Consequently, a core desirable property of
+such flattening is the ability to partially reconstruct the nested data
+structure, skipping any attributes not mentioned in the query.
+
+- [ ] **TODO:** Create illustration for partial projection
+  - **Objective:** Original and partial side by side
+  - **Details**:
+    - **Original**
+      - Clear, compact (YAML over JSON)
+      - Example has 2 or more levels of nesting
+      - Clearly labelled as original
+    - **Partial Projection**
+      - Briefly state the query (e.g. query for product id and English(US)
+        description of first image)
+      - Show the result partial projection from original
+      - Clearly labelled as partial
+  - **Placement:** Insert after paragraph discussing partial reconstruction
+
+---
+
 In columnar storage values of a single column attribute are stored
 contiguously. In analytics databases the query optimizer can apply
 projection pushdown directly to the data source. This means only those columns
@@ -142,7 +171,7 @@ level) in tandem with the column values the original nested values can be
 reassembled.
 
 ```
-# ImageGallery.AdditionalImageId Column  
+# ImageGallery.AdditionalImageId Column
 
 d       : [1, 1, 1, 1, 1]             # definition level
 r       : [0, 1, 0, 1, 1]             # repetition level
@@ -183,13 +212,13 @@ The data model is,
 
 ```
 ProductImages                     # Document Name
-├─ ProductId [int64]               
-├─ ImageGallery                   
-│  ├─ PrimaryImageId [int64]      
+├─ ProductId [int64]
+├─ ImageGallery
+│  ├─ PrimaryImageId [int64]
 │  └─ AdditionalImageId [int64]*  # repeated
 └─ AltText?                       # optional
    └─ Language*                   # repeated
-      ├─ Locale [string]          
+      ├─ Locale [string]
       ├─ Description [string]?    # optional
       └─ Keyword [string]*        # repeated
 
@@ -215,7 +244,7 @@ In `ImageGallery.AdditionalImageId`,
 - `AdditionalImageId` is a repeated field
 
 ```
-# ImageGallery.AdditionalImageId Column  
+# ImageGallery.AdditionalImageId Column
 
 definition_levels : [1, 1, 1, 1, 1]
 repetition_levels : [0, 1, 0, 1, 1]
@@ -283,7 +312,7 @@ repetition which corresponds to the `Locale`: `fr-FR` and `de-DE`.
 ```
 # AltText.Language.Description Column
 
-values: ["Athletic running shoes", "Athletic trainers", NULL, NULL] 
+values: ["Athletic running shoes", "Athletic trainers", NULL, NULL]
 ```
 
 Next let us compute the definition levels. The definition level for both the
@@ -294,7 +323,7 @@ NULL values is two because the path terminates at `AltText.Language` as the
 # AltText.Language.Description Column
 
 definition_levels : [3, 3, 2, 2]
-values            : ["Athletic running shoes", "Athletic trainers", NULL, NULL] 
+values            : ["Athletic running shoes", "Athletic trainers", NULL, NULL]
 ```
 
 Next let us compute the repetition levels. This column has a single repeated
@@ -309,7 +338,7 @@ the repeated field `Language`, from the rest.
 
 repetition_levels : [0, 1, 1, 1]
 definition_levels : [3, 3, 2, 2]
-values            : ["Athletic running shoes", "Athletic trainers", NULL, NULL] 
+values            : ["Athletic running shoes", "Athletic trainers", NULL, NULL]
 ```
 
 Next let us look at an example where there is more than one repeated field
@@ -332,7 +361,7 @@ level of two because `Keyword` field is missing.
 # AltText.Language.Keyword
 
 values: ["shoes", "athletic", "trainers", "sport", NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 ```
 
 Next let us compute the repetition levels. This looks complicated, but you
@@ -342,7 +371,7 @@ will soon see how this exactly reassembles the original nested data structure.
 # AltText.Language.Keyword
 
 values: ["shoes", "athletic", "trainers", "sport", NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 ```
 
@@ -398,7 +427,7 @@ the repetition level up to `Language` field. And the value is one.
 # AltText.Language.Keyword
 
 values: ["shoes", "athletic", "trainers", "sport", NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 ```
 
@@ -460,7 +489,7 @@ NULL values need not be physically stored saving space.
 
 # Physical representation which does not store NULL values
 values: ["shoes", "athletic", "trainers", "sport"]
-def   : [3, 3, 3, 3, 2, 2] 
+def   : [3, 3, 3, 3, 2, 2]
 rep   : [0, 2, 1, 2, 1, 1]
 ```
 
