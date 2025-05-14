@@ -36,6 +36,34 @@ structure, skipping any attributes not mentioned in the query.
       - Clearly labelled as partial
   - **Placement:** Insert after paragraph discussing partial reconstruction
 
+# Data Model
+
+For a moment consider a nested data model with the following restrictions:
+
+1. All fields are mandatory. There are never any null values.
+2. This model disallows list or array types, permitting only struct types and
+   scalar types (includes integers, floating-point, boolean, characters and
+   strings).
+
+Here we do not have to explicitly track field presence because no field can
+ever be null. Furthermore, since all fields are mandatory and this model
+disallows lists (meaning each field is a single scalar or struct, not a
+collection), the cardinality of every field is exactly one. Consequently, we
+do not have to determine if a list is empty.
+
+In such a model, the structure of any data instance perfectly mirrors its
+schema. Consequently, the schema alone is sufficient to reconstruct the
+original nested data structure from its flattened representation.
+
+- [ ] **TODO:** Concrete example with a nested value + schema
+
+These restrictions limit our ability to represent most real-world nested
+datasets. But at the same time, this simplified model demonstrates which
+structural properties must be encoded as metadata.
+
+1. Is an optional field present or not?
+2. Is a list empty or not?
+
 ---
 
 In columnar storage values of a single column attribute are stored
