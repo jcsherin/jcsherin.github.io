@@ -45,24 +45,36 @@ For a moment consider a nested data model with the following restrictions:
    scalar types (includes integers, floating-point, boolean, characters and
    strings).
 
-Here we do not have to explicitly track field presence because no field can
-ever be null. Furthermore, since all fields are mandatory and this model
-disallows lists (meaning each field is a single scalar or struct, not a
-collection), the cardinality of every field is exactly one. Consequently, we
-do not have to determine if a list is empty.
-
 In such a model, the structure of any data instance perfectly mirrors its
 schema. Consequently, the schema alone is sufficient to reconstruct the
 original nested data structure from its flattened representation.
 
-- [ ] **TODO:** Concrete example with a nested value + schema
+- [ ] **TODO:** Diagram value mirrors schema structure perfectly
 
-These restrictions limit our ability to represent most real-world nested
-datasets. But at the same time, this simplified model demonstrates which
-structural properties must be encoded as metadata.
+Here we do not have to track the presence of a field because it can never be
+null. In this model, since all fields are mandatory and the model disallows
+lists, the cardinality of every field is therefore always one. Each field can be
+either a scalar or a struct value, never a collection. We do not have to
+determine if a list is empty.
+
+If both restrictions are removed then different concrete values of the same
+nested schema can have many possible structures. In these cases, one cannot
+reverse the flattened values using the schema alone.
+
+- [ ] **TODO:** Diagram concrete values of schema with optional fields
+- [ ] **TODO:** Diagram concrete value of schema with list field
+
+This simplified model restricts our ability to express most real-world
+nested datasets because it lacks optional fields and disallows lists. But it
+helps us narrow down the sources of structural variations.
 
 1. Is an optional field present or not?
 2. Is a list empty or not?
+
+In a data model which allows both optional fields and lists, it will be
+possible to reconstruct any flattened nested data structure with a
+well-defined schema back to its original form, if these two structural
+properties are encoded as metadata.
 
 ---
 
