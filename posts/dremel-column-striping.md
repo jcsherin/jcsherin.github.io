@@ -71,10 +71,33 @@ helps us narrow down the sources of structural variations.
 1. Is an optional field present or not?
 2. Is a list empty or not?
 
-In a data model which allows both optional fields and lists, it will be
-possible to reconstruct any flattened nested data structure with a
-well-defined schema back to its original form, if these two structural
-properties are encoded as metadata.
+Consider a data model with these restrictions removed. It allows both
+optional fields and lists - the very features that introduce structural
+variations. Reconstructing any flattened nested data structure with a
+well-defined schema back to its original form is indeed possible, but this
+capability depends entirely on encoding these two structural properties
+(optional field presence and list status) as metadata.
+
+# Flattening
+
+To flatten a nested data structure, we first enumerate its potential column
+attributes. This involves traversing the schema in depth-first order. Each
+column attribute corresponds to a unique path of fields from the document's
+root up to a leaf node. The field definition at this leaf node determines
+the optionality and data type for that column attribute.
+
+- [ ] **TODO:** Diagram enumerate paths in a schema
+
+Next, we traverse an actual data instance of the nested structure, again in
+depth-first order. As we reach the leaf nodes in the data, we extract the
+scalar values and append them to the lists associated with their
+corresponding column attributes (as identified from the schema).
+
+- [ ] **TODO:** Diagram flattening nested value to column values
+
+# Metadata: Definition Level
+
+# Metadata: Repetition Level
 
 ---
 
