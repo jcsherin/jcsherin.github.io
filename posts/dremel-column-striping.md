@@ -97,8 +97,38 @@ corresponding column attributes (as identified from the schema).
 
 # Metadata: Definition Level
 
+A path may terminate early before it reaches the leaf node. This happens
+when an optional field is not present in the value tree. There is also a
+possibility that a path defined in the schema is not present in the value
+tree. Here the first field in the path is an optional field and is not
+present in the value. This will go undetected without the schema.
+
+- [ ] **TODO:** Diagram various legal constructions of terminating paths
+
+A path may also contain list fields which maybe empty in the value. So we
+need to know in the case of a list field whether it is empty or contains at
+least one element.
+
+We can track both cases by counting the optional fields which are present
+and list fields which are not empty. If an optional field is present the
+count is incremented by one. If a list field contains at least one element
+the count is incremented by one. Note that the count is only incremented by
+one for the list field and does not depend on the number of elements in the
+list.
+
+The terminology used by Dremel for this count metadata field is **definition
+level**. If a path contains N optional fields and list fields, then its
+definition level will be in the range (inclusive) [0, N]. The upper bound
+can be derived from the schema.
+
+The definition level of a non-NULL value will always be N. For null values
+the definition level tell us the exact point at which the path terminates.
+This allows us to reconstruct partially terminated paths. If the definition
+level is 0, we know that path is entirely missing from the value.
+
 # Metadata: Repetition Level
 
+# Metadata: required fields only path
 ---
 
 In columnar storage values of a single column attribute are stored
