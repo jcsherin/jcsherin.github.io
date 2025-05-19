@@ -128,7 +128,42 @@ level is 0, we know that path is entirely missing from the value.
 
 # Metadata: Repetition Level
 
+The list data type is variable length. Unlike other data types a single list
+can explode into multiple rows of values when flattened. So the metadata
+needs to capture how many elements are there in the list. The empty list is
+already handled by definition level metadata.
+
+It also gets trickier when you consider nested lists. In the schema definition
+if a path has 2 or more list data type, then it is a nested list.
+
+- [ ] **TODO:** Concrete example of list with scalar type
+- [ ] **TODO:** Concrete example of List(Struct({k1: List(...)})) 2-level
+- [ ] **TODO:** List(Struct({k1: Struct(k1: List(...))})) 2-level w/ skip
+
+The idea is similar to definition levels. In the schema for each path
+maintain a count of the number of lists which are seen. So if there are two
+list fields in a schema path, then the repetition levels can be values in
+the range (inclusive) [0, 2]. A flattened value can have a repetition level
+of 0, 1 or 2 all with different interpretations.
+
+The first element always inherits the repetition level of its parent list.
+This is the important bit which makes reconstruction of the original
+structure feasible. It acts as a marker which informs us where a list begins.
+
+If there is no parent list, then the repetition level of the first element
+is always zero. The implication here is that this is also marks a record
+boundaries. When you see that a flattened value has a repetition level which
+is zero, you know that it is the start of a new nested value.
+
+- [ ] **TODO:** Concrete examples like AltText.Language.Keyword
+
 # Metadata: required fields only path
+
+If the schema path contains only required fields then both definition and
+repetition level values are going to be zero. This path contains no optional
+fields or any list data types. The original structure can be reconstructed
+from the schema.
+
 ---
 
 In columnar storage values of a single column attribute are stored
