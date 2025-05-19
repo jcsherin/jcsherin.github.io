@@ -147,7 +147,37 @@ the definition level tell us the exact point at which the path terminates.<br>
 This allows us to reconstruct partially terminated paths. If the definition<br>
 level is 0, we know that path is entirely missing from the value.</p>
 <h1 id="metadata:-repetition-level" tabindex="-1">Metadata: Repetition Level <a class="direct-link" href="#metadata:-repetition-level" aria-hidden="true">#</a></h1>
+<p>The list data type is variable length. Unlike other data types a single list<br>
+can explode into multiple rows of values when flattened. So the metadata<br>
+needs to capture how many elements are there in the list. The empty list is<br>
+already handled by definition level metadata.</p>
+<p>It also gets trickier when you consider nested lists. In the schema definition<br>
+if a path has 2 or more list data type, then it is a nested list.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Concrete example of list with scalar type</li>
+<li>[ ] <strong>TODO:</strong> Concrete example of List(Struct({k1: List(...)})) 2-level</li>
+<li>[ ] <strong>TODO:</strong> List(Struct({k1: Struct(k1: List(...))})) 2-level w/ skip</li>
+</ul>
+<p>The idea is similar to definition levels. In the schema for each path<br>
+maintain a count of the number of lists which are seen. So if there are two<br>
+list fields in a schema path, then the repetition levels can be values in<br>
+the range (inclusive) [0, 2]. A flattened value can have a repetition level<br>
+of 0, 1 or 2 all with different interpretations.</p>
+<p>The first element always inherits the repetition level of its parent list.<br>
+This is the important bit which makes reconstruction of the original<br>
+structure feasible. It acts as a marker which informs us where a list begins.</p>
+<p>If there is no parent list, then the repetition level of the first element<br>
+is always zero. The implication here is that this is also marks a record<br>
+boundaries. When you see that a flattened value has a repetition level which<br>
+is zero, you know that it is the start of a new nested value.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Concrete examples like AltText.Language.Keyword</li>
+</ul>
 <h1 id="metadata:-required-fields-only-path" tabindex="-1">Metadata: required fields only path <a class="direct-link" href="#metadata:-required-fields-only-path" aria-hidden="true">#</a></h1>
+<p>If the schema path contains only required fields then both definition and<br>
+repetition level values are going to be zero. This path contains no optional<br>
+fields or any list data types. The original structure can be reconstructed<br>
+from the schema.</p>
 <hr>
 <p>In columnar storage values of a single column attribute are stored<br>
 contiguously. In analytics databases the query optimizer can apply<br>
