@@ -73,24 +73,81 @@ description of first image)</li>
 scalar types (includes integers, floating-point, boolean, characters and<br>
 strings).</li>
 </ol>
-<p>Here we do not have to explicitly track field presence because no field can<br>
-ever be null. Furthermore, since all fields are mandatory and this model<br>
-disallows lists (meaning each field is a single scalar or struct, not a<br>
-collection), the cardinality of every field is exactly one. Consequently, we<br>
-do not have to determine if a list is empty.</p>
 <p>In such a model, the structure of any data instance perfectly mirrors its<br>
 schema. Consequently, the schema alone is sufficient to reconstruct the<br>
 original nested data structure from its flattened representation.</p>
 <ul>
-<li>[ ] <strong>TODO:</strong> Concrete example with a nested value + schema</li>
+<li>[ ] <strong>TODO:</strong> Diagram value mirrors schema structure perfectly</li>
 </ul>
-<p>These restrictions limit our ability to represent most real-world nested<br>
-datasets. But at the same time, this simplified model demonstrates which<br>
-structural properties must be encoded as metadata.</p>
+<p>Here we do not have to track the presence of a field because it can never be<br>
+null. In this model, since all fields are mandatory and the model disallows<br>
+lists, the cardinality of every field is therefore always one. Each field can be<br>
+either a scalar or a struct value, never a collection. We do not have to<br>
+determine if a list is empty.</p>
+<p>If both restrictions are removed then different concrete values of the same<br>
+nested schema can have many possible structures. In these cases, one cannot<br>
+reverse the flattened values using the schema alone.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Diagram concrete values of schema with optional fields</li>
+<li>[ ] <strong>TODO:</strong> Diagram concrete value of schema with list field</li>
+</ul>
+<p>This simplified model restricts our ability to express most real-world<br>
+nested datasets because it lacks optional fields and disallows lists. But it<br>
+helps us narrow down the sources of structural variations.</p>
 <ol>
 <li>Is an optional field present or not?</li>
 <li>Is a list empty or not?</li>
 </ol>
+<p>Consider a data model with these restrictions removed. It allows both<br>
+optional fields and lists - the very features that introduce structural<br>
+variations. Reconstructing any flattened nested data structure with a<br>
+well-defined schema back to its original form is indeed possible, but this<br>
+capability depends entirely on encoding these two structural properties<br>
+(optional field presence and list status) as metadata.</p>
+<h1 id="flattening" tabindex="-1">Flattening <a class="direct-link" href="#flattening" aria-hidden="true">#</a></h1>
+<p>To flatten a nested data structure, we first enumerate its potential column<br>
+attributes. This involves traversing the schema in depth-first order. Each<br>
+column attribute corresponds to a unique path of fields from the document's<br>
+root up to a leaf node. The field definition at this leaf node determines<br>
+the optionality and data type for that column attribute.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Diagram enumerate paths in a schema</li>
+</ul>
+<p>Next, we traverse an actual data instance of the nested structure, again in<br>
+depth-first order. As we reach the leaf nodes in the data, we extract the<br>
+scalar values and append them to the lists associated with their<br>
+corresponding column attributes (as identified from the schema).</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Diagram flattening nested value to column values</li>
+</ul>
+<h1 id="metadata:-definition-level" tabindex="-1">Metadata: Definition Level <a class="direct-link" href="#metadata:-definition-level" aria-hidden="true">#</a></h1>
+<p>A path may terminate early before it reaches the leaf node. This happens<br>
+when an optional field is not present in the value tree. There is also a<br>
+possibility that a path defined in the schema is not present in the value<br>
+tree. Here the first field in the path is an optional field and is not<br>
+present in the value. This will go undetected without the schema.</p>
+<ul>
+<li>[ ] <strong>TODO:</strong> Diagram various legal constructions of terminating paths</li>
+</ul>
+<p>A path may also contain list fields which maybe empty in the value. So we<br>
+need to know in the case of a list field whether it is empty or contains at<br>
+least one element.</p>
+<p>We can track both cases by counting the optional fields which are present<br>
+and list fields which are not empty. If an optional field is present the<br>
+count is incremented by one. If a list field contains at least one element<br>
+the count is incremented by one. Note that the count is only incremented by<br>
+one for the list field and does not depend on the number of elements in the<br>
+list.</p>
+<p>The terminology used by Dremel for this count metadata field is <strong>definition<br>
+level</strong>. If a path contains N optional fields and list fields, then its<br>
+definition level will be in the range (inclusive) [0, N]. The upper bound<br>
+can be derived from the schema.</p>
+<p>The definition level of a non-NULL value will always be N. For null values<br>
+the definition level tell us the exact point at which the path terminates.<br>
+This allows us to reconstruct partially terminated paths. If the definition<br>
+level is 0, we know that path is entirely missing from the value.</p>
+<h1 id="metadata:-repetition-level" tabindex="-1">Metadata: Repetition Level <a class="direct-link" href="#metadata:-repetition-level" aria-hidden="true">#</a></h1>
+<h1 id="metadata:-required-fields-only-path" tabindex="-1">Metadata: required fields only path <a class="direct-link" href="#metadata:-required-fields-only-path" aria-hidden="true">#</a></h1>
 <hr>
 <p>In columnar storage values of a single column attribute are stored<br>
 contiguously. In analytics databases the query optimizer can apply<br>
