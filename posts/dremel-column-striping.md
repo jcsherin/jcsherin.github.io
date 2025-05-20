@@ -224,6 +224,71 @@ repetition level values for each path:
 D - Definition Level
 R - Repetition Level
 
+### document 1 (d1)
+
+Multiple holes are present in this document. the secondary images list is
+empty. the single localization which is present does not have any keywords
+defined yet.
+
+```yaml
+product_id: 101
+images:
+  primary_id: 2001
+  secondary_image_ids: [ ]
+alt_text:
+  localizations:
+    - locale: "en-us"
+      description: "blue casual t-shirt."
+      keywords: [ ]
+```
+
+### document 2 (d2)
+
+This document contains only the product id and primary image id. the
+remaining properties are either missing or empty.
+
+```yaml
+product_id: 102
+images:
+  primary_id: 3010
+  secondary_image_ids: [ ]
+alt_text:
+  localizations: [ ]
+```
+
+### document 3 (d3)
+
+This is a fairly complete document with multiple secondary image ids and
+multiple localizations with varied content.
+
+```yaml
+product_id: 103
+images:
+  primary_id: 4400
+  secondary_image_ids:
+    - 4401
+    - 4402
+    - 4403
+alt_text:
+  localizations:
+    - locale: "en-us"
+      description: "red running shoe, side view."
+      keywords:
+        - "red shoe"
+        - "running"
+        - "sport"
+    - locale: "en-au"
+      # placeholder locale does not yet have a description
+      keywords:
+        - "red runner"
+        - "jogging"
+    - locale: "en-gb"
+      description: "red trainer, profile."
+      keywords:
+        - "trainer"
+        - "athletics"
+```
+
 ---
 
 In columnar storage values of a single column attribute are stored
