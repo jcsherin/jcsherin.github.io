@@ -128,41 +128,51 @@ level is 0, we know that path is entirely missing from the value.
 
 # Metadata: Repetition Level
 
-The list data type is variable length. Unlike other data types a single list
-can explode into multiple rows of values when flattened. So the metadata
-needs to capture how many elements are there in the list. The empty list is
-already handled by definition level metadata.
+A list field is variable length and maps to multiple values in a flattened
+representation. Here it should be possible to determine list boundaries so
+that the flattened values can be reverse mapped back to the correct list field.
 
-It also gets trickier when you consider nested lists. In the schema definition
-if a path has 2 or more list data type, then it is a nested list.
+A schema path may define multiple list fields (nested lists). This poses
+a serious challenge in also having to identify at which level of nesting a
+flattened value belongs.
 
-- [ ] **TODO:** Concrete example of list with scalar type
-- [ ] **TODO:** Concrete example of List(Struct({k1: List(...)})) 2-level
-- [ ] **TODO:** List(Struct({k1: Struct(k1: List(...))})) 2-level w/ skip
+Here we need to consider only the non-empty list fields because an empty
+list field is already handled by the definition level.
 
-The idea is similar to definition levels. In the schema for each path
-maintain a count of the number of lists which are seen. So if there are two
-list fields in a schema path, then the repetition levels can be values in
-the range (inclusive) [0, 2]. A flattened value can have a repetition level
-of 0, 1 or 2 all with different interpretations.
+Dremel uses a clever trick to encode both the list boundary and nesting
+level of a flattened list element into a single metadata value known as
+repetition level.
 
-The first element always inherits the repetition level of its parent list.
-This is the important bit which makes reconstruction of the original
-structure feasible. It acts as a marker which informs us where a list begins.
+There are similarities to how definition level tracks the presence of
+optional/list fields along a path. The maximum possible repetition level for
+any value along a given schema path (let's call it R) is equal to the number
+of list fields defined in that schema path. The actual repetition level (r)
+assigned to a flattened value will then fall within the range (inclusive) [0,
+R]. If R = 2, then a flattened value can have a repetition level of 0, 1 or 2.
 
-If there is no parent list, then the repetition level of the first element
-is always zero. The implication here is that this is also marks a record
-boundaries. When you see that a flattened value has a repetition level which
-is zero, you know that it is the start of a new nested value.
+From interpreting the repetition level of a flattened value we can identify
+the record it belongs to and the nesting level within the record if the
+schema path defines nested lists.
 
-- [ ] **TODO:** Concrete examples like AltText.Language.Keyword
+The rules for interpreting repetition levels are:
+If r = 0: The value marks the beginning a new record. It is the first
+occurrence of this specific field path within that new record.
+If r < R (max repetition level for a path): This is the first element of a
+new instance of a nested list. The value of 'r' tells us which list in the
+path (from root to leaf) this new instance belongs to.
+If r = R: This value is a subsequent item belonging to the same instance
+of most recent list that was previously started.
 
 # Metadata: required fields only path
 
-If the schema path contains only required fields then both definition and
-repetition level values are going to be zero. This path contains no optional
-fields or any list data types. The original structure can be reconstructed
-from the schema.
+Consider a schema path that contains no optional fields and no list fields.
+For any value present along such a path the definition level will always be
+zero as there are no optional or list fields. The repetition level will
+always be zero as there are no list fields.
+
+In this specific scenario, which mirrors our simplified data model, the
+schema alone is indeed sufficient to reconstruct the data, as no structural
+variations due to optionality or repetition exist.
 
 ---
 
