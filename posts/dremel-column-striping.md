@@ -174,6 +174,56 @@ In this specific scenario, which mirrors our simplified data model, the
 schema alone is indeed sufficient to reconstruct the data, as no structural
 variations due to optionality or repetition exist.
 
+# Putting it all together
+
+Let us now see how this works in practice.
+
+## Schema
+
+```
+ProductImages (doc)
+|- product_id (u64)
+|- images
+|  |- primary_id (u64)
+|  |- secondary_image_ids (list u64)
+|- alt_text
+   |- localizations (list)
+      |- locale (string)
+      |- description (optional string)
+      |- keywords (list string)
+```
+
+This schema represents a nested data structure which contains references to
+the display images belonging to a product. It also provides zero or more
+localized alt text entries for internationalization (i18n). Each entry has a
+locale, description (the alt text itself), and keywords (for seo).
+
+The individual attributes present in this schema are:
+
+| No. | Schema Path                        | Data Type | Optional |
+|-----|------------------------------------|-----------|----------|
+| 1   | product_id                         | u64       | N        |
+| 2   | images.primary_id                  | u64       | N        |
+| 3   | images.secondary_image_ids         | u64       | N        |
+| 4   | alt_text.localizations.locale      | string    | N        |
+| 5   | alt_text.localizations.description | string    | Y        |
+| 6   | alt_text.localizations.keywords    | string    | N        |
+
+From the schema we can compute the maximum possible definition and
+repetition level values for each path:
+
+| No. | Schema Path                        | D | R |
+|-----|------------------------------------|---|---|
+| 1   | product_id                         | 0 | 0 |
+| 2   | images.primary_id                  | 0 | 0 |
+| 3   | images.secondary_image_ids         | 1 | 1 |
+| 4   | alt_text.localizations.locale      | 1 | 1 |
+| 5   | alt_text.localizations.description | 2 | 1 |
+| 6   | alt_text.localizations.keywords    | 2 | 2 |
+
+D - Definition Level
+R - Repetition Level
+
 ---
 
 In columnar storage values of a single column attribute are stored
