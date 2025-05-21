@@ -362,6 +362,62 @@ is 1. The repetition level for the first element 4401 is zero, and for
 subsequent elements the repetition level is one. This marks 4401 as the
 beginning of a new list instance in a new document.
 
+## Path 4: alt_text.localizations.locale
+
+The struct alt_text is required/mandatory and locale is a required/mandatory
+string. The localizations is a list. So this has a maximum definition level
+of 1 and maximum repetition levels is also 1.
+
+The inner data type of localizations is a struct with three properties:
+
+- locale: a required/mandatory string
+- description: an optional string
+- keywords: a list of strings
+
+Step 1: Flatten D1
+
+```yaml
+alt_text.localizations.locale:
+  values: [ "en-us" ]
+  def: [ 1 ]
+  rep: [ 0 ]
+```
+
+In D1 a single locale is defined. So the derived definition level is 1
+because the localizations list is present. The repetition level is 0 which
+indicates that this is the first occurrence of the locale struct property in
+a new instance of the localizations list in a new document.
+
+Step 2: Flatten D2
+
+```yaml
+alt_text.localizations.locale:
+  values: [ "en-us", NULL ]
+  def: [ 1, 0 ]
+  rep: [ 0, 0 ]
+```
+
+In D2 the localizations list is empty. So the definition level becomes 0 and
+NULL value is inserted. The repetition level is zero, but has to interpreted
+together with the NULL value and definition level which shows that the
+localizations list is empty in this document.
+
+Step 3: Flatten D3
+
+```yaml
+alt_text.localizations.locale:
+  values: [ "en-us", NULL, "en-us", "en-au", "en-gb" ]
+  def: [ 1, 0, 1, 1, 1 ]
+  rep: [ 0, 0, 0, 1, 1 ]
+```
+
+There are three locale values in D3. They are added to values. The
+definition level is 1 because the localizations is not empty. The
+repetition level is 0 for "en-us" which signals that this is the beginning
+of a new localizations list instance in a new document and this is the
+first element. The subsequent elements in the list therefore have the
+repetition level of 1.
+
 ---
 
 In columnar storage values of a single column attribute are stored
