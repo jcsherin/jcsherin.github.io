@@ -209,8 +209,11 @@ The individual attributes present in this schema are:
 | 5   | alt_text.localizations.description | string    | Y        |
 | 6   | alt_text.localizations.keywords    | string    | N        |
 
-From the schema we can compute the maximum possible definition and
-repetition level values for each path:
+Each path in our schema has a maximum possible definition level (D) and
+repetition level (R). The maximum D is calculated by counting how many
+fields along the path are either optional or list types. The maximum R is
+the count of just the list type fields along the path. For our ProductImages
+schema, these maximums are:
 
 | No. | Schema Path                        | D | R |
 |-----|------------------------------------|---|---|
@@ -224,7 +227,7 @@ repetition level values for each path:
 D - Definition Level
 R - Repetition Level
 
-### document 1 (d1)
+### document 1 (D1)
 
 Multiple holes are present in this document. the secondary images list is
 empty. the single localization which is present does not have any keywords
@@ -242,7 +245,7 @@ alt_text:
       keywords: [ ]
 ```
 
-### document 2 (d2)
+### document 2 (D2)
 
 This document contains only the product id and primary image id. the
 remaining properties are either missing or empty.
@@ -256,7 +259,7 @@ alt_text:
   localizations: [ ]
 ```
 
-### document 3 (d3)
+### document 3 (D3)
 
 This is a fairly complete document with multiple secondary image ids and
 multiple localizations with varied content.
@@ -288,6 +291,76 @@ alt_text:
         - "trainer"
         - "athletics"
 ```
+
+After flattening the documents, the values in each path are stored contiguously.
+
+```yaml
+product_id:
+  values: [ 101, 102, 103 ]
+  def: [ 0, 0, 0 ]
+  rep: [ 0, 0, 0 ]
+
+images.primary_id:
+  values: [ 2001, 3010, 4400 ]
+  def: [ 0, 0, 0 ]
+  rep: [ 0, 0, 0 ]
+```
+
+The paths product_id and images.primary_id contain only mandatory fields. So
+the derived definition and repetition level values is going to be zero for
+all values. So it is equivalent to the following storage representation.
+
+```yaml
+product_id:
+  values: [ 101, 102, 103 ]
+
+images.primary_id:
+  values: [ 2001, 3010, 4400 ]
+```
+
+## Path: images.secondary_image_ids
+
+Step 1: Flatten D1
+
+```yaml
+images.secondary_image_ids:
+  values: [ NULL ]
+  def: [ 0 ]
+  rep: [ 0 ]
+```
+
+The definition level is zero because secondary_image_ids list is empty. The
+repetition level is zero here for the same reason. The repetition level for
+the path images.secondary_image_ids is in the range (inclusive) [0, 1]. Here
+the interpretation of zero is not that this is the first element in the list,
+which is not possible as the list is empty. But we have to read it together
+with the NULL value and the definition level value which happens to be zero
+and signals that the list is empty.
+
+Step 2: Flatten D2
+
+```yaml
+images.secondary_image_ids:
+  values: [ NULL, NULL ]
+  def: [ 0, 0 ]
+  rep: [ 0, 0 ]
+```
+
+The same reasoning as above applies here.
+
+Step 3: Flatten D3
+
+```yaml
+images.secondary_image_ids:
+  values: [ NULL, NULL, 4401, 4402, 4403 ]
+  def: [ 0, 0, 1, 1, 1 ]
+  rep: [ 0, 0, 0, 1, 1 ]
+```
+
+As the list is not empty, the definition level for all values in this list
+is 1. The repetition level for the first element 4401 is zero, and for
+subsequent elements the repetition level is one. This marks 4401 as the
+beginning of a new list instance in a new document.
 
 ---
 
