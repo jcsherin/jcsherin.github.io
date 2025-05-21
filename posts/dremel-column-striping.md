@@ -475,6 +475,161 @@ property in the first struct element. The subsequent descriptions have a
 repetition level of 1 to indicate that they are elements belonging to this same
 list.
 
+## Path 6: alt_text.localizations.keywords
+
+This is the first time we encounter a nested list. Both localizations and
+keywords are list fields. The maximum definition level is 2 and the maximum
+repetition level is also 2 for this path.
+
+Step 1: Flatten D1
+
+```yaml
+alt_text:
+  localizations:
+    - locale: "en-us"
+      description: "blue casual t-shirt."
+      keywords: [ ]
+```
+
+In D1, keywords list is present, but it is empty.
+
+```yaml
+alt_text.localizations.keywords:
+  values: [ NULL ]
+  def: [ 1 ]
+  rep: [ 0 ]
+```
+
+We insert a NULL value because keywords list is empty. The definition level
+is 1 as localizations list is present and not empty, but the keywords list
+is empty. The repetition level is zero because this is the start of a new
+record (D1).
+
+Step 2: Flatten D2
+
+```yaml
+alt_text:
+  localizations: [ ]
+```
+
+In D2, the localizations list is empty.
+
+```yaml
+alt_text.localizations.keywords:
+  values: [ NULL, NULL ]
+  def: [ 1, 0 ]
+  rep: [ 0, 0 ]
+```
+
+The definition level in this case is 0 because the localizations list is
+empty. The repetition level is 0 because this is the start of a new record (D2).
+
+Step 3: Flatten D3
+
+```yaml
+alt_text:
+  localizations:
+    - locale: "en-us"
+      description: "red running shoe, side view."
+      keywords:
+        - "red shoe"
+        - "running"
+        - "sport"
+    - locale: "en-au"
+      # placeholder locale does not yet have a description
+      keywords:
+        - "red runner"
+        - "jogging"
+    - locale: "en-gb"
+      description: "red trainer, profile."
+      keywords:
+        - "trainer"
+        - "athletics"
+```
+
+The localizations list contains 3 items. So let us break this up by item so
+we can clearly see how repetition levels varies across keywords for each item.
+
+After processing the first item in localizations:
+
+```yaml
+alt_text.localizations.keywords:
+  values: [ "red shoe", "running", "sport" ]
+  def: [ 2, 2, 2 ]
+  rep: [ 0, 2, 2 ]
+```
+
+The localizations list is present and the keywords list is present, and both
+are not empty. So the definition level is 2. The first item in the list has
+a repetition level of 0 because this is the beginning of a new record (D3).
+The other items have a repetition level of 2 to indicate that this is a
+continuation of the current keywords list.
+
+Now the second item,
+
+```yaml
+alt_text.localizations.keywords:
+  values: [ "red runner", "jogging" ]
+  def: [ 2, 2 ]
+  rep: [ 1, 2 ]
+```
+
+The definition level is 2 as both lists in the path are present. Note that
+the repetition level for "red runner" is not zero. This is significant! This
+keywords field is part of the second struct item in localizations. And
+localizations has a repetition level in the range (inclusive) [0, 1]. The 0
+repetition level marks the beginning of a new record, but here this is the
+second item in the localizations list. The computed repetition level is
+therefore 1 for all remaining structs in this list. Now when we reach the
+keywords list, this is a new list instance and "red runner" is the first
+element in the list. So the repetition level for "red runner" is 1. The
+remaining items in the list have a repetition level of 2 to indicate that it
+is a continuation of the newly opened list.
+
+And the final item in localizations,
+
+```yaml
+alt_text.localizations.keywords:
+  values: [ "trainer", "athletics" ]
+  def: [ 2, 2 ]
+  rep: [ 1, 2 ]
+```
+
+The repetition level of "trainer" is 1 because it is child property of the
+third struct item in localizations list. The repetition level for the third
+item can only be 1. Also, "trainer" is the first item in the new instance of
+keywords list so we give it a repetition level of 1 to identify it as the
+first element in a new keywords list. The remaining items in keywords get a
+repetition level of 2.
+
+The final aggregation of keywords after processing D1, D2 and all three
+localization items from D3:
+
+```yaml
+alt_text.localizations.keywords:
+  values: [
+    NULL,                           # D1: keywords list is empty
+    NULL,                           # D2: localizations list is empty
+    "red shoe", "running", "sport", # D3: 1st localization ("en-us")
+    "red runner", "jogging",        # D3: 2nd localization ("en-au")
+    "trainer", "athletics"          # D3: 3rd localization ("en-gb")
+  ]
+  def: [
+    1,        # D1: (localizations present, keywords empty)
+    0,        # D2: (localizations empty)
+    2, 2, 2,  # D3: (both list present and non-empty)
+    2, 2,
+    2, 2
+  ]
+  rep: [
+    0,        # D1: new record
+    0,        # D2: new record
+    0, 2, 2,  # D3: 1st localization: r=0 for first keyword, r=2 for remaining
+    1, 2,     # D3: 2nd localization: r=1 for first keyword, r=2 for remaining
+    1, 2      # D3: 3rd localization: r=1 for first keyword, r=2 for remaining
+  ]
+```
+
 ---
 
 In columnar storage values of a single column attribute are stored
