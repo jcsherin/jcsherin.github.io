@@ -418,6 +418,63 @@ of a new localizations list instance in a new document and this is the
 first element. The subsequent elements in the list therefore have the
 repetition level of 1.
 
+## Path 5: alt_text.localizations.description
+
+In this path localizations is a list and description is an optional string.
+So the maximum definition level is 2. The maximum value for repetition level
+is 1 as there is only a single list in this path.
+
+Step 1: Flatten D1
+
+```yaml
+alt_text.localizations.description:
+  values: [ "blue casual t-shirt" ]
+  def: [ 2 ]
+  rep: [ 0 ]
+```
+
+The optional description is present in D1. So the definition level is 2, and
+the repetition level is 0. This is the first description in a new instance
+of localizations, at the start of the document.
+
+Step 2: Flatten D2
+
+```yaml
+alt_text.localizations.description:
+  values: [ "blue casual t-shirt", NULL ]
+  def: [ 2, 1 ]
+  rep: [ 0, 0 ]
+```
+
+In D2, the localizations list is empty. A NULL value is inserted for
+description. The definition level is 1 indicating that the path is defined
+up to the localizations list field, but the list is empty so no actual
+description value exists within a list item. The repetition level is 0, as
+the entry corresponds to a new record (D2).
+
+Step 3: Flatten D3
+
+```yaml
+alt_text.localizations.description:
+  values:
+    - "blue casual t-shirt"         # D1
+    - NULL                          # D2
+    - "red running shoe, side view" # D3
+    - NULL                          # D3
+    - "red trainer, profile"        # D3
+  def: [ 2, 1, 2, 1, 2 ]
+  rep: [ 0, 0, 0, 1, 1 ]
+```
+
+The second description is not present, so a NULL value is inserted in its
+place and its definition level is 1. The first description and third
+description are present, so they have a definition level of 2. The
+repetition level of the first description is 0 to indicate that this is a
+new instance of a localizations list, and this is the first description
+property in the first struct element. The subsequent descriptions have a
+repetition level of 1 to indicate that they are elements belonging to this same
+list.
+
 ---
 
 In columnar storage values of a single column attribute are stored
