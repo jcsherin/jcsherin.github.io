@@ -147,37 +147,311 @@ the definition level tell us the exact point at which the path terminates.<br>
 This allows us to reconstruct partially terminated paths. If the definition<br>
 level is 0, we know that path is entirely missing from the value.</p>
 <h1 id="metadata:-repetition-level" tabindex="-1">Metadata: Repetition Level <a class="direct-link" href="#metadata:-repetition-level" aria-hidden="true">#</a></h1>
-<p>The list data type is variable length. Unlike other data types a single list<br>
-can explode into multiple rows of values when flattened. So the metadata<br>
-needs to capture how many elements are there in the list. The empty list is<br>
-already handled by definition level metadata.</p>
-<p>It also gets trickier when you consider nested lists. In the schema definition<br>
-if a path has 2 or more list data type, then it is a nested list.</p>
-<ul>
-<li>[ ] <strong>TODO:</strong> Concrete example of list with scalar type</li>
-<li>[ ] <strong>TODO:</strong> Concrete example of List(Struct({k1: List(...)})) 2-level</li>
-<li>[ ] <strong>TODO:</strong> List(Struct({k1: Struct(k1: List(...))})) 2-level w/ skip</li>
-</ul>
-<p>The idea is similar to definition levels. In the schema for each path<br>
-maintain a count of the number of lists which are seen. So if there are two<br>
-list fields in a schema path, then the repetition levels can be values in<br>
-the range (inclusive) [0, 2]. A flattened value can have a repetition level<br>
-of 0, 1 or 2 all with different interpretations.</p>
-<p>The first element always inherits the repetition level of its parent list.<br>
-This is the important bit which makes reconstruction of the original<br>
-structure feasible. It acts as a marker which informs us where a list begins.</p>
-<p>If there is no parent list, then the repetition level of the first element<br>
-is always zero. The implication here is that this is also marks a record<br>
-boundaries. When you see that a flattened value has a repetition level which<br>
-is zero, you know that it is the start of a new nested value.</p>
-<ul>
-<li>[ ] <strong>TODO:</strong> Concrete examples like AltText.Language.Keyword</li>
-</ul>
+<p>A list field is variable length and maps to multiple values in a flattened<br>
+representation. Here it should be possible to determine list boundaries so<br>
+that the flattened values can be reverse mapped back to the correct list field.</p>
+<p>A schema path may define multiple list fields (nested lists). This poses<br>
+a serious challenge in also having to identify at which level of nesting a<br>
+flattened value belongs.</p>
+<p>Here we need to consider only the non-empty list fields because an empty<br>
+list field is already handled by the definition level.</p>
+<p>Dremel uses a clever trick to encode both the list boundary and nesting<br>
+level of a flattened list element into a single metadata value known as<br>
+repetition level.</p>
+<p>There are similarities to how definition level tracks the presence of<br>
+optional/list fields along a path. The maximum possible repetition level for<br>
+any value along a given schema path (let's call it R) is equal to the number<br>
+of list fields defined in that schema path. The actual repetition level (r)<br>
+assigned to a flattened value will then fall within the range (inclusive) [0,<br>
+R]. If R = 2, then a flattened value can have a repetition level of 0, 1 or 2.</p>
+<p>From interpreting the repetition level of a flattened value we can identify<br>
+the record it belongs to and the nesting level within the record if the<br>
+schema path defines nested lists.</p>
+<p>The rules for interpreting repetition levels are:<br>
+If r = 0: The value marks the beginning a new record. It is the first<br>
+occurrence of this specific field path within that new record.<br>
+If r &lt; R (max repetition level for a path): This is the first element of a<br>
+new instance of a nested list. The value of 'r' tells us which list in the<br>
+path (from root to leaf) this new instance belongs to.<br>
+If r = R: This value is a subsequent item belonging to the same instance<br>
+of most recent list that was previously started.</p>
 <h1 id="metadata:-required-fields-only-path" tabindex="-1">Metadata: required fields only path <a class="direct-link" href="#metadata:-required-fields-only-path" aria-hidden="true">#</a></h1>
-<p>If the schema path contains only required fields then both definition and<br>
-repetition level values are going to be zero. This path contains no optional<br>
-fields or any list data types. The original structure can be reconstructed<br>
-from the schema.</p>
+<p>Consider a schema path that contains no optional fields and no list fields.<br>
+For any value present along such a path the definition level will always be<br>
+zero as there are no optional or list fields. The repetition level will<br>
+always be zero as there are no list fields.</p>
+<p>In this specific scenario, which mirrors our simplified data model, the<br>
+schema alone is indeed sufficient to reconstruct the data, as no structural<br>
+variations due to optionality or repetition exist.</p>
+<h1 id="putting-it-all-together" tabindex="-1">Putting it all together <a class="direct-link" href="#putting-it-all-together" aria-hidden="true">#</a></h1>
+<p>Let us now see how this works in practice.</p>
+<h2 id="schema" tabindex="-1">Schema <a class="direct-link" href="#schema" aria-hidden="true">#</a></h2>
+<pre><code>ProductImages (doc)
+|- product_id (u64)
+|- images
+|  |- primary_id (u64)
+|  |- secondary_image_ids (list u64)
+|- alt_text
+   |- localizations (list)
+      |- locale (string)
+      |- description (optional string)
+      |- keywords (list string)
+</code></pre>
+<p>This schema represents a nested data structure which contains references to<br>
+the display images belonging to a product. It also provides zero or more<br>
+localized alt text entries for internationalization (i18n). Each entry has a<br>
+locale, description (the alt text itself), and keywords (for seo).</p>
+<p>The individual attributes present in this schema are:</p>
+<table>
+<thead>
+<tr>
+<th>No.</th>
+<th>Schema Path</th>
+<th>Data Type</th>
+<th>Optional</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>product_id</td>
+<td>u64</td>
+<td>N</td>
+</tr>
+<tr>
+<td>2</td>
+<td>images.primary_id</td>
+<td>u64</td>
+<td>N</td>
+</tr>
+<tr>
+<td>3</td>
+<td>images.secondary_image_ids</td>
+<td>u64</td>
+<td>N</td>
+</tr>
+<tr>
+<td>4</td>
+<td>alt_text.localizations.locale</td>
+<td>string</td>
+<td>N</td>
+</tr>
+<tr>
+<td>5</td>
+<td>alt_text.localizations.description</td>
+<td>string</td>
+<td>Y</td>
+</tr>
+<tr>
+<td>6</td>
+<td>alt_text.localizations.keywords</td>
+<td>string</td>
+<td>N</td>
+</tr>
+</tbody>
+</table>
+<p>Each path in our schema has a maximum possible definition level (D) and<br>
+repetition level (R). The maximum D is calculated by counting how many<br>
+fields along the path are either optional or list types. The maximum R is<br>
+the count of just the list type fields along the path. For our ProductImages<br>
+schema, these maximums are:</p>
+<table>
+<thead>
+<tr>
+<th>No.</th>
+<th>Schema Path</th>
+<th>D</th>
+<th>R</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>product_id</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>2</td>
+<td>images.primary_id</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>3</td>
+<td>images.secondary_image_ids</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>4</td>
+<td>alt_text.localizations.locale</td>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>5</td>
+<td>alt_text.localizations.description</td>
+<td>2</td>
+<td>1</td>
+</tr>
+<tr>
+<td>6</td>
+<td>alt_text.localizations.keywords</td>
+<td>2</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<p>D - Definition Level<br>
+R - Repetition Level</p>
+<h3 id="document-1-(d1)" tabindex="-1">document 1 (D1) <a class="direct-link" href="#document-1-(d1)" aria-hidden="true">#</a></h3>
+<p>Multiple holes are present in this document. the secondary images list is<br>
+empty. the single localization which is present does not have any keywords<br>
+defined yet.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">product_id</span><span class="token punctuation">:</span> <span class="token number">101</span><br><span class="token key atrule">images</span><span class="token punctuation">:</span><br>  <span class="token key atrule">primary_id</span><span class="token punctuation">:</span> <span class="token number">2001</span><br>  <span class="token key atrule">secondary_image_ids</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token punctuation">]</span><br><span class="token key atrule">alt_text</span><span class="token punctuation">:</span><br>  <span class="token key atrule">localizations</span><span class="token punctuation">:</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-us"</span><br>      <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"blue casual t-shirt."</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token punctuation">]</span></code></pre>
+<h3 id="document-2-(d2)" tabindex="-1">document 2 (D2) <a class="direct-link" href="#document-2-(d2)" aria-hidden="true">#</a></h3>
+<p>This document contains only the product id and primary image id. the<br>
+remaining properties are either missing or empty.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">product_id</span><span class="token punctuation">:</span> <span class="token number">102</span><br><span class="token key atrule">images</span><span class="token punctuation">:</span><br>  <span class="token key atrule">primary_id</span><span class="token punctuation">:</span> <span class="token number">3010</span><br>  <span class="token key atrule">secondary_image_ids</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token punctuation">]</span><br><span class="token key atrule">alt_text</span><span class="token punctuation">:</span><br>  <span class="token key atrule">localizations</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token punctuation">]</span></code></pre>
+<h3 id="document-3-(d3)" tabindex="-1">document 3 (D3) <a class="direct-link" href="#document-3-(d3)" aria-hidden="true">#</a></h3>
+<p>This is a fairly complete document with multiple secondary image ids and<br>
+multiple localizations with varied content.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">product_id</span><span class="token punctuation">:</span> <span class="token number">103</span><br><span class="token key atrule">images</span><span class="token punctuation">:</span><br>  <span class="token key atrule">primary_id</span><span class="token punctuation">:</span> <span class="token number">4400</span><br>  <span class="token key atrule">secondary_image_ids</span><span class="token punctuation">:</span><br>    <span class="token punctuation">-</span> <span class="token number">4401</span><br>    <span class="token punctuation">-</span> <span class="token number">4402</span><br>    <span class="token punctuation">-</span> <span class="token number">4403</span><br><span class="token key atrule">alt_text</span><span class="token punctuation">:</span><br>  <span class="token key atrule">localizations</span><span class="token punctuation">:</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-us"</span><br>      <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"red running shoe, side view."</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span><br>        <span class="token punctuation">-</span> <span class="token string">"red shoe"</span><br>        <span class="token punctuation">-</span> <span class="token string">"running"</span><br>        <span class="token punctuation">-</span> <span class="token string">"sport"</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-au"</span><br>      <span class="token comment"># placeholder locale does not yet have a description</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span><br>        <span class="token punctuation">-</span> <span class="token string">"red runner"</span><br>        <span class="token punctuation">-</span> <span class="token string">"jogging"</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-gb"</span><br>      <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"red trainer, profile."</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span><br>        <span class="token punctuation">-</span> <span class="token string">"trainer"</span><br>        <span class="token punctuation">-</span> <span class="token string">"athletics"</span></code></pre>
+<p>After flattening the documents, the values in each path are stored contiguously.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">product_id</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">101</span><span class="token punctuation">,</span> <span class="token number">102</span><span class="token punctuation">,</span> <span class="token number">103</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span><br><br><span class="token key atrule">images.primary_id</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2001</span><span class="token punctuation">,</span> <span class="token number">3010</span><span class="token punctuation">,</span> <span class="token number">4400</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>The paths product_id and images.primary_id contain only mandatory fields. So<br>
+the derived definition and repetition level values is going to be zero for<br>
+all values. So it is equivalent to the following storage representation.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">product_id</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">101</span><span class="token punctuation">,</span> <span class="token number">102</span><span class="token punctuation">,</span> <span class="token number">103</span> <span class="token punctuation">]</span><br><br><span class="token key atrule">images.primary_id</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2001</span><span class="token punctuation">,</span> <span class="token number">3010</span><span class="token punctuation">,</span> <span class="token number">4400</span> <span class="token punctuation">]</span></code></pre>
+<h2 id="path:-images.secondary_image_ids" tabindex="-1">Path: images.secondary_image_ids <a class="direct-link" href="#path:-images.secondary_image_ids" aria-hidden="true">#</a></h2>
+<p>Step 1: Flatten D1</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">images.secondary_image_ids</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token null important">NULL</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>The definition level is zero because secondary_image_ids list is empty. The<br>
+repetition level is zero here for the same reason. The repetition level for<br>
+the path images.secondary_image_ids is in the range (inclusive) [0, 1]. Here<br>
+the interpretation of zero is not that this is the first element in the list,<br>
+which is not possible as the list is empty. But we have to read it together<br>
+with the NULL value and the definition level value which happens to be zero<br>
+and signals that the list is empty.</p>
+<p>Step 2: Flatten D2</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">images.secondary_image_ids</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token null important">NULL</span><span class="token punctuation">,</span> <span class="token null important">NULL</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>The same reasoning as above applies here.</p>
+<p>Step 3: Flatten D3</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">images.secondary_image_ids</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token null important">NULL</span><span class="token punctuation">,</span> <span class="token null important">NULL</span><span class="token punctuation">,</span> <span class="token number">4401</span><span class="token punctuation">,</span> <span class="token number">4402</span><span class="token punctuation">,</span> <span class="token number">4403</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span> <span class="token punctuation">]</span></code></pre>
+<p>As the list is not empty, the definition level for all values in this list<br>
+is 1. The repetition level for the first element 4401 is zero, and for<br>
+subsequent elements the repetition level is one. This marks 4401 as the<br>
+beginning of a new list instance in a new document.</p>
+<h2 id="path-4:-alt_text.localizations.locale" tabindex="-1">Path 4: alt_text.localizations.locale <a class="direct-link" href="#path-4:-alt_text.localizations.locale" aria-hidden="true">#</a></h2>
+<p>The struct alt_text is required/mandatory and locale is a required/mandatory<br>
+string. The localizations is a list. So this has a maximum definition level<br>
+of 1 and maximum repetition levels is also 1.</p>
+<p>The inner data type of localizations is a struct with three properties:</p>
+<ul>
+<li>locale: a required/mandatory string</li>
+<li>description: an optional string</li>
+<li>keywords: a list of strings</li>
+</ul>
+<p>Step 1: Flatten D1</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.locale</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"en-us"</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>In D1 a single locale is defined. So the derived definition level is 1<br>
+because the localizations list is present. The repetition level is 0 which<br>
+indicates that this is the first occurrence of the locale struct property in<br>
+a new instance of the localizations list in a new document.</p>
+<p>Step 2: Flatten D2</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.locale</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"en-us"</span><span class="token punctuation">,</span> <span class="token null important">NULL</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>In D2 the localizations list is empty. So the definition level becomes 0 and<br>
+NULL value is inserted. The repetition level is zero, but has to interpreted<br>
+together with the NULL value and definition level which shows that the<br>
+localizations list is empty in this document.</p>
+<p>Step 3: Flatten D3</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.locale</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"en-us"</span><span class="token punctuation">,</span> <span class="token null important">NULL</span><span class="token punctuation">,</span> <span class="token string">"en-us"</span><span class="token punctuation">,</span> <span class="token string">"en-au"</span><span class="token punctuation">,</span> <span class="token string">"en-gb"</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span> <span class="token punctuation">]</span></code></pre>
+<p>There are three locale values in D3. They are added to values. The<br>
+definition level is 1 because the localizations is not empty. The<br>
+repetition level is 0 for &quot;en-us&quot; which signals that this is the beginning<br>
+of a new localizations list instance in a new document and this is the<br>
+first element. The subsequent elements in the list therefore have the<br>
+repetition level of 1.</p>
+<h2 id="path-5:-alt_text.localizations.description" tabindex="-1">Path 5: alt_text.localizations.description <a class="direct-link" href="#path-5:-alt_text.localizations.description" aria-hidden="true">#</a></h2>
+<p>In this path localizations is a list and description is an optional string.<br>
+So the maximum definition level is 2. The maximum value for repetition level<br>
+is 1 as there is only a single list in this path.</p>
+<p>Step 1: Flatten D1</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.description</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"blue casual t-shirt"</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>The optional description is present in D1. So the definition level is 2, and<br>
+the repetition level is 0. This is the first description in a new instance<br>
+of localizations, at the start of the document.</p>
+<p>Step 2: Flatten D2</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.description</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"blue casual t-shirt"</span><span class="token punctuation">,</span> <span class="token null important">NULL</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">1</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>In D2, the localizations list is empty. A NULL value is inserted for<br>
+description. The definition level is 1 indicating that the path is defined<br>
+up to the localizations list field, but the list is empty so no actual<br>
+description value exists within a list item. The repetition level is 0, as<br>
+the entry corresponds to a new record (D2).</p>
+<p>Step 3: Flatten D3</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.description</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span><br>    <span class="token punctuation">-</span> <span class="token string">"blue casual t-shirt"</span>         <span class="token comment"># D1</span><br>    <span class="token punctuation">-</span> <span class="token null important">NULL</span>                          <span class="token comment"># D2</span><br>    <span class="token punctuation">-</span> <span class="token string">"red running shoe, side view"</span> <span class="token comment"># D3</span><br>    <span class="token punctuation">-</span> <span class="token null important">NULL</span>                          <span class="token comment"># D3</span><br>    <span class="token punctuation">-</span> <span class="token string">"red trainer, profile"</span>        <span class="token comment"># D3</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">1</span> <span class="token punctuation">]</span></code></pre>
+<p>The second description is not present, so a NULL value is inserted in its<br>
+place and its definition level is 1. The first description and third<br>
+description are present, so they have a definition level of 2. The<br>
+repetition level of the first description is 0 to indicate that this is a<br>
+new instance of a localizations list, and this is the first description<br>
+property in the first struct element. The subsequent descriptions have a<br>
+repetition level of 1 to indicate that they are elements belonging to this same<br>
+list.</p>
+<h2 id="path-6:-alt_text.localizations.keywords" tabindex="-1">Path 6: alt_text.localizations.keywords <a class="direct-link" href="#path-6:-alt_text.localizations.keywords" aria-hidden="true">#</a></h2>
+<p>This is the first time we encounter a nested list. Both localizations and<br>
+keywords are list fields. The maximum definition level is 2 and the maximum<br>
+repetition level is also 2 for this path.</p>
+<p>Step 1: Flatten D1</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text</span><span class="token punctuation">:</span><br>  <span class="token key atrule">localizations</span><span class="token punctuation">:</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-us"</span><br>      <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"blue casual t-shirt."</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token punctuation">]</span></code></pre>
+<p>In D1, keywords list is present, but it is empty.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token null important">NULL</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>We insert a NULL value because keywords list is empty. The definition level<br>
+is 1 as localizations list is present and not empty, but the keywords list<br>
+is empty. The repetition level is zero because this is the start of a new<br>
+record (D1).</p>
+<p>Step 2: Flatten D2</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text</span><span class="token punctuation">:</span><br>  <span class="token key atrule">localizations</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token punctuation">]</span></code></pre>
+<p>In D2, the localizations list is empty.</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token null important">NULL</span><span class="token punctuation">,</span> <span class="token null important">NULL</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">0</span> <span class="token punctuation">]</span></code></pre>
+<p>The definition level in this case is 0 because the localizations list is<br>
+empty. The repetition level is 0 because this is the start of a new record (D2).</p>
+<p>Step 3: Flatten D3</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text</span><span class="token punctuation">:</span><br>  <span class="token key atrule">localizations</span><span class="token punctuation">:</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-us"</span><br>      <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"red running shoe, side view."</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span><br>        <span class="token punctuation">-</span> <span class="token string">"red shoe"</span><br>        <span class="token punctuation">-</span> <span class="token string">"running"</span><br>        <span class="token punctuation">-</span> <span class="token string">"sport"</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-au"</span><br>      <span class="token comment"># placeholder locale does not yet have a description</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span><br>        <span class="token punctuation">-</span> <span class="token string">"red runner"</span><br>        <span class="token punctuation">-</span> <span class="token string">"jogging"</span><br>    <span class="token punctuation">-</span> <span class="token key atrule">locale</span><span class="token punctuation">:</span> <span class="token string">"en-gb"</span><br>      <span class="token key atrule">description</span><span class="token punctuation">:</span> <span class="token string">"red trainer, profile."</span><br>      <span class="token key atrule">keywords</span><span class="token punctuation">:</span><br>        <span class="token punctuation">-</span> <span class="token string">"trainer"</span><br>        <span class="token punctuation">-</span> <span class="token string">"athletics"</span></code></pre>
+<p>The localizations list contains 3 items. So let us break this up by item so<br>
+we can clearly see how repetition levels varies across keywords for each item.</p>
+<p>After processing the first item in localizations:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"red shoe"</span><span class="token punctuation">,</span> <span class="token string">"running"</span><span class="token punctuation">,</span> <span class="token string">"sport"</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">0</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span></code></pre>
+<p>The localizations list is present and the keywords list is present, and both<br>
+are not empty. So the definition level is 2. The first item in the list has<br>
+a repetition level of 0 because this is the beginning of a new record (D3).<br>
+The other items have a repetition level of 2 to indicate that this is a<br>
+continuation of the current keywords list.</p>
+<p>Now the second item,</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"red runner"</span><span class="token punctuation">,</span> <span class="token string">"jogging"</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span></code></pre>
+<p>The definition level is 2 as both lists in the path are present. Note that<br>
+the repetition level for &quot;red runner&quot; is not zero. This is significant! This<br>
+keywords field is part of the second struct item in localizations. And<br>
+localizations has a repetition level in the range (inclusive) [0, 1]. The 0<br>
+repetition level marks the beginning of a new record, but here this is the<br>
+second item in the localizations list. The computed repetition level is<br>
+therefore 1 for all remaining structs in this list. Now when we reach the<br>
+keywords list, this is a new list instance and &quot;red runner&quot; is the first<br>
+element in the list. So the repetition level for &quot;red runner&quot; is 1. The<br>
+remaining items in the list have a repetition level of 2 to indicate that it<br>
+is a continuation of the newly opened list.</p>
+<p>And the final item in localizations,</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token string">"trainer"</span><span class="token punctuation">,</span> <span class="token string">"athletics"</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span> <span class="token number">1</span><span class="token punctuation">,</span> <span class="token number">2</span> <span class="token punctuation">]</span></code></pre>
+<p>The repetition level of &quot;trainer&quot; is 1 because it is child property of the<br>
+third struct item in localizations list. The repetition level for the third<br>
+item can only be 1. Also, &quot;trainer&quot; is the first item in the new instance of<br>
+keywords list so we give it a repetition level of 1 to identify it as the<br>
+first element in a new keywords list. The remaining items in keywords get a<br>
+repetition level of 2.</p>
+<p>The final aggregation of keywords after processing D1, D2 and all three<br>
+localization items from D3:</p>
+<pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><br>    <span class="token null important">NULL</span><span class="token punctuation">,</span>                           <span class="token comment"># D1: keywords list is empty</span><br>    NULL<span class="token punctuation">,</span>                           <span class="token comment"># D2: localizations list is empty</span><br>    "red shoe"<span class="token punctuation">,</span> <span class="token string">"running"</span><span class="token punctuation">,</span> <span class="token string">"sport"</span><span class="token punctuation">,</span> <span class="token comment"># D3: 1st localization ("en-us")</span><br>    "red runner"<span class="token punctuation">,</span> <span class="token string">"jogging"</span><span class="token punctuation">,</span>        <span class="token comment"># D3: 2nd localization ("en-au")</span><br>    "trainer"<span class="token punctuation">,</span> <span class="token string">"athletics"</span>          <span class="token comment"># D3: 3rd localization ("en-gb")</span><br>  <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><br>    <span class="token number">1</span><span class="token punctuation">,</span>        <span class="token comment"># D1: (localizations present, keywords empty)</span><br>    0<span class="token punctuation">,</span>        <span class="token comment"># D2: (localizations empty)</span><br>    2<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>  <span class="token comment"># D3: (both list present and non-empty)</span><br>    2<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span><br>    <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><br>  <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><br>    <span class="token number">0</span><span class="token punctuation">,</span>        <span class="token comment"># D1: new record</span><br>    0<span class="token punctuation">,</span>        <span class="token comment"># D2: new record</span><br>    0<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>  <span class="token comment"># D3: 1st localization: r=0 for first keyword, r=2 for remaining</span><br>    1<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>     <span class="token comment"># D3: 2nd localization: r=1 for first keyword, r=2 for remaining</span><br>    1<span class="token punctuation">,</span> <span class="token number">2</span>      <span class="token comment"># D3: 3rd localization: r=1 for first keyword, r=2 for remaining</span><br>  <span class="token punctuation">]</span></code></pre>
 <hr>
 <p>In columnar storage values of a single column attribute are stored<br>
 contiguously. In analytics databases the query optimizer can apply<br>
