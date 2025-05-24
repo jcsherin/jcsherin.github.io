@@ -119,8 +119,10 @@ In such a model, the structure of any data instance perfectly mirrors its
 schema. Consequently, the schema alone is sufficient to reconstruct the
 original nested data structure from its flattened representation.
 
+## Fixed Schema
+
 ```
-ProductImages_BasicInfoSchema
+ProductImages_Fixed_Schema
 ├── product_id (u64)
 ├── images
 │   └── image_id (u64)
@@ -130,7 +132,7 @@ ProductImages_BasicInfoSchema
 ```
 
 ```
-ProductImages_Example_1
+ProductImages_Fixed_1
 ├── product_id: 10785
 ├── images
 │   └── image_id: 55001
@@ -140,7 +142,7 @@ ProductImages_Example_1
 ```
 
 ```
-ProductImages_Example_2
+ProductImages_Fixed_2
 ├── product_id: 20488
 ├── images
 │   └── image_id: 60773
@@ -159,8 +161,56 @@ If both restrictions are removed then different concrete values of the same
 nested schema can have many possible structures. In these cases, one cannot
 reverse the flattened values using the schema alone.
 
-- [ ] **TODO:** Diagram concrete values of schema with optional fields
-- [ ] **TODO:** Diagram concrete value of schema with list field
+## With Optional Field
+
+```
+ProductImages_Optional_Schema
+├── product_id (u64)
+├── images
+│   └── image_id (u64)
+└── alt_text
+    ├── locale (String)
+    └── description (String, optional)  // <--- This field is now optional
+```
+
+```
+ProductImages_Optional_1
+├── product_id: 20488
+├── images
+│   └── image_id: 60773
+└── alt_text
+    ├── locale: "en-in"
+    // description is not present in this example
+```
+
+## With List Field
+
+```
+ProductImages_List_Schema
+├── product_id (u64)
+└── images
+    ├── primary_id (u64)
+    └── secondary_image_ids (List<u64>)
+```
+
+```
+ProductImages_List_1
+├── product_id: 30501
+└── images
+    ├── primary_id: 77001
+    └── secondary_image_ids
+        ├── [0]: 77002
+        ├── [1]: 77003
+        └── [2]: 77004
+```
+
+```
+ProductImages_List_2
+├── product_id: 30502
+└── images
+    ├── primary_id: 77005
+    └── secondary_image_ids: [] // List is empty
+```
 
 This simplified model restricts our ability to express most real-world
 nested datasets because it lacks optional fields and disallows lists. But it
