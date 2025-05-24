@@ -119,7 +119,35 @@ In such a model, the structure of any data instance perfectly mirrors its
 schema. Consequently, the schema alone is sufficient to reconstruct the
 original nested data structure from its flattened representation.
 
-- [ ] **TODO:** Diagram value mirrors schema structure perfectly
+```
+ProductImages_BasicInfoSchema
+├── product_id (u64)
+├── images
+│   └── image_id (u64)
+└── alt_text
+    ├── locale (String)
+    └── description (String)
+```
+
+```
+ProductImages_Example_1
+├── product_id: 10785
+├── images
+│   └── image_id: 55001
+└── alt_text
+    ├── locale: "en-in"
+    └── description: "MacBook Air 13.3\" (M1 chip, 8GB RAM, 256GB SSD), Space Grey."
+```
+
+```
+ProductImages_Example_2
+├── product_id: 20488
+├── images
+│   └── image_id: 60773
+└── alt_text
+    ├── locale: "en-in"
+    └── description: "PortaShell 13.3\" Laptop Sleeve, Grey, with pocket & handle."
+```
 
 Here we do not have to track the presence of a field because it can never be
 null. In this model, since all fields are mandatory and the model disallows
