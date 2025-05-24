@@ -22,19 +22,89 @@ nested data structure. Consequently, a core desirable property of
 such flattening is the ability to partially reconstruct the nested data
 structure, skipping any attributes not mentioned in the query.
 
-- [ ] **TODO:** Create illustration for partial projection
-  - **Objective:** Original and partial side by side
-  - **Details**:
-    - **Original**
-      - Clear, compact (YAML over JSON)
-      - Example has 2 or more levels of nesting
-      - Clearly labelled as original
-    - **Partial Projection**
-      - Briefly state the query (e.g. query for product id and English(US)
-        description of first image)
-      - Show the result partial projection from original
-      - Clearly labelled as partial
-  - **Placement:** Insert after paragraph discussing partial reconstruction
+## ProductImages: A Hierarchical View of a Nested Record
+
+```
+ProductImages
+├── product_id: 103
+├── images
+│   ├── primary_id: 4400
+│   └── secondary_image_ids
+│       ├── [0]: 4401
+│       ├── [1]: 4402
+│       └── [2]: 4403
+└── alt_text
+    └── localizations
+        ├── [0]
+        │   ├── locale: "en-us"
+        │   ├── description: "red running shoe, side view."
+        │   └── keywords
+        │       ├── [0]: "red shoe"
+        │       ├── [1]: "running"
+        │       └── [2]: "sport"
+        ├── [1]
+        │   ├── locale: "en-au"
+        │   └── keywords
+        │       ├── [0]: "red runner"
+        │       └── [1]: "jogging"
+        └── [2]
+            ├── locale: "en-gb"
+            ├── description: "red trainer, profile."
+            └── keywords
+                ├── [0]: "trainer"
+                └── [1]: "athletics"
+```
+
+## ProductImages: Illustrative Partial Projections
+
+```
+ProductImages_AltText
+├── product_id: 103
+└── alt_text
+    └── localizations
+        ├── [0]
+        │   ├── locale: "en-us"
+        │   └── description: "red running shoe, side view."
+        ├── [1]
+        │   ├── locale: "en-au"
+        └── [2]
+            ├── locale: "en-gb"
+            └── description: "red trainer, profile."
+```
+
+```
+ProductImages_References
+├── product_id: 103
+└── images
+    ├── primary_id: 4400
+    └── secondary_image_ids
+        ├── [0]: 4401
+        ├── [1]: 4402
+        └── [2]: 4403
+```
+
+```
+ProductImages_LocalizedKeywords
+├── product_id: 103
+└── alt_text
+    └── localizations
+        ├── [0]
+        │   ├── locale: "en-us"
+        │   └── keywords
+        │       ├── [0]: "red shoe"
+        │       ├── [1]: "running"
+        │       └── [2]: "sport"
+        ├── [1]
+        │   ├── locale: "en-au"
+        │   └── keywords
+        │       ├── [0]: "red runner"
+        │       └── [1]: "jogging"
+        └── [2]
+            ├── locale: "en-gb"
+            └── keywords
+                ├── [0]: "trainer"
+                └── [1]: "athletics"
+```
 
 # Data Model
 
