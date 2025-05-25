@@ -48,6 +48,24 @@ layout: layouts/post.njk
                 └── [1]: "athletics"
 ```
 
+Column shredding (aka record shredding) is a technique for flattening deeply
+nested data structures and storing them in a columnar format.
+
+| Identifier          | Full Field Path                    |
+|:--------------------|:-----------------------------------|
+| product_id          | product_id                         |
+| primary_id          | images.primary_id                  |
+| secondary_image_ids | images.secondary_image_ids         |
+| locale              | alt_text.localizations.locale      |
+| description         | alt_text.localizations.description |
+| keywords            | alt_text.localizations.keywords    |
+
+| product_id | primary_id | secondary_image_ids | locale  | description           | keywords                         |
+|:-----------|:-----------|:--------------------|:--------|:----------------------|:---------------------------------|
+| 103        | 4400       | 4401                | "en-us" | "red running shoe..." | ["red shoe", "running", "sport"] |
+|            |            | 4402                | "en-au" | NULL                  | ["red runner", "jogging"]        |
+|            |            | 4403                | "en-gb" | "red trainer, pr..."  | ["trainer", "athletics"]         |
+
 # Introduction
 
 The main issue with flattening nested data structures is ensuring the
@@ -95,7 +113,6 @@ structure, skipping any attributes not mentioned in the query.
                 ├── [0]: "trainer"
                 └── [1]: "athletics"
 ```
-
 
 ## ProductImages: Illustrative Partial Projections
 
