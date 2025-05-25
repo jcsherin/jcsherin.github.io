@@ -9,6 +9,45 @@ tags:
 layout: layouts/post.njk
 ---
 
+# Summary
+
+- [ ] Condense main ideas, supporting arguments, opinions, recap
+
+# Nested Data Structure
+
+```
++-----------------+
+| ProductImages   |
++-----------------+
+├── [ product_id ]: 103
+├── [ images ]
+│   ├── [ primary_id ]: 4400
+│   └── [ secondary_image_ids ]
+│       ├── [0]: 4401
+│       ├── [1]: 4402
+│       └── [2]: 4403
+└── [ alt_text ]
+    └── [ localizations ]
+        ├── [0]
+        │   ├── [ locale ]: "en-us"
+        │   ├── [ description ]: "red running shoe, side view."
+        │   └── [ keywords ]
+        │       ├── [0]: "red shoe"
+        │       ├── [1]: "running"
+        │       └── [2]: "sport"
+        ├── [1]
+        │   ├── [ locale ]: "en-au"
+        │   └── [ keywords ]
+        │       ├── [0]: "red runner"
+        │       └── [1]: "jogging"
+        └── [2]
+            ├── [ locale ]: "en-gb"
+            ├── [ description ]: "red trainer, profile."
+            └── [ keywords ]
+                ├── [0]: "trainer"
+                └── [1]: "athletics"
+```
+
 # Introduction
 
 The main issue with flattening nested data structures is ensuring the
@@ -22,38 +61,41 @@ nested data structure. Consequently, a core desirable property of
 such flattening is the ability to partially reconstruct the nested data
 structure, skipping any attributes not mentioned in the query.
 
-## ProductImages: A Hierarchical View of a Nested Record
+# Nested Data Structure
 
 ```
-ProductImages
-├── product_id: 103
-├── images
-│   ├── primary_id: 4400
-│   └── secondary_image_ids
++-----------------+
+| ProductImages   |
++-----------------+
+├── [ product_id ]: 103
+├── [ images ]
+│   ├── [ primary_id ]: 4400
+│   └── [ secondary_image_ids ]
 │       ├── [0]: 4401
 │       ├── [1]: 4402
 │       └── [2]: 4403
-└── alt_text
-    └── localizations
+└── [ alt_text ]
+    └── [ localizations ]
         ├── [0]
-        │   ├── locale: "en-us"
-        │   ├── description: "red running shoe, side view."
-        │   └── keywords
+        │   ├── [ locale ]: "en-us"
+        │   ├── [ description ]: "red running shoe, side view."
+        │   └── [ keywords ]
         │       ├── [0]: "red shoe"
         │       ├── [1]: "running"
         │       └── [2]: "sport"
         ├── [1]
-        │   ├── locale: "en-au"
-        │   └── keywords
+        │   ├── [ locale ]: "en-au"
+        │   └── [ keywords ]
         │       ├── [0]: "red runner"
         │       └── [1]: "jogging"
         └── [2]
-            ├── locale: "en-gb"
-            ├── description: "red trainer, profile."
-            └── keywords
+            ├── [ locale ]: "en-gb"
+            ├── [ description ]: "red trainer, profile."
+            └── [ keywords ]
                 ├── [0]: "trainer"
                 └── [1]: "athletics"
 ```
+
 
 ## ProductImages: Illustrative Partial Projections
 
