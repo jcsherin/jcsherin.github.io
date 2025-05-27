@@ -17,160 +17,376 @@
 		<link href="https://jacobsherin.com/posts/dremel-column-striping/"/>
 		<updated>2025-04-21T00:00:00Z</updated>
 		<id>https://jacobsherin.com/posts/dremel-column-striping/</id>
-		<content type="html">&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;The main issue with flattening nested data structures is ensuring the&lt;br /&gt;
-process is reversible. The flattened representation needs to contain both data&lt;br /&gt;
-and the metadata which encodes the structure. From this representation, one&lt;br /&gt;
+		<content type="html">&lt;h1 id=&quot;summary&quot; tabindex=&quot;-1&quot;&gt;Summary &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#summary&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;ul&gt;
+&lt;li&gt;[ ] Condense main ideas, supporting arguments, opinions, recap&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h1 id=&quot;nested-data-structure&quot; tabindex=&quot;-1&quot;&gt;Nested Data Structure &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#nested-data-structure&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;pre&gt;&lt;code&gt;+-----------------+
+| ProductImages   |
++-----------------+
+├── [ product_id ]: 103
+├── [ images ]
+│   ├── [ primary_id ]: 4400
+│   └── [ secondary_image_ids ]
+│       ├── [0]: 4401
+│       ├── [1]: 4402
+│       └── [2]: 4403
+└── [ alt_text ]
+    └── [ localizations ]
+        ├── [0]
+        │   ├── [ locale ]: &amp;quot;en-us&amp;quot;
+        │   ├── [ description ]: &amp;quot;red running shoe, side view.&amp;quot;
+        │   └── [ keywords ]
+        │       ├── [0]: &amp;quot;red shoe&amp;quot;
+        │       ├── [1]: &amp;quot;running&amp;quot;
+        │       └── [2]: &amp;quot;sport&amp;quot;
+        ├── [1]
+        │   ├── [ locale ]: &amp;quot;en-au&amp;quot;
+        │   └── [ keywords ]
+        │       ├── [0]: &amp;quot;red runner&amp;quot;
+        │       └── [1]: &amp;quot;jogging&amp;quot;
+        └── [2]
+            ├── [ locale ]: &amp;quot;en-gb&amp;quot;
+            ├── [ description ]: &amp;quot;red trainer, profile.&amp;quot;
+            └── [ keywords ]
+                ├── [0]: &amp;quot;trainer&amp;quot;
+                └── [1]: &amp;quot;athletics&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Column shredding (aka record shredding) is a technique for flattening deeply
+nested data structures and storing them in a columnar format.&lt;/p&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;Identifier&lt;/th&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;Full Field Path&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;product_id&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;product_id&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;primary_id&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;images.primary_id&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;secondary_image_ids&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;images.secondary_image_ids&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;locale&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;alt_text.localizations.locale&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;description&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;alt_text.localizations.description&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;keywords&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;alt_text.localizations.keywords&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;table&gt;
+&lt;thead&gt;
+&lt;tr&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;product_id&lt;/th&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;primary_id&lt;/th&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;secondary_image_ids&lt;/th&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;locale&lt;/th&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;description&lt;/th&gt;
+&lt;th style=&quot;text-align:left&quot;&gt;keywords&lt;/th&gt;
+&lt;/tr&gt;
+&lt;/thead&gt;
+&lt;tbody&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;103&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;4400&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;4401&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&amp;quot;en-us&amp;quot;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&amp;quot;red running shoe...&amp;quot;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;[&amp;quot;red shoe&amp;quot;, &amp;quot;running&amp;quot;, &amp;quot;sport&amp;quot;]&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;4402&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&amp;quot;en-au&amp;quot;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;NULL&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;[&amp;quot;red runner&amp;quot;, &amp;quot;jogging&amp;quot;]&lt;/td&gt;
+&lt;/tr&gt;
+&lt;tr&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;4403&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&amp;quot;en-gb&amp;quot;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;&amp;quot;red trainer, pr...&amp;quot;&lt;/td&gt;
+&lt;td style=&quot;text-align:left&quot;&gt;[&amp;quot;trainer&amp;quot;, &amp;quot;athletics&amp;quot;]&lt;/td&gt;
+&lt;/tr&gt;
+&lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;The main issue with flattening nested data structures is ensuring the
+process is reversible. The flattened representation needs to contain both data
+and the metadata which encodes the structure. From this representation, one
 should be able to correctly reconstruct the original nested data structure.&lt;/p&gt;
-&lt;p&gt;Typically, a query reads only a few attributes. Therefore, it is more&lt;br /&gt;
-efficient to read only those specific attributes, rather than the entire&lt;br /&gt;
-nested data structure. Consequently, a core desirable property of&lt;br /&gt;
-such flattening is the ability to partially reconstruct the nested data&lt;br /&gt;
+&lt;p&gt;Typically, a query reads only a few attributes. Therefore, it is more
+efficient to read only those specific attributes, rather than the entire
+nested data structure. Consequently, a core desirable property of
+such flattening is the ability to partially reconstruct the nested data
 structure, skipping any attributes not mentioned in the query.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Create illustration for partial projection
-&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Objective:&lt;/strong&gt; Original and partial side by side&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Details&lt;/strong&gt;:
-&lt;ul&gt;
-&lt;li&gt;&lt;strong&gt;Original&lt;/strong&gt;
-&lt;ul&gt;
-&lt;li&gt;Clear, compact (YAML over JSON)&lt;/li&gt;
-&lt;li&gt;Example has 2 or more levels of nesting&lt;/li&gt;
-&lt;li&gt;Clearly labelled as original&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Partial Projection&lt;/strong&gt;
-&lt;ul&gt;
-&lt;li&gt;Briefly state the query (e.g. query for product id and English(US)&lt;br /&gt;
-description of first image)&lt;/li&gt;
-&lt;li&gt;Show the result partial projection from original&lt;/li&gt;
-&lt;li&gt;Clearly labelled as partial&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;Placement:&lt;/strong&gt; Insert after paragraph discussing partial reconstruction&lt;/li&gt;
-&lt;/ul&gt;
-&lt;/li&gt;
-&lt;/ul&gt;
+&lt;h1 id=&quot;nested-data-structure-1&quot; tabindex=&quot;-1&quot;&gt;Nested Data Structure &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#nested-data-structure-1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;pre&gt;&lt;code&gt;+-----------------+
+| ProductImages   |
++-----------------+
+├── [ product_id ]: 103
+├── [ images ]
+│   ├── [ primary_id ]: 4400
+│   └── [ secondary_image_ids ]
+│       ├── [0]: 4401
+│       ├── [1]: 4402
+│       └── [2]: 4403
+└── [ alt_text ]
+    └── [ localizations ]
+        ├── [0]
+        │   ├── [ locale ]: &amp;quot;en-us&amp;quot;
+        │   ├── [ description ]: &amp;quot;red running shoe, side view.&amp;quot;
+        │   └── [ keywords ]
+        │       ├── [0]: &amp;quot;red shoe&amp;quot;
+        │       ├── [1]: &amp;quot;running&amp;quot;
+        │       └── [2]: &amp;quot;sport&amp;quot;
+        ├── [1]
+        │   ├── [ locale ]: &amp;quot;en-au&amp;quot;
+        │   └── [ keywords ]
+        │       ├── [0]: &amp;quot;red runner&amp;quot;
+        │       └── [1]: &amp;quot;jogging&amp;quot;
+        └── [2]
+            ├── [ locale ]: &amp;quot;en-gb&amp;quot;
+            ├── [ description ]: &amp;quot;red trainer, profile.&amp;quot;
+            └── [ keywords ]
+                ├── [0]: &amp;quot;trainer&amp;quot;
+                └── [1]: &amp;quot;athletics&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&quot;productimages:-illustrative-partial-projections&quot; tabindex=&quot;-1&quot;&gt;ProductImages: Illustrative Partial Projections &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#productimages:-illustrative-partial-projections&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_AltText
+├── product_id: 103
+└── alt_text
+    └── localizations
+        ├── [0]
+        │   ├── locale: &amp;quot;en-us&amp;quot;
+        │   └── description: &amp;quot;red running shoe, side view.&amp;quot;
+        ├── [1]
+        │   ├── locale: &amp;quot;en-au&amp;quot;
+        └── [2]
+            ├── locale: &amp;quot;en-gb&amp;quot;
+            └── description: &amp;quot;red trainer, profile.&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_References
+├── product_id: 103
+└── images
+    ├── primary_id: 4400
+    └── secondary_image_ids
+        ├── [0]: 4401
+        ├── [1]: 4402
+        └── [2]: 4403
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_LocalizedKeywords
+├── product_id: 103
+└── alt_text
+    └── localizations
+        ├── [0]
+        │   ├── locale: &amp;quot;en-us&amp;quot;
+        │   └── keywords
+        │       ├── [0]: &amp;quot;red shoe&amp;quot;
+        │       ├── [1]: &amp;quot;running&amp;quot;
+        │       └── [2]: &amp;quot;sport&amp;quot;
+        ├── [1]
+        │   ├── locale: &amp;quot;en-au&amp;quot;
+        │   └── keywords
+        │       ├── [0]: &amp;quot;red runner&amp;quot;
+        │       └── [1]: &amp;quot;jogging&amp;quot;
+        └── [2]
+            ├── locale: &amp;quot;en-gb&amp;quot;
+            └── keywords
+                ├── [0]: &amp;quot;trainer&amp;quot;
+                └── [1]: &amp;quot;athletics&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h1 id=&quot;data-model&quot; tabindex=&quot;-1&quot;&gt;Data Model &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#data-model&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;p&gt;For a moment consider a nested data model with the following restrictions:&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;All fields are mandatory. There are never any null values.&lt;/li&gt;
-&lt;li&gt;This model disallows list or array types, permitting only struct types and&lt;br /&gt;
-scalar types (includes integers, floating-point, boolean, characters and&lt;br /&gt;
+&lt;li&gt;This model disallows list or array types, permitting only struct types and
+scalar types (includes integers, floating-point, boolean, characters and
 strings).&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;In such a model, the structure of any data instance perfectly mirrors its&lt;br /&gt;
-schema. Consequently, the schema alone is sufficient to reconstruct the&lt;br /&gt;
+&lt;p&gt;In such a model, the structure of any data instance perfectly mirrors its
+schema. Consequently, the schema alone is sufficient to reconstruct the
 original nested data structure from its flattened representation.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Diagram value mirrors schema structure perfectly&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Here we do not have to track the presence of a field because it can never be&lt;br /&gt;
-null. In this model, since all fields are mandatory and the model disallows&lt;br /&gt;
-lists, the cardinality of every field is therefore always one. Each field can be&lt;br /&gt;
-either a scalar or a struct value, never a collection. We do not have to&lt;br /&gt;
+&lt;h2 id=&quot;fixed-schema&quot; tabindex=&quot;-1&quot;&gt;Fixed Schema &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#fixed-schema&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_Fixed_Schema
+├── product_id (u64)
+├── images
+│   └── image_id (u64)
+└── alt_text
+    ├── locale (String)
+    └── description (String)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_Fixed_1
+├── product_id: 10785
+├── images
+│   └── image_id: 55001
+└── alt_text
+    ├── locale: &amp;quot;en-in&amp;quot;
+    └── description: &amp;quot;MacBook Air 13.3\&amp;quot; (M1 chip, 8GB RAM, 256GB SSD), Space Grey.&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_Fixed_2
+├── product_id: 20488
+├── images
+│   └── image_id: 60773
+└── alt_text
+    ├── locale: &amp;quot;en-in&amp;quot;
+    └── description: &amp;quot;PortaShell 13.3\&amp;quot; Laptop Sleeve, Grey, with pocket &amp;amp; handle.&amp;quot;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here we do not have to track the presence of a field because it can never be
+null. In this model, since all fields are mandatory and the model disallows
+lists, the cardinality of every field is therefore always one. Each field can be
+either a scalar or a struct value, never a collection. We do not have to
 determine if a list is empty.&lt;/p&gt;
-&lt;p&gt;If both restrictions are removed then different concrete values of the same&lt;br /&gt;
-nested schema can have many possible structures. In these cases, one cannot&lt;br /&gt;
+&lt;p&gt;If both restrictions are removed then different concrete values of the same
+nested schema can have many possible structures. In these cases, one cannot
 reverse the flattened values using the schema alone.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Diagram concrete values of schema with optional fields&lt;/li&gt;
-&lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Diagram concrete value of schema with list field&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;This simplified model restricts our ability to express most real-world&lt;br /&gt;
-nested datasets because it lacks optional fields and disallows lists. But it&lt;br /&gt;
+&lt;h2 id=&quot;with-optional-field&quot; tabindex=&quot;-1&quot;&gt;With Optional Field &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#with-optional-field&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_Optional_Schema
+├── product_id (u64)
+├── images
+│   └── image_id (u64)
+└── alt_text
+    ├── locale (String)
+    └── description (String, optional)  // &amp;lt;--- This field is now optional
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_Optional_1
+├── product_id: 20488
+├── images
+│   └── image_id: 60773
+└── alt_text
+    ├── locale: &amp;quot;en-in&amp;quot;
+    // description is not present in this example
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2 id=&quot;with-list-field&quot; tabindex=&quot;-1&quot;&gt;With List Field &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#with-list-field&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_List_Schema
+├── product_id (u64)
+└── images
+    ├── primary_id (u64)
+    └── secondary_image_ids (List&amp;lt;u64&amp;gt;)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_List_1
+├── product_id: 30501
+└── images
+    ├── primary_id: 77001
+    └── secondary_image_ids
+        ├── [0]: 77002
+        ├── [1]: 77003
+        └── [2]: 77004
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;ProductImages_List_2
+├── product_id: 30502
+└── images
+    ├── primary_id: 77005
+    └── secondary_image_ids: [] // List is empty
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This simplified model restricts our ability to express most real-world
+nested datasets because it lacks optional fields and disallows lists. But it
 helps us narrow down the sources of structural variations.&lt;/p&gt;
 &lt;ol&gt;
 &lt;li&gt;Is an optional field present or not?&lt;/li&gt;
 &lt;li&gt;Is a list empty or not?&lt;/li&gt;
 &lt;/ol&gt;
-&lt;p&gt;Consider a data model with these restrictions removed. It allows both&lt;br /&gt;
-optional fields and lists - the very features that introduce structural&lt;br /&gt;
-variations. Reconstructing any flattened nested data structure with a&lt;br /&gt;
-well-defined schema back to its original form is indeed possible, but this&lt;br /&gt;
-capability depends entirely on encoding these two structural properties&lt;br /&gt;
+&lt;p&gt;Consider a data model with these restrictions removed. It allows both
+optional fields and lists - the very features that introduce structural
+variations. Reconstructing any flattened nested data structure with a
+well-defined schema back to its original form is indeed possible, but this
+capability depends entirely on encoding these two structural properties
 (optional field presence and list status) as metadata.&lt;/p&gt;
 &lt;h1 id=&quot;flattening&quot; tabindex=&quot;-1&quot;&gt;Flattening &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#flattening&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;To flatten a nested data structure, we first enumerate its potential column&lt;br /&gt;
-attributes. This involves traversing the schema in depth-first order. Each&lt;br /&gt;
-column attribute corresponds to a unique path of fields from the document&#39;s&lt;br /&gt;
-root up to a leaf node. The field definition at this leaf node determines&lt;br /&gt;
+&lt;p&gt;To flatten a nested data structure, we first enumerate its potential column
+attributes. This involves traversing the schema in depth-first order. Each
+column attribute corresponds to a unique path of fields from the document&#39;s
+root up to a leaf node. The field definition at this leaf node determines
 the optionality and data type for that column attribute.&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Diagram enumerate paths in a schema&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;Next, we traverse an actual data instance of the nested structure, again in&lt;br /&gt;
-depth-first order. As we reach the leaf nodes in the data, we extract the&lt;br /&gt;
-scalar values and append them to the lists associated with their&lt;br /&gt;
+&lt;p&gt;Next, we traverse an actual data instance of the nested structure, again in
+depth-first order. As we reach the leaf nodes in the data, we extract the
+scalar values and append them to the lists associated with their
 corresponding column attributes (as identified from the schema).&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Diagram flattening nested value to column values&lt;/li&gt;
 &lt;/ul&gt;
 &lt;h1 id=&quot;metadata:-definition-level&quot; tabindex=&quot;-1&quot;&gt;Metadata: Definition Level &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#metadata:-definition-level&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;A path may terminate early before it reaches the leaf node. This happens&lt;br /&gt;
-when an optional field is not present in the value tree. There is also a&lt;br /&gt;
-possibility that a path defined in the schema is not present in the value&lt;br /&gt;
-tree. Here the first field in the path is an optional field and is not&lt;br /&gt;
+&lt;p&gt;A path may terminate early before it reaches the leaf node. This happens
+when an optional field is not present in the value tree. There is also a
+possibility that a path defined in the schema is not present in the value
+tree. Here the first field in the path is an optional field and is not
 present in the value. This will go undetected without the schema.&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;[ ] &lt;strong&gt;TODO:&lt;/strong&gt; Diagram various legal constructions of terminating paths&lt;/li&gt;
 &lt;/ul&gt;
-&lt;p&gt;A path may also contain list fields which maybe empty in the value. So we&lt;br /&gt;
-need to know in the case of a list field whether it is empty or contains at&lt;br /&gt;
+&lt;p&gt;A path may also contain list fields which maybe empty in the value. So we
+need to know in the case of a list field whether it is empty or contains at
 least one element.&lt;/p&gt;
-&lt;p&gt;We can track both cases by counting the optional fields which are present&lt;br /&gt;
-and list fields which are not empty. If an optional field is present the&lt;br /&gt;
-count is incremented by one. If a list field contains at least one element&lt;br /&gt;
-the count is incremented by one. Note that the count is only incremented by&lt;br /&gt;
-one for the list field and does not depend on the number of elements in the&lt;br /&gt;
+&lt;p&gt;We can track both cases by counting the optional fields which are present
+and list fields which are not empty. If an optional field is present the
+count is incremented by one. If a list field contains at least one element
+the count is incremented by one. Note that the count is only incremented by
+one for the list field and does not depend on the number of elements in the
 list.&lt;/p&gt;
-&lt;p&gt;The terminology used by Dremel for this count metadata field is &lt;strong&gt;definition&lt;br /&gt;
-level&lt;/strong&gt;. If a path contains N optional fields and list fields, then its&lt;br /&gt;
-definition level will be in the range (inclusive) [0, N]. The upper bound&lt;br /&gt;
+&lt;p&gt;The terminology used by Dremel for this count metadata field is &lt;strong&gt;definition
+level&lt;/strong&gt;. If a path contains N optional fields and list fields, then its
+definition level will be in the range (inclusive) [0, N]. The upper bound
 can be derived from the schema.&lt;/p&gt;
-&lt;p&gt;The definition level of a non-NULL value will always be N. For null values&lt;br /&gt;
-the definition level tell us the exact point at which the path terminates.&lt;br /&gt;
-This allows us to reconstruct partially terminated paths. If the definition&lt;br /&gt;
+&lt;p&gt;The definition level of a non-NULL value will always be N. For null values
+the definition level tell us the exact point at which the path terminates.
+This allows us to reconstruct partially terminated paths. If the definition
 level is 0, we know that path is entirely missing from the value.&lt;/p&gt;
 &lt;h1 id=&quot;metadata:-repetition-level&quot; tabindex=&quot;-1&quot;&gt;Metadata: Repetition Level &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#metadata:-repetition-level&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;A list field is variable length and maps to multiple values in a flattened&lt;br /&gt;
-representation. Here it should be possible to determine list boundaries so&lt;br /&gt;
+&lt;p&gt;A list field is variable length and maps to multiple values in a flattened
+representation. Here it should be possible to determine list boundaries so
 that the flattened values can be reverse mapped back to the correct list field.&lt;/p&gt;
-&lt;p&gt;A schema path may define multiple list fields (nested lists). This poses&lt;br /&gt;
-a serious challenge in also having to identify at which level of nesting a&lt;br /&gt;
+&lt;p&gt;A schema path may define multiple list fields (nested lists). This poses
+a serious challenge in also having to identify at which level of nesting a
 flattened value belongs.&lt;/p&gt;
-&lt;p&gt;Here we need to consider only the non-empty list fields because an empty&lt;br /&gt;
+&lt;p&gt;Here we need to consider only the non-empty list fields because an empty
 list field is already handled by the definition level.&lt;/p&gt;
-&lt;p&gt;Dremel uses a clever trick to encode both the list boundary and nesting&lt;br /&gt;
-level of a flattened list element into a single metadata value known as&lt;br /&gt;
+&lt;p&gt;Dremel uses a clever trick to encode both the list boundary and nesting
+level of a flattened list element into a single metadata value known as
 repetition level.&lt;/p&gt;
-&lt;p&gt;There are similarities to how definition level tracks the presence of&lt;br /&gt;
-optional/list fields along a path. The maximum possible repetition level for&lt;br /&gt;
-any value along a given schema path (let&#39;s call it R) is equal to the number&lt;br /&gt;
-of list fields defined in that schema path. The actual repetition level (r)&lt;br /&gt;
-assigned to a flattened value will then fall within the range (inclusive) [0,&lt;br /&gt;
+&lt;p&gt;There are similarities to how definition level tracks the presence of
+optional/list fields along a path. The maximum possible repetition level for
+any value along a given schema path (let&#39;s call it R) is equal to the number
+of list fields defined in that schema path. The actual repetition level (r)
+assigned to a flattened value will then fall within the range (inclusive) [0,
 R]. If R = 2, then a flattened value can have a repetition level of 0, 1 or 2.&lt;/p&gt;
-&lt;p&gt;From interpreting the repetition level of a flattened value we can identify&lt;br /&gt;
-the record it belongs to and the nesting level within the record if the&lt;br /&gt;
+&lt;p&gt;From interpreting the repetition level of a flattened value we can identify
+the record it belongs to and the nesting level within the record if the
 schema path defines nested lists.&lt;/p&gt;
-&lt;p&gt;The rules for interpreting repetition levels are:&lt;br /&gt;
-If r = 0: The value marks the beginning a new record. It is the first&lt;br /&gt;
-occurrence of this specific field path within that new record.&lt;br /&gt;
-If r &amp;lt; R (max repetition level for a path): This is the first element of a&lt;br /&gt;
-new instance of a nested list. The value of &#39;r&#39; tells us which list in the&lt;br /&gt;
-path (from root to leaf) this new instance belongs to.&lt;br /&gt;
-If r = R: This value is a subsequent item belonging to the same instance&lt;br /&gt;
+&lt;p&gt;The rules for interpreting repetition levels are:
+If r = 0: The value marks the beginning a new record. It is the first
+occurrence of this specific field path within that new record.
+If r &amp;lt; R (max repetition level for a path): This is the first element of a
+new instance of a nested list. The value of &#39;r&#39; tells us which list in the
+path (from root to leaf) this new instance belongs to.
+If r = R: This value is a subsequent item belonging to the same instance
 of most recent list that was previously started.&lt;/p&gt;
 &lt;h1 id=&quot;metadata:-required-fields-only-path&quot; tabindex=&quot;-1&quot;&gt;Metadata: required fields only path &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#metadata:-required-fields-only-path&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;Consider a schema path that contains no optional fields and no list fields.&lt;br /&gt;
-For any value present along such a path the definition level will always be&lt;br /&gt;
-zero as there are no optional or list fields. The repetition level will&lt;br /&gt;
+&lt;p&gt;Consider a schema path that contains no optional fields and no list fields.
+For any value present along such a path the definition level will always be
+zero as there are no optional or list fields. The repetition level will
 always be zero as there are no list fields.&lt;/p&gt;
-&lt;p&gt;In this specific scenario, which mirrors our simplified data model, the&lt;br /&gt;
-schema alone is indeed sufficient to reconstruct the data, as no structural&lt;br /&gt;
+&lt;p&gt;In this specific scenario, which mirrors our simplified data model, the
+schema alone is indeed sufficient to reconstruct the data, as no structural
 variations due to optionality or repetition exist.&lt;/p&gt;
 &lt;h1 id=&quot;putting-it-all-together&quot; tabindex=&quot;-1&quot;&gt;Putting it all together &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#putting-it-all-together&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;p&gt;Let us now see how this works in practice.&lt;/p&gt;
@@ -186,9 +402,9 @@ variations due to optionality or repetition exist.&lt;/p&gt;
       |- description (optional string)
       |- keywords (list string)
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;This schema represents a nested data structure which contains references to&lt;br /&gt;
-the display images belonging to a product. It also provides zero or more&lt;br /&gt;
-localized alt text entries for internationalization (i18n). Each entry has a&lt;br /&gt;
+&lt;p&gt;This schema represents a nested data structure which contains references to
+the display images belonging to a product. It also provides zero or more
+localized alt text entries for internationalization (i18n). Each entry has a
 locale, description (the alt text itself), and keywords (for seo).&lt;/p&gt;
 &lt;p&gt;The individual attributes present in this schema are:&lt;/p&gt;
 &lt;table&gt;
@@ -239,10 +455,10 @@ locale, description (the alt text itself), and keywords (for seo).&lt;/p&gt;
 &lt;/tr&gt;
 &lt;/tbody&gt;
 &lt;/table&gt;
-&lt;p&gt;Each path in our schema has a maximum possible definition level (D) and&lt;br /&gt;
-repetition level (R). The maximum D is calculated by counting how many&lt;br /&gt;
-fields along the path are either optional or list types. The maximum R is&lt;br /&gt;
-the count of just the list type fields along the path. For our ProductImages&lt;br /&gt;
+&lt;p&gt;Each path in our schema has a maximum possible definition level (D) and
+repetition level (R). The maximum D is calculated by counting how many
+fields along the path are either optional or list types. The maximum R is
+the count of just the list type fields along the path. For our ProductImages
 schema, these maximums are:&lt;/p&gt;
 &lt;table&gt;
 &lt;thead&gt;
@@ -292,49 +508,49 @@ schema, these maximums are:&lt;/p&gt;
 &lt;/tr&gt;
 &lt;/tbody&gt;
 &lt;/table&gt;
-&lt;p&gt;D - Definition Level&lt;br /&gt;
+&lt;p&gt;D - Definition Level
 R - Repetition Level&lt;/p&gt;
 &lt;h3 id=&quot;document-1-(d1)&quot; tabindex=&quot;-1&quot;&gt;document 1 (D1) &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#document-1-(d1)&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;Multiple holes are present in this document. the secondary images list is&lt;br /&gt;
-empty. the single localization which is present does not have any keywords&lt;br /&gt;
+&lt;p&gt;Multiple holes are present in this document. the secondary images list is
+empty. the single localization which is present does not have any keywords
 defined yet.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;product_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;101&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;images&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;primary_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2001&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;secondary_image_ids&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;localizations&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;blue casual t-shirt.&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;h3 id=&quot;document-2-(d2)&quot; tabindex=&quot;-1&quot;&gt;document 2 (D2) &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#document-2-(d2)&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;This document contains only the product id and primary image id. the&lt;br /&gt;
+&lt;p&gt;This document contains only the product id and primary image id. the
 remaining properties are either missing or empty.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;product_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;102&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;images&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;primary_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;3010&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;secondary_image_ids&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;localizations&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;h3 id=&quot;document-3-(d3)&quot; tabindex=&quot;-1&quot;&gt;document 3 (D3) &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#document-3-(d3)&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
-&lt;p&gt;This is a fairly complete document with multiple secondary image ids and&lt;br /&gt;
+&lt;p&gt;This is a fairly complete document with multiple secondary image ids and
 multiple localizations with varied content.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;product_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;103&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;images&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;primary_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4400&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;secondary_image_ids&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4401&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4402&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4403&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;localizations&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red running shoe, side view.&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red shoe&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;running&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;sport&quot;&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-au&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token comment&quot;&gt;# placeholder locale does not yet have a description&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red runner&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;jogging&quot;&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-gb&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red trainer, profile.&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;trainer&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;athletics&quot;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;After flattening the documents, the values in each path are stored contiguously.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;product_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;101&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;102&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;103&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;images.primary_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2001&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;3010&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4400&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The paths product_id and images.primary_id contain only mandatory fields. So&lt;br /&gt;
-the derived definition and repetition level values is going to be zero for&lt;br /&gt;
+&lt;p&gt;The paths product_id and images.primary_id contain only mandatory fields. So
+the derived definition and repetition level values is going to be zero for
 all values. So it is equivalent to the following storage representation.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;product_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;101&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;102&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;103&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;&lt;br /&gt;&lt;span class=&quot;token key atrule&quot;&gt;images.primary_id&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2001&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;3010&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4400&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;h2 id=&quot;path:-images.secondary_image_ids&quot; tabindex=&quot;-1&quot;&gt;Path: images.secondary_image_ids &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#path:-images.secondary_image_ids&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;Step 1: Flatten D1&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;images.secondary_image_ids&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The definition level is zero because secondary_image_ids list is empty. The&lt;br /&gt;
-repetition level is zero here for the same reason. The repetition level for&lt;br /&gt;
-the path images.secondary_image_ids is in the range (inclusive) [0, 1]. Here&lt;br /&gt;
-the interpretation of zero is not that this is the first element in the list,&lt;br /&gt;
-which is not possible as the list is empty. But we have to read it together&lt;br /&gt;
-with the NULL value and the definition level value which happens to be zero&lt;br /&gt;
+&lt;p&gt;The definition level is zero because secondary_image_ids list is empty. The
+repetition level is zero here for the same reason. The repetition level for
+the path images.secondary_image_ids is in the range (inclusive) [0, 1]. Here
+the interpretation of zero is not that this is the first element in the list,
+which is not possible as the list is empty. But we have to read it together
+with the NULL value and the definition level value which happens to be zero
 and signals that the list is empty.&lt;/p&gt;
 &lt;p&gt;Step 2: Flatten D2&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;images.secondary_image_ids&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;The same reasoning as above applies here.&lt;/p&gt;
 &lt;p&gt;Step 3: Flatten D3&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;images.secondary_image_ids&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4401&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4402&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;4403&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;As the list is not empty, the definition level for all values in this list&lt;br /&gt;
-is 1. The repetition level for the first element 4401 is zero, and for&lt;br /&gt;
-subsequent elements the repetition level is one. This marks 4401 as the&lt;br /&gt;
+&lt;p&gt;As the list is not empty, the definition level for all values in this list
+is 1. The repetition level for the first element 4401 is zero, and for
+subsequent elements the repetition level is one. This marks 4401 as the
 beginning of a new list instance in a new document.&lt;/p&gt;
 &lt;h2 id=&quot;path-4:-alt_text.localizations.locale&quot; tabindex=&quot;-1&quot;&gt;Path 4: alt_text.localizations.locale &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#path-4:-alt_text.localizations.locale&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;The struct alt_text is required/mandatory and locale is a required/mandatory&lt;br /&gt;
-string. The localizations is a list. So this has a maximum definition level&lt;br /&gt;
+&lt;p&gt;The struct alt_text is required/mandatory and locale is a required/mandatory
+string. The localizations is a list. So this has a maximum definition level
 of 1 and maximum repetition levels is also 1.&lt;/p&gt;
 &lt;p&gt;The inner data type of localizations is a struct with three properties:&lt;/p&gt;
 &lt;ul&gt;
@@ -344,583 +560,107 @@ of 1 and maximum repetition levels is also 1.&lt;/p&gt;
 &lt;/ul&gt;
 &lt;p&gt;Step 1: Flatten D1&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In D1 a single locale is defined. So the derived definition level is 1&lt;br /&gt;
-because the localizations list is present. The repetition level is 0 which&lt;br /&gt;
-indicates that this is the first occurrence of the locale struct property in&lt;br /&gt;
+&lt;p&gt;In D1 a single locale is defined. So the derived definition level is 1
+because the localizations list is present. The repetition level is 0 which
+indicates that this is the first occurrence of the locale struct property in
 a new instance of the localizations list in a new document.&lt;/p&gt;
 &lt;p&gt;Step 2: Flatten D2&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In D2 the localizations list is empty. So the definition level becomes 0 and&lt;br /&gt;
-NULL value is inserted. The repetition level is zero, but has to interpreted&lt;br /&gt;
-together with the NULL value and definition level which shows that the&lt;br /&gt;
+&lt;p&gt;In D2 the localizations list is empty. So the definition level becomes 0 and
+NULL value is inserted. The repetition level is zero, but has to interpreted
+together with the NULL value and definition level which shows that the
 localizations list is empty in this document.&lt;/p&gt;
 &lt;p&gt;Step 3: Flatten D3&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-au&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-gb&quot;&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;There are three locale values in D3. They are added to values. The&lt;br /&gt;
-definition level is 1 because the localizations is not empty. The&lt;br /&gt;
-repetition level is 0 for &amp;quot;en-us&amp;quot; which signals that this is the beginning&lt;br /&gt;
-of a new localizations list instance in a new document and this is the&lt;br /&gt;
-first element. The subsequent elements in the list therefore have the&lt;br /&gt;
+&lt;p&gt;There are three locale values in D3. They are added to values. The
+definition level is 1 because the localizations is not empty. The
+repetition level is 0 for &amp;quot;en-us&amp;quot; which signals that this is the beginning
+of a new localizations list instance in a new document and this is the
+first element. The subsequent elements in the list therefore have the
 repetition level of 1.&lt;/p&gt;
 &lt;h2 id=&quot;path-5:-alt_text.localizations.description&quot; tabindex=&quot;-1&quot;&gt;Path 5: alt_text.localizations.description &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#path-5:-alt_text.localizations.description&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;In this path localizations is a list and description is an optional string.&lt;br /&gt;
-So the maximum definition level is 2. The maximum value for repetition level&lt;br /&gt;
+&lt;p&gt;In this path localizations is a list and description is an optional string.
+So the maximum definition level is 2. The maximum value for repetition level
 is 1 as there is only a single list in this path.&lt;/p&gt;
 &lt;p&gt;Step 1: Flatten D1&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;blue casual t-shirt&quot;&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The optional description is present in D1. So the definition level is 2, and&lt;br /&gt;
-the repetition level is 0. This is the first description in a new instance&lt;br /&gt;
+&lt;p&gt;The optional description is present in D1. So the definition level is 2, and
+the repetition level is 0. This is the first description in a new instance
 of localizations, at the start of the document.&lt;/p&gt;
 &lt;p&gt;Step 2: Flatten D2&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;blue casual t-shirt&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In D2, the localizations list is empty. A NULL value is inserted for&lt;br /&gt;
-description. The definition level is 1 indicating that the path is defined&lt;br /&gt;
-up to the localizations list field, but the list is empty so no actual&lt;br /&gt;
-description value exists within a list item. The repetition level is 0, as&lt;br /&gt;
+&lt;p&gt;In D2, the localizations list is empty. A NULL value is inserted for
+description. The definition level is 1 indicating that the path is defined
+up to the localizations list field, but the list is empty so no actual
+description value exists within a list item. The repetition level is 0, as
 the entry corresponds to a new record (D2).&lt;/p&gt;
 &lt;p&gt;Step 3: Flatten D3&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;blue casual t-shirt&quot;&lt;/span&gt;         &lt;span class=&quot;token comment&quot;&gt;# D1&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;                          &lt;span class=&quot;token comment&quot;&gt;# D2&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red running shoe, side view&quot;&lt;/span&gt; &lt;span class=&quot;token comment&quot;&gt;# D3&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;                          &lt;span class=&quot;token comment&quot;&gt;# D3&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red trainer, profile&quot;&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D3&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The second description is not present, so a NULL value is inserted in its&lt;br /&gt;
-place and its definition level is 1. The first description and third&lt;br /&gt;
-description are present, so they have a definition level of 2. The&lt;br /&gt;
-repetition level of the first description is 0 to indicate that this is a&lt;br /&gt;
-new instance of a localizations list, and this is the first description&lt;br /&gt;
-property in the first struct element. The subsequent descriptions have a&lt;br /&gt;
-repetition level of 1 to indicate that they are elements belonging to this same&lt;br /&gt;
+&lt;p&gt;The second description is not present, so a NULL value is inserted in its
+place and its definition level is 1. The first description and third
+description are present, so they have a definition level of 2. The
+repetition level of the first description is 0 to indicate that this is a
+new instance of a localizations list, and this is the first description
+property in the first struct element. The subsequent descriptions have a
+repetition level of 1 to indicate that they are elements belonging to this same
 list.&lt;/p&gt;
 &lt;h2 id=&quot;path-6:-alt_text.localizations.keywords&quot; tabindex=&quot;-1&quot;&gt;Path 6: alt_text.localizations.keywords &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#path-6:-alt_text.localizations.keywords&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;This is the first time we encounter a nested list. Both localizations and&lt;br /&gt;
-keywords are list fields. The maximum definition level is 2 and the maximum&lt;br /&gt;
+&lt;p&gt;This is the first time we encounter a nested list. Both localizations and
+keywords are list fields. The maximum definition level is 2 and the maximum
 repetition level is also 2 for this path.&lt;/p&gt;
 &lt;p&gt;Step 1: Flatten D1&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;localizations&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;blue casual t-shirt.&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In D1, keywords list is present, but it is empty.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;We insert a NULL value because keywords list is empty. The definition level&lt;br /&gt;
-is 1 as localizations list is present and not empty, but the keywords list&lt;br /&gt;
-is empty. The repetition level is zero because this is the start of a new&lt;br /&gt;
+&lt;p&gt;We insert a NULL value because keywords list is empty. The definition level
+is 1 as localizations list is present and not empty, but the keywords list
+is empty. The repetition level is zero because this is the start of a new
 record (D1).&lt;/p&gt;
 &lt;p&gt;Step 2: Flatten D2&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;localizations&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;In D2, the localizations list is empty.&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The definition level in this case is 0 because the localizations list is&lt;br /&gt;
+&lt;p&gt;The definition level in this case is 0 because the localizations list is
 empty. The repetition level is 0 because this is the start of a new record (D2).&lt;/p&gt;
 &lt;p&gt;Step 3: Flatten D3&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;localizations&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-us&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red running shoe, side view.&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red shoe&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;running&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;sport&quot;&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-au&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token comment&quot;&gt;# placeholder locale does not yet have a description&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red runner&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;jogging&quot;&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token key atrule&quot;&gt;locale&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;en-gb&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;description&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red trainer, profile.&quot;&lt;/span&gt;&lt;br /&gt;      &lt;span class=&quot;token key atrule&quot;&gt;keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;trainer&quot;&lt;/span&gt;&lt;br /&gt;        &lt;span class=&quot;token punctuation&quot;&gt;-&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;athletics&quot;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The localizations list contains 3 items. So let us break this up by item so&lt;br /&gt;
+&lt;p&gt;The localizations list contains 3 items. So let us break this up by item so
 we can clearly see how repetition levels varies across keywords for each item.&lt;/p&gt;
 &lt;p&gt;After processing the first item in localizations:&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red shoe&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;running&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;sport&quot;&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The localizations list is present and the keywords list is present, and both&lt;br /&gt;
-are not empty. So the definition level is 2. The first item in the list has&lt;br /&gt;
-a repetition level of 0 because this is the beginning of a new record (D3).&lt;br /&gt;
-The other items have a repetition level of 2 to indicate that this is a&lt;br /&gt;
+&lt;p&gt;The localizations list is present and the keywords list is present, and both
+are not empty. So the definition level is 2. The first item in the list has
+a repetition level of 0 because this is the beginning of a new record (D3).
+The other items have a repetition level of 2 to indicate that this is a
 continuation of the current keywords list.&lt;/p&gt;
 &lt;p&gt;Now the second item,&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;red runner&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;jogging&quot;&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The definition level is 2 as both lists in the path are present. Note that&lt;br /&gt;
-the repetition level for &amp;quot;red runner&amp;quot; is not zero. This is significant! This&lt;br /&gt;
-keywords field is part of the second struct item in localizations. And&lt;br /&gt;
-localizations has a repetition level in the range (inclusive) [0, 1]. The 0&lt;br /&gt;
-repetition level marks the beginning of a new record, but here this is the&lt;br /&gt;
-second item in the localizations list. The computed repetition level is&lt;br /&gt;
-therefore 1 for all remaining structs in this list. Now when we reach the&lt;br /&gt;
-keywords list, this is a new list instance and &amp;quot;red runner&amp;quot; is the first&lt;br /&gt;
-element in the list. So the repetition level for &amp;quot;red runner&amp;quot; is 1. The&lt;br /&gt;
-remaining items in the list have a repetition level of 2 to indicate that it&lt;br /&gt;
+&lt;p&gt;The definition level is 2 as both lists in the path are present. Note that
+the repetition level for &amp;quot;red runner&amp;quot; is not zero. This is significant! This
+keywords field is part of the second struct item in localizations. And
+localizations has a repetition level in the range (inclusive) [0, 1]. The 0
+repetition level marks the beginning of a new record, but here this is the
+second item in the localizations list. The computed repetition level is
+therefore 1 for all remaining structs in this list. Now when we reach the
+keywords list, this is a new list instance and &amp;quot;red runner&amp;quot; is the first
+element in the list. So the repetition level for &amp;quot;red runner&amp;quot; is 1. The
+remaining items in the list have a repetition level of 2 to indicate that it
 is a continuation of the newly opened list.&lt;/p&gt;
 &lt;p&gt;And the final item in localizations,&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;trainer&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;athletics&quot;&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The repetition level of &amp;quot;trainer&amp;quot; is 1 because it is child property of the&lt;br /&gt;
-third struct item in localizations list. The repetition level for the third&lt;br /&gt;
-item can only be 1. Also, &amp;quot;trainer&amp;quot; is the first item in the new instance of&lt;br /&gt;
-keywords list so we give it a repetition level of 1 to identify it as the&lt;br /&gt;
-first element in a new keywords list. The remaining items in keywords get a&lt;br /&gt;
+&lt;p&gt;The repetition level of &amp;quot;trainer&amp;quot; is 1 because it is child property of the
+third struct item in localizations list. The repetition level for the third
+item can only be 1. Also, &amp;quot;trainer&amp;quot; is the first item in the new instance of
+keywords list so we give it a repetition level of 1 to identify it as the
+first element in a new keywords list. The remaining items in keywords get a
 repetition level of 2.&lt;/p&gt;
-&lt;p&gt;The final aggregation of keywords after processing D1, D2 and all three&lt;br /&gt;
+&lt;p&gt;The final aggregation of keywords after processing D1, D2 and all three
 localization items from D3:&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;                           &lt;span class=&quot;token comment&quot;&gt;# D1: keywords list is empty&lt;/span&gt;&lt;br /&gt;    NULL&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;                           &lt;span class=&quot;token comment&quot;&gt;# D2: localizations list is empty&lt;/span&gt;&lt;br /&gt;    &quot;red shoe&quot;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;running&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;sport&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token comment&quot;&gt;# D3: 1st localization (&quot;en-us&quot;)&lt;/span&gt;&lt;br /&gt;    &quot;red runner&quot;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;jogging&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D3: 2nd localization (&quot;en-au&quot;)&lt;/span&gt;&lt;br /&gt;    &quot;trainer&quot;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;athletics&quot;&lt;/span&gt;          &lt;span class=&quot;token comment&quot;&gt;# D3: 3rd localization (&quot;en-gb&quot;)&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D1: (localizations present, keywords empty)&lt;/span&gt;&lt;br /&gt;    0&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D2: (localizations empty)&lt;/span&gt;&lt;br /&gt;    2&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;  &lt;span class=&quot;token comment&quot;&gt;# D3: (both list present and non-empty)&lt;/span&gt;&lt;br /&gt;    2&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D1: new record&lt;/span&gt;&lt;br /&gt;    0&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D2: new record&lt;/span&gt;&lt;br /&gt;    0&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;  &lt;span class=&quot;token comment&quot;&gt;# D3: 1st localization: r=0 for first keyword, r=2 for remaining&lt;/span&gt;&lt;br /&gt;    1&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;     &lt;span class=&quot;token comment&quot;&gt;# D3: 2nd localization: r=1 for first keyword, r=2 for remaining&lt;/span&gt;&lt;br /&gt;    1&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;      &lt;span class=&quot;token comment&quot;&gt;# D3: 3rd localization: r=1 for first keyword, r=2 for remaining&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;hr /&gt;
-&lt;p&gt;In columnar storage values of a single column attribute are stored&lt;br /&gt;
-contiguously. In analytics databases the query optimizer can apply&lt;br /&gt;
-projection pushdown directly to the data source. This means only those columns&lt;br /&gt;
-which are specified in the query are read from storage. Analytical queries are&lt;br /&gt;
-often aggregations over the entire data source. So this can reduce the I/O&lt;br /&gt;
-required and make the queries run faster.&lt;/p&gt;
-&lt;p&gt;It is easy to map flat relational data to columns. Given a projection of&lt;br /&gt;
-columns the original record can be reassembled by index or offset. A record&lt;br /&gt;
-has the same index or offset across all columns. This is not the case with&lt;br /&gt;
-nested data structures.&lt;/p&gt;
-&lt;p&gt;If nested data structures can be shredded into columns, then it is possible&lt;br /&gt;
-to use a SQL or DataFrame interface to query nested data. All the built-in&lt;br /&gt;
-optimizations which are available for relational data also then becomes&lt;br /&gt;
-available to nested data structures. The ability to interactively query millions&lt;br /&gt;
-or billions of nested data becomes possible in a single node using a vectorized&lt;br /&gt;
-query execution engines like DuckDB, ClickHouse or Apache DataFusion.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# First record
-ProductId: 123
-ImageGallery:
-  PrimaryImageId: 555
-  AdditionalImageId:
-    - 556
-    - 557
-
-# Second record
-ProductId: 678
-ImageGallery:
-  PrimaryImageId: 987
-  AdditionalImageId:
-    - 988
-    - 989
-    - 990
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Nested data structures are tree shaped. The atomic or primitive value is&lt;br /&gt;
-found at the leaf of the tree. And columns in the nested data structure is&lt;br /&gt;
-the path from root to leaf. The columns with their data type are:&lt;/p&gt;
-&lt;ol&gt;
-&lt;li&gt;ProductId - Integer&lt;/li&gt;
-&lt;li&gt;ImageGallery.PrimaryImageId - Integer&lt;/li&gt;
-&lt;li&gt;ImageGallery.AdditionalImageId - Array[Integer]&lt;/li&gt;
-&lt;/ol&gt;
-&lt;p&gt;The two records above after being shredded into column values will look like&lt;br /&gt;
-this:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;ProductId                       : [123, 678]
-ImageGallery.PrimaryImageId     : [555, 987]
-ImageGallery.AdditionalImageId  : [556, 557, 988, 989, 990]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In the absence of other metadata it is now impossible for us to reassemble&lt;br /&gt;
-the original records. The structural information is lost with this encoding.&lt;br /&gt;
-We are unable to identify where a record begins or ends when the nested data&lt;br /&gt;
-structure contains repeated (array) values. In this representation it is not&lt;br /&gt;
-possible anymore to know which values in &lt;code&gt;ImageGallery.AdditionalImageId&lt;/code&gt;&lt;br /&gt;
-belongs to which records.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# First record
-ProductId: 123
-ImageGallery:
-  PrimaryImageId: 555
-  AdditionalImageId:
-    - 556
-    - 557
-AltText:
-  - Language:
-      - Locale: en-US
-        Description: Athletic running shoes
-        Keyword:
-          - shoes
-          - running
-          - athletic
-
-# Second record
-ProductId: 678
-ImageGallery:
-  PrimaryImageId: 987
-  AdditionalImageId:
-    - 988
-    - 989
-    - 990
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Real world nested data structures are also sparse. In this example the&lt;br /&gt;
-first nested data contains descriptive text columns, but the second record&lt;br /&gt;
-does not. For partially or completely missing paths in a nested data&lt;br /&gt;
-structure NULL values are inserted. The more sparse the data because of&lt;br /&gt;
-missing column values, the more NULL values there will be.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;ProductId                       : [123, 678]
-ImageGallery.PrimaryImageId     : [555, 987]
-ImageGallery.AdditionalImageId  : [556, 557, 988, 989, 990]
-
-# Columns present only in the first record
-AltText.Language.Locale         : [&amp;quot;en-US&amp;quot;, NULL]
-AltText.Language.Description    : [&amp;quot;Athletic running shoes&amp;quot;, NULL]
-AltText.Language.Keyword        : [&amp;quot;shoes&amp;quot;, &amp;quot;running&amp;quot;, &amp;quot;athletic&amp;quot;, NULL]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The Dremel (Google BigQuery) paper (VLDB 2010) introduced a new&lt;br /&gt;
-representation for nested data in columnar storage which also stored the&lt;br /&gt;
-structural hierarchy of the nested data side by side with the column values.&lt;br /&gt;
-This metadata made it possible to reassemble the original nested data&lt;br /&gt;
-structure back from columnar format.&lt;/p&gt;
-&lt;p&gt;The ability to represent nested data directly in a columnar format meant&lt;br /&gt;
-increased developer productivity. There is no need to normalize the nested&lt;br /&gt;
-data by extracting entities and joining multiple relations using foreign&lt;br /&gt;
-keys in some star or snowflake schema for data analysis. Developers could&lt;br /&gt;
-use the SQL query execution for interactive analysis of very large nested&lt;br /&gt;
-datasets.&lt;/p&gt;
-&lt;p&gt;Later when Parquet was created it added ground up support nested data&lt;br /&gt;
-structures in its file format using the techniques and principles described&lt;br /&gt;
-in the Dremel paper.&lt;/p&gt;
-&lt;p&gt;For the &lt;code&gt;ImageGallery.AdditionalImageId&lt;/code&gt; it was impossible to reassemble the&lt;br /&gt;
-original two records by looking at only the stored column values. In Dremel&lt;br /&gt;
-they introduced metadata which encodes the structure of the values in the&lt;br /&gt;
-nested data. They are definition level and repetition level.&lt;/p&gt;
-&lt;p&gt;In the below example by reading &lt;code&gt;d&lt;/code&gt; (definition level) and &lt;code&gt;r&lt;/code&gt; (repetition&lt;br /&gt;
-level) in tandem with the column values the original nested values can be&lt;br /&gt;
-reassembled.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# ImageGallery.AdditionalImageId Column
-
-d       : [1, 1, 1, 1, 1]             # definition level
-r       : [0, 1, 0, 1, 1]             # repetition level
-values  : [556, 557, 988, 989, 990]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;To compute the definition level of &lt;code&gt;ImageGallery.AdditionalImageId&lt;/code&gt; we need&lt;br /&gt;
-to count all the optional and repeated fields in it. To compute the&lt;br /&gt;
-repetition level the index of the value must be known. If there are multiple&lt;br /&gt;
-repeated fields in column path, then the computed repetition level of the&lt;br /&gt;
-nearest repeated ancestor.&lt;/p&gt;
-&lt;p&gt;The schema of the nested data is required for us to know if a field is&lt;br /&gt;
-defined as required, optional or repeated. So let us inspect the schema for&lt;br /&gt;
-&lt;code&gt;ProductImages&lt;/code&gt; document before formalizing the computation of definition&lt;br /&gt;
-and repetition levels from the nested data.&lt;/p&gt;
-&lt;p&gt;The schema for &lt;code&gt;ProductImages&lt;/code&gt; is given below. From the schema we can see that&lt;br /&gt;
-this is a nested document which contains the display images for a product and&lt;br /&gt;
-language translations of the image descriptions.&lt;/p&gt;
-&lt;p&gt;The data model is,&lt;/p&gt;
+&lt;h1 id=&quot;conclusion&quot; tabindex=&quot;-1&quot;&gt;Conclusion &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#conclusion&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;ul&gt;
-&lt;li&gt;A field is either a struct type or a primitive type like an integer,&lt;br /&gt;
-string, float, boolean etc.&lt;/li&gt;
-&lt;li&gt;A field with no explicit multiplicity labels is a required field. A&lt;br /&gt;
-required field will always be present in the nested data.&lt;/li&gt;
-&lt;li&gt;An optional field is explicitly marked in the schema. In nested data this&lt;br /&gt;
-field maybe present or absent.&lt;/li&gt;
-&lt;li&gt;A repeated field is represented as an array of values. The type of&lt;br /&gt;
-repeated field can be either a struct type or a primitive type.&lt;/li&gt;
-&lt;li&gt;The ordering of repeated values is significant.&lt;/li&gt;
-&lt;li&gt;The leaf node is always a primitive type, or a repeated field of a&lt;br /&gt;
-primitive type.&lt;/li&gt;
-&lt;li&gt;A column name is represented using dot notation by joining the field names&lt;br /&gt;
-from root to leaf. Eg. &lt;code&gt;AltText.Language.Keyword&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;/li&gt;
+&lt;li&gt;[ ] TODO&lt;/li&gt;
 &lt;/ul&gt;
-&lt;pre&gt;&lt;code&gt;ProductImages                     # Document Name
-├─ ProductId [int64]
-├─ ImageGallery
-│  ├─ PrimaryImageId [int64]
-│  └─ AdditionalImageId [int64]*  # repeated
-└─ AltText?                       # optional
-   └─ Language*                   # repeated
-      ├─ Locale [string]
-      ├─ Description [string]?    # optional
-      └─ Keyword [string]*        # repeated
-
-* = repeated
-? = optional
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;A definition level for a column value is computed by counting the occurrence&lt;br /&gt;
-of optional and repeated fields which are present in the value. If an optional&lt;br /&gt;
-field is absent then we do not increment the definition level. If a repeated&lt;br /&gt;
-field is empty or missing we do not increment the definition level. So the&lt;br /&gt;
-definition level can tell us where the path in a tree terminated for any&lt;br /&gt;
-given column value.&lt;/p&gt;
-&lt;p&gt;But this is not enough for us to reassemble repeated values. The repetition&lt;br /&gt;
-level is used to identify the beginning of an array from the rest of the&lt;br /&gt;
-array values. For computing repetition levels, only repeated fields in a&lt;br /&gt;
-path are counted.&lt;/p&gt;
-&lt;p&gt;In &lt;code&gt;ImageGallery.AdditionalImageId&lt;/code&gt;,&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;ImageGallery&lt;/code&gt; is a required field&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;AdditionalImageId&lt;/code&gt; is a repeated field&lt;/li&gt;
-&lt;/ul&gt;
-&lt;pre&gt;&lt;code&gt;# ImageGallery.AdditionalImageId Column
-
-definition_levels : [1, 1, 1, 1, 1]
-repetition_levels : [0, 1, 0, 1, 1]
-values            : [556, 557, 988, 989, 990]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;From the definition levels we can see that for all values the path is&lt;br /&gt;
-&lt;code&gt;ImageGallery.AdditionalImageId&lt;/code&gt; because the definition level is 1 which&lt;br /&gt;
-means the repeated field &lt;code&gt;AdditionalImageId&lt;/code&gt; in the path is always present.&lt;/p&gt;
-&lt;p&gt;There is only a single repeated field, so the repetition levels can be&lt;br /&gt;
-either zero or one. To identify the start of the array, the first element in&lt;br /&gt;
-this example will have a repetition level of zero. The remaining values in&lt;br /&gt;
-the array will have the repetition level of one. So &lt;code&gt;556&lt;/code&gt; has repetition level&lt;br /&gt;
-of zero, and &lt;code&gt;557&lt;/code&gt; has a repetition level of one.&lt;/p&gt;
-&lt;p&gt;For the next value &lt;code&gt;988&lt;/code&gt; we can infer that it belongs to the second record&lt;br /&gt;
-because it has a repetition level of zero. This means it has to be the first&lt;br /&gt;
-value in the array. And the remaining values in the second record &lt;code&gt;989&lt;/code&gt;, &lt;code&gt;989&lt;/code&gt;&lt;br /&gt;
-because they have a repetition level of 1.&lt;/p&gt;
-&lt;p&gt;In this example we were able to identify that the repeated values belonged&lt;br /&gt;
-to two separate nested values using the repetition levels.&lt;/p&gt;
-&lt;p&gt;Next let us look at a example which contains null values.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;ProductId: 123
-ImageGallery:
-  PrimaryImageId: 555
-  AdditionalImageId:
-    - 556
-    - 557
-AltText:
-  - Language:
-      - Locale: en-US
-        Description: Athletic running shoes
-        Keyword:
-          - shoes
-          - athletic
-  - Language:
-      - Locale: en-GB
-        Description: Athletic trainers
-        Keyword:
-          - trainers
-          - sport
-  - Language:
-      - Locale: fr-FR
-  - Language:
-      - Locale: de-DE
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The column &lt;code&gt;AltText.Language.Description&lt;/code&gt; contains a repeated field and&lt;br /&gt;
-exactly two optional fields. The definition level therefore can be between 0&lt;br /&gt;
-and 3.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;AltText: optional&lt;/li&gt;
-&lt;li&gt;Language: repeated&lt;/li&gt;
-&lt;li&gt;Description: optional&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;After compiling the column values, there are two NULL values. This&lt;br /&gt;
-represents the missing &lt;code&gt;Description&lt;/code&gt; in the 2nd and 3rd &lt;code&gt;Language&lt;/code&gt;&lt;br /&gt;
-repetition which corresponds to the &lt;code&gt;Locale&lt;/code&gt;: &lt;code&gt;fr-FR&lt;/code&gt; and &lt;code&gt;de-DE&lt;/code&gt;.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Description Column
-
-values: [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Next let us compute the definition levels. The definition level for both the&lt;br /&gt;
-NULL values is two because the path terminates at &lt;code&gt;AltText.Language&lt;/code&gt; as the&lt;br /&gt;
-&lt;code&gt;Description&lt;/code&gt; field is missing in both cases.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Description Column
-
-definition_levels : [3, 3, 2, 2]
-values            : [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Next let us compute the repetition levels. This column has a single repeated&lt;br /&gt;
-field which is &lt;code&gt;Language&lt;/code&gt;. So repetition levels will be between 0 and 1 for&lt;br /&gt;
-all values.&lt;/p&gt;
-&lt;p&gt;Here the repetition level of zero clearly identifies the first element in&lt;br /&gt;
-the repeated field &lt;code&gt;Language&lt;/code&gt;, from the rest.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Description Column
-
-repetition_levels : [0, 1, 1, 1]
-definition_levels : [3, 3, 2, 2]
-values            : [&amp;quot;Athletic running shoes&amp;quot;, &amp;quot;Athletic trainers&amp;quot;, NULL, NULL]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Next let us look at an example where there is more than one repeated field&lt;br /&gt;
-in a column. The &lt;code&gt;AltText.Language.Keyword&lt;/code&gt; column has two repeated fields&lt;br /&gt;
-and a single optional field.&lt;/p&gt;
-&lt;p&gt;Let us compile the values first. The final two NULL values represent the&lt;br /&gt;
-missing &lt;code&gt;Keyword&lt;/code&gt; in the second and third repetition of &lt;code&gt;Language&lt;/code&gt;.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keywords
-
-values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Next let us compute the definition levels. The NULL values have a definition&lt;br /&gt;
-level of two because &lt;code&gt;Keyword&lt;/code&gt; field is missing.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
-
-values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Next let us compute the repetition levels. This looks complicated, but you&lt;br /&gt;
-will soon see how this exactly reassembles the original nested data structure.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
-
-values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2]
-rep   : [0, 2, 1, 2, 1, 1]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Let us look at the nested column in isolation and give it index numbers.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;AltText:
-  - Language:         # Language[0]
-        - Keyword:
-          - shoes     # Language[0].Keyword[0]
-          - athletic  # Language[0].Keyword[0]
-  - Language:         # Language[1]
-        - Keyword:
-          - trainers  # Language[1].Keyword[0]
-          - sport     # Language[1].Keyword[1]
-  - Language:         # Language[2]
-  - Language:         # Language[3]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;There are two repeated fields &lt;code&gt;Alt.Language.Keyword&lt;/code&gt; which are &lt;code&gt;Language&lt;/code&gt;&lt;br /&gt;
-and then &lt;code&gt;Keyword&lt;/code&gt;. So values in this column may have repetition levels - 0,&lt;br /&gt;
-1 or 2.&lt;/p&gt;
-&lt;p&gt;The complete path for &lt;code&gt;shoes&lt;/code&gt; is &lt;code&gt;Language[0].Keyword[0]&lt;/code&gt;. This value is the&lt;br /&gt;
-first repeated value in the path of this nested data structure. The&lt;br /&gt;
-repetition level of &lt;code&gt;Language[0]&lt;/code&gt; is zero. The repetition level of &lt;code&gt;Keyword [0]&lt;/code&gt; is also zero. It inherits the repetition level of the nearest repeated&lt;br /&gt;
-ancestor.&lt;/p&gt;
-&lt;p&gt;The second value is &lt;code&gt;athletic&lt;/code&gt; with path &lt;code&gt;Language[0].Keyword[1]&lt;/code&gt;. The&lt;br /&gt;
-computed repetition level is two so that we can distinctly identify that&lt;br /&gt;
-this is not the first item in &lt;code&gt;Keyword&lt;/code&gt;. Because this is not the first item&lt;br /&gt;
-we do not have to consider the repetition level of a repeated ancestor. Here&lt;br /&gt;
-&lt;code&gt;Keyword&lt;/code&gt; field is the second repeated field of this column which is present&lt;br /&gt;
-and therefore the repetition level is two.&lt;/p&gt;
-&lt;p&gt;The third value is &lt;code&gt;trainers&lt;/code&gt;. It has the path &lt;code&gt;Language[1].Keyword[0]&lt;/code&gt;.&lt;br /&gt;
-Even though this is the first Keyword, it is the second repetition of&lt;br /&gt;
-Language. So the repetition level of &lt;code&gt;Language[1]&lt;/code&gt; is one. And since it is&lt;br /&gt;
-the first keyword, we inherit that value. So the computed repetition level&lt;br /&gt;
-is one.&lt;/p&gt;
-&lt;p&gt;The fourth value is &lt;code&gt;sport&lt;/code&gt; and the path is &lt;code&gt;Language[1].Keyword[1]&lt;/code&gt;. The&lt;br /&gt;
-computed repetition level is two here. This is the second keyword, and so&lt;br /&gt;
-the repetition level is same as the number of repeated fields in this path&lt;br /&gt;
-which happens to be two.&lt;/p&gt;
-&lt;p&gt;The fifth and sixth values are both NULL. They have the paths &lt;code&gt;Language[2]&lt;/code&gt;&lt;br /&gt;
-and &lt;code&gt;Language[3]&lt;/code&gt;. The &lt;code&gt;Keyword&lt;/code&gt; field is empty or missing. So we compute&lt;br /&gt;
-the repetition level up to &lt;code&gt;Language&lt;/code&gt; field. And the value is one.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
-
-values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-def   : [3, 3, 3, 3, 2, 2]
-rep   : [0, 2, 1, 2, 1, 1]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Now that we know how definition and repetition levels are computed, it is&lt;br /&gt;
-possible to reassemble the nested data structure from the column values,&lt;br /&gt;
-definition and repetition levels.&lt;/p&gt;
-&lt;p&gt;From the column storage values we can also reassemble a partial projection of&lt;br /&gt;
-the nested data structure in its original form. For example if only the&lt;br /&gt;
-following columns are selected - [ProductId, AltText.Language.Locale] which&lt;br /&gt;
-is stored in columnar format as,&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# ProductId Column
-values            : [123, 456]
-definition_level  : [0, 0]
-repetition_level  : [0, 0]
-
-# AltText.Language.Locale
-values            : [&#39;en-US&#39;, &#39;en-GB&#39;, &#39;fr-FR&#39;, &#39;de-DE&#39;, NULL]
-definition_level  : [2, 2, 2, 2, 0]
-repetition_level  : [0, 1, 1, 1, 0]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The reassembled nested data structure resembles the original but contains&lt;br /&gt;
-only the selected columns.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# Record 1
-ProductId: 123
-AltText:
-  - Language:
-      - Locale: en-US
-  - Language:
-      - Locale: en-GB
-  - Language:
-      - Locale: fr-FR
-  - Language:
-      - Locale: de-DE
-
-# Record 2
-ProductId: 678
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;This is just a physical representation. In physical storage the NULL values&lt;br /&gt;
-can be omitted. Because we know that for the column &lt;code&gt;AltText.Language. Keyword&lt;/code&gt; has a max definition level of 3. It has an optional field &lt;code&gt;AltText&lt;/code&gt;&lt;br /&gt;
-and two repeated fields &lt;code&gt;Language&lt;/code&gt; and &lt;code&gt;Keyword&lt;/code&gt;. So when we see a&lt;br /&gt;
-definition level value lower than 3, we know that it stands for a NULL value.&lt;br /&gt;
-This way we can avoid storing the NULL values. This is a useful property for&lt;br /&gt;
-real world nested data structures which are sparse, and therefore has many&lt;br /&gt;
-NULL values need not be physically stored saving space.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# AltText.Language.Keyword
-
-# Logical representation
-# values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;, NULL, NULL]
-
-# Physical representation which does not store NULL values
-values: [&amp;quot;shoes&amp;quot;, &amp;quot;athletic&amp;quot;, &amp;quot;trainers&amp;quot;, &amp;quot;sport&amp;quot;]
-def   : [3, 3, 3, 3, 2, 2]
-rep   : [0, 2, 1, 2, 1, 1]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In this example &lt;code&gt;ProductId&lt;/code&gt; is a required field so there is no need to store&lt;br /&gt;
-the definition levels. The definition level is always zero for all values.&lt;br /&gt;
-Similarly, a definition level of zero implies that the repetition level is&lt;br /&gt;
-also zero. So we do not also need to store repetition levels.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# ProductId Column
-values            : [123, 456]
-definition_level  : [0, 0]
-repetition_level  : [0, 0]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;So in this encoding in physical storage we only write the column values.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;# ProductId Column
-values            : [123, 456]
-&lt;/code&gt;&lt;/pre&gt;
-&lt;hr /&gt;
-&lt;p&gt;Draft Notes:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Improve definition level explanation: counting number of optional and&lt;br /&gt;
-repeated fields in the path from root to where the value is found, or&lt;br /&gt;
-where the path terminates for NULL values or paths which are entirely&lt;br /&gt;
-missing which can happen if the first field in a path is optional and&lt;br /&gt;
-therefore is a NULL value.&lt;/li&gt;
-&lt;li&gt;In &lt;code&gt;AltText.Language.Keyword&lt;/code&gt; the computation of repetition levels needs&lt;br /&gt;
-improvement. For e.g. in the case of &amp;quot;athletic&amp;quot; the second repeated field&lt;br /&gt;
-&lt;code&gt;Keyword&lt;/code&gt; is repeating, therefore the repetition level switches from zero&lt;br /&gt;
-to two.&lt;/li&gt;
-&lt;li&gt;The path with index &lt;code&gt;Language[0].Keyword[1]&lt;/code&gt; for demonstrating the&lt;br /&gt;
-relationship with repetition levels can be compiled as a table or a nested&lt;br /&gt;
-list. The key is to explicitly outline the repetition level no matter&lt;br /&gt;
-which format is used for visualizing the relationship.&lt;/li&gt;
-&lt;li&gt;A definition level less than maximum value means a NULL value at that&lt;br /&gt;
-specific position in the schema. The count provides clues as to where the&lt;br /&gt;
-path terminated.&lt;/li&gt;
-&lt;li&gt;Add visual diagrams like in the Twitter blog post - Dremel made simple&lt;br /&gt;
-with Parquet.&lt;/li&gt;
-&lt;li&gt;Include an example of a flat schema with a required, optional and repeated&lt;br /&gt;
-field.&lt;/li&gt;
-&lt;li&gt;Include bit-level packing of definition, repetition levels.&lt;/li&gt;
-&lt;li&gt;The twitter blog post includes examples of how useful data structures like&lt;br /&gt;
-map (key, value) are implemented. It maybe useful to show the separation&lt;br /&gt;
-between logical and physical types. Map is a logical type which is&lt;br /&gt;
-rewritten to a struct physical type with a required key of type string,&lt;br /&gt;
-and an optional value of a primitive type or a record type.&lt;/li&gt;
-&lt;li&gt;The twitter blog post also includes a nested list example for&lt;br /&gt;
-demonstrating repetition levels. I need to reference it again to check how&lt;br /&gt;
-it is represented logically similar to the map type.&lt;/li&gt;
-&lt;li&gt;Include a couple of practical SQL query examples over the column&lt;br /&gt;
-shredded nested data structures using Apache DataFusion. The test data can&lt;br /&gt;
-be generated and written using python to Parquet format.&lt;/li&gt;
-&lt;li&gt;Parquet precomputed offset index which helps with deeply nested&lt;br /&gt;
-documents where otherwise we have to scan the definition, repetition&lt;br /&gt;
-levels from beginning to end to jump to a record. Include a concrete&lt;br /&gt;
-example.&lt;/li&gt;
-&lt;li&gt;Include record reassembly as a separate example instead of merging it with&lt;br /&gt;
-the explanation of definition, and repetition levels.&lt;/li&gt;
-&lt;li&gt;Schema merging in Parquet. Include an example.&lt;/li&gt;
-&lt;li&gt;In proto3 there is a significant change. Fields are optional by default&lt;br /&gt;
-and need not be marked as optional. They don&#39;t use the optional keyword&lt;br /&gt;
-anymore. The paper uses the proto2 syntax and semantics. The optional&lt;br /&gt;
-fields are explicitly marked. So proto3 removed required fields and uses&lt;br /&gt;
-default values for missing fields instead of explicitly tracking presence.&lt;br /&gt;
-This means it is not possible anymore to identify if a field which was&lt;br /&gt;
-explicitly set to default value vs one which was not set at all. But this&lt;br /&gt;
-change was included to make it possible to mark an optional field as&lt;br /&gt;
-required (dangerous) made it challenging for schema evolution. But proto3&lt;br /&gt;
-reintroduced the optional keyword again.&lt;/li&gt;
-&lt;li&gt;Include concrete SQL example for predicate pushdown.&lt;/li&gt;
-&lt;li&gt;Include Zero-Copy Optimization when reading from Parquet to Arrow.&lt;br /&gt;
-Remapping definition levels to validity bitmaps, and repetition levels to&lt;br /&gt;
-offset indexes. The last entry (n+1 for n items) indicates position after&lt;br /&gt;
-the last element. This also has to do with point access when you want to&lt;br /&gt;
-read all the values for record N, you can do offset[N-1] - offset[N] and&lt;br /&gt;
-directly read only those values from offset[N-1].&lt;/li&gt;
-&lt;li&gt;This is not a post about light-weight compression schemes, so I am not&lt;br /&gt;
-adding anything about dictionary encoding, run-length encoding etc.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;hr /&gt;
-&lt;p&gt;Predicate Pushdown for Nested Fields - Concrete Example&lt;br /&gt;
-Consider a schema with nested e-commerce orders:&lt;br /&gt;
-Order&lt;br /&gt;
-├─ OrderId&lt;br /&gt;
-├─ Customer&lt;br /&gt;
-│ ├─ CustomerId&lt;br /&gt;
-│ ├─ Name&lt;br /&gt;
-│ └─ PremiumStatus&lt;br /&gt;
-└─ Items [array]&lt;br /&gt;
-├─ ProductId&lt;br /&gt;
-├─ Quantity&lt;br /&gt;
-└─ Price&lt;br /&gt;
-Let&#39;s say we want all orders where any item has a price over $100:&lt;/p&gt;
-&lt;pre class=&quot;language-sql&quot;&gt;&lt;code class=&quot;language-sql&quot;&gt;&lt;span class=&quot;token keyword&quot;&gt;SELECT&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;*&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;FROM&lt;/span&gt; orders&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;WHERE&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;EXISTS&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;SELECT&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;FROM&lt;/span&gt; UNNEST&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;items&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;WHERE&lt;/span&gt; price &lt;span class=&quot;token operator&quot;&gt;&gt;&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;100&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Traditional Approach:&lt;/p&gt;
-&lt;p&gt;Read all columns for all Order records&lt;br /&gt;
-Reconstruct the full nested structure&lt;br /&gt;
-Apply the filter to each record&lt;br /&gt;
-Return matching records&lt;/p&gt;
-&lt;p&gt;Predicate Pushdown with Nested Fields:&lt;/p&gt;
-&lt;p&gt;The query engine identifies that only the Items.Price column needs examining&lt;br /&gt;
-first&lt;br /&gt;
-It reads only the Items.Price column with its definition and repetition levels&lt;br /&gt;
-It creates a bitmap of which Orders have at least one item with price &amp;gt; $100&lt;br /&gt;
-It then only reads the remaining columns for Orders that matched the filter&lt;/p&gt;
-&lt;p&gt;For a dataset with 1 million orders but only 5% having items over $100, this&lt;br /&gt;
-approach reads only 5% of the data for most columns.&lt;/p&gt;
-&lt;hr /&gt;
 </content>
 	</entry>
 	
@@ -956,7 +696,7 @@ approach reads only 5% of the data for most columns.&lt;/p&gt;
 		<id>https://jacobsherin.com/posts/secondpost/</id>
 		<content type="html">&lt;p&gt;Leverage agile frameworks to provide a robust synopsis for high level overviews. Iterative approaches to corporate strategy foster collaborative thinking to further the overall value proposition. Organically grow the holistic world view of disruptive innovation via workplace diversity and empowerment.&lt;/p&gt;
 &lt;h2 id=&quot;section-header&quot; tabindex=&quot;-1&quot;&gt;Section Header &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/secondpost/#section-header&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
-&lt;p&gt;&lt;a href=&quot;https://jacobsherin.com/posts/firstpost/&quot;&gt;First post&lt;/a&gt;&lt;br /&gt;
+&lt;p&gt;&lt;a href=&quot;https://jacobsherin.com/posts/firstpost/&quot;&gt;First post&lt;/a&gt;
 &lt;a href=&quot;https://jacobsherin.com/posts/thirdpost/&quot;&gt;Third post&lt;/a&gt;&lt;/p&gt;
 &lt;p&gt;Bring to the table win-win survival strategies to ensure proactive domination. At the end of the day, going forward, a new normal that has evolved from generation X is on the runway heading towards a streamlined cloud solution. User generated content in real-time will have multiple touchpoints for offshoring.&lt;/p&gt;
 &lt;p&gt;Capitalize on low hanging fruit to identify a ballpark value added activity to beta test. Override the digital divide with additional clickthroughs from DevOps. Nanotechnology immersion along the information highway will close the loop on focusing solely on the bottom line.&lt;/p&gt;

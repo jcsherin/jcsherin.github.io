@@ -50,16 +50,16 @@
 <li>Dremel provides a SQL-like language to express ad-hoc queries</li>
 </ul>
 <blockquote>
-<p>Dremel uses a column-striped storage representation, which enables it to<br>
-read less data from secondary storage and reduce CPU cost due to cheaper<br>
+<p>Dremel uses a column-striped storage representation, which enables it to
+read less data from secondary storage and reduce CPU cost due to cheaper
 compression.</p>
 </blockquote>
 <ul>
 <li>The main contribution of this paper is a columnar storage for nested data.</li>
-<li>It describes algorithms for column-striping strongly-typed nested data and<br>
+<li>It describes algorithms for column-striping strongly-typed nested data and
 also reassembly of nested data from a given projection of columns</li>
-<li>The Dremel query execution can operate directly on the column-striped<br>
-values to run ad-hoc aggregation queries over many nested records without<br>
+<li>The Dremel query execution can operate directly on the column-striped
+values to run ad-hoc aggregation queries over many nested records without
 any further restructuring of the data.</li>
 <li>How does this look?
 <ul>
@@ -104,12 +104,12 @@ any further restructuring of the data.</li>
 <li>efficient reassembly</li>
 </ol>
 <blockquote>
-<p>Values alone do not convey the structure of a record. Given two values of a<br>
-repeated field, we do not know at what ‘level’ the value repeated (e.g.,<br>
-whether<br>
-these values are from two different records, or two repeated values in the<br>
-same<br>
-record). Likewise, given a missing optional field, we do not know which<br>
+<p>Values alone do not convey the structure of a record. Given two values of a
+repeated field, we do not know at what ‘level’ the value repeated (e.g.,
+whether
+these values are from two different records, or two repeated values in the
+same
+record). Likewise, given a missing optional field, we do not know which
 enclosing records were defined explicitly. (p. 3)</p>
 </blockquote>
 <h2 id="repetition-levels" tabindex="-1">Repetition Levels <a class="direct-link" href="#repetition-levels" aria-hidden="true">#</a></h2>
@@ -117,7 +117,7 @@ enclosing records were defined explicitly. (p. 3)</p>
 <li>Repeated fields are represented as a list of items</li>
 </ul>
 <blockquote>
-<p>It tells us at what repeated field in the field’s path the value has<br>
+<p>It tells us at what repeated field in the field’s path the value has
 repeated. (p. 3)</p>
 </blockquote>
 <ul>
@@ -130,12 +130,12 @@ repeated. (p. 3)</p>
 <li>The repetition level then tells us,
 <ul>
 <li>the order of values in a list</li>
-<li>it also encodes record boundaries so we know which record a list item<br>
+<li>it also encodes record boundaries so we know which record a list item
 belongs to</li>
 </ul>
 </li>
 <li>In the nested repeated case a path may contain multiple repeated fields</li>
-<li>A path can terminate early if the list is empty, but this is not encoded<br>
+<li>A path can terminate early if the list is empty, but this is not encoded
 by repetition levels</li>
 <li>How does that all look? (a concrete example for illustration)</li>
 <li>And repetition levels then tell us,
@@ -146,7 +146,7 @@ by repetition levels</li>
 </li>
 </ul>
 <blockquote>
-<p>In general though, determining the level up to which nested records exist<br>
+<p>In general though, determining the level up to which nested records exist
 requires extra information.</p>
 </blockquote>
 <ul>
@@ -154,13 +154,13 @@ requires extra information.</p>
 </ul>
 <h2 id="definition-levels" tabindex="-1">Definition Levels <a class="direct-link" href="#definition-levels" aria-hidden="true">#</a></h2>
 <blockquote>
-<p>Each value of a field with path p, esp. every NULL, has a definition level<br>
-specifying how many fields in p that could be undefined (because they are<br>
+<p>Each value of a field with path p, esp. every NULL, has a definition level
+specifying how many fields in p that could be undefined (because they are
 optional or repeated) are actually present in the record.</p>
 </blockquote>
 <blockquote>
-<p>We use integer definition levels as opposed to is-null bits so that the data<br>
-for a leaf field (e.g., Name.Language.Country) contains the information about<br>
+<p>We use integer definition levels as opposed to is-null bits so that the data
+for a leaf field (e.g., Name.Language.Country) contains the information about
 the occurrences of its parent fields; (p. 3)</p>
 </blockquote>
 <ul>
