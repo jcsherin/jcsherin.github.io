@@ -1,5 +1,5 @@
 ---
-title: Nested Record Shredding
+title: An Efficient Representation for Nested Data Structures
 description: Shredding nested data for columnar storage
 date: 2025-04-21
 tags:
@@ -9,9 +9,98 @@ tags:
 layout: layouts/post.njk
 ---
 
-# Summary
+Revision
+--------
 
-- [ ] Condense main ideas, supporting arguments, opinions, recap
+The Dremel paper, "Dremel: Interactive Analysis of Web-Scale Datasets"
+introduced a novel representation for nested data structures in columnar
+storage. The data extracted from the nested data structure is annotated with
+derived metadata: repetition and definition levels. This is known as record
+shredding. The reconstruction of the original nested data structure is then
+completed by reading back the column data together with their corresponding
+repetition and definition levels. This is known as record assembly.
+
+parquet, orc, ground breaking
+
+----
+
+# Introduction
+
+This post is about how strongly-typed nested data structures are
+This post is about efficiently representing strongly-typed nested data
+structures in column-oriented
+
+When the Parquet columnar file format for data analytics was created, it
+incorporated first-class support for strongly-typed nested data structures.
+It adopted a novel representation introduced by Dremel in this influential
+[VLDB 2010 Dremel Paper]. Dremel is the underlying query execution engine for
+Google BigQuery.
+
+[VLDB 2010 Dremel Paper]:https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf
+
+A strongly-typed nested data structure contains
+
+# Old: Introduction
+
+A nested data structure with optional and repeated (arrays) fields is
+flattened into a column by column representation. The problem with naive
+flattening is that it does not convey information about the original
+hierarchical structure of the data. Across multiple instances of nested data
+structures it becomes difficult to determine to which instance a flattened
+value belongs. If a nested path contains one or more optional fields, it can
+abruptly terminate because one of the optional fields is not present.
+Therefore, the value itself will not be present in the nested data structure.
+The trouble does not end there as nested repeated (arrays) fields introduce
+substantial complexity.
+
+When Parquet was conceived, it adopted the columnar representation described
+in the [Dremel: VLDB 2010 paper] for nested data structures. Dremel
+is the underlying query execution engine for Google BigQuery.
+
+
+[Dremel: VLDB 2010 paper]:https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf
+
+The defining characteristic of analytical queries is that it scans a large
+part of the dataset, involves aggregations and often have high selectivity.
+If the data is stored in a columnar format like Parquet, the queries read only
+the relevant columns, dramatically reducing the data scanned and improving query
+speeds.
+
+This means a query only has to
+read the relevant columns, and skip the remaining data.
+
+Without an efficient columnar representation for nested data structures, an
+explicit denormalization step is required
+
+- maintenance cost
+- run query directly over nested data
+- transformation job
+- schema evolution (maintenance)
+- explicit denormalization
+  This significantly lowers the barrier as you can now run analytical queries
+  directly over the nested data structures in storage.
+
+You can skip steps in the data pipeline to transform
+a nested schema into a flat schema and the continued cost of maintenance as
+the nested schema evolves.
+
+- flattening
+- terminology
+- projections
+
+A naive flattening of nested data structures into columnar format is not
+enough. The original hierarchical structure of the data is lost
+
+A naive flattening of nested data structures into columnar format fails to
+preserve its original hierarchical structure.
+
+The Dremel paper uses the term
+column striping, while Parquet calls
+
+The Dremel technique involves
+deriving two metadata values which encodes the original structure and
+storing it together with the data. With the metadata it becomes possible to
+reconstruct even
 
 # Nested Data Structure
 
@@ -19,33 +108,33 @@ layout: layouts/post.njk
 +-----------------+
 | ProductImages   |
 +-----------------+
-├── [ product_id ]: 103
-├── [ images ]
-│   ├── [ primary_id ]: 4400
-│   └── [ secondary_image_ids ]
-│       ├── [0]: 4401
-│       ├── [1]: 4402
-│       └── [2]: 4403
-└── [ alt_text ]
-    └── [ localizations ]
-        ├── [0]
-        │   ├── [ locale ]: "en-us"
-        │   ├── [ description ]: "red running shoe, side view."
-        │   └── [ keywords ]
-        │       ├── [0]: "red shoe"
-        │       ├── [1]: "running"
-        │       └── [2]: "sport"
-        ├── [1]
-        │   ├── [ locale ]: "en-au"
-        │   └── [ keywords ]
-        │       ├── [0]: "red runner"
-        │       └── [1]: "jogging"
-        └── [2]
-            ├── [ locale ]: "en-gb"
-            ├── [ description ]: "red trainer, profile."
-            └── [ keywords ]
-                ├── [0]: "trainer"
-                └── [1]: "athletics"
+├──[ product_id ]: 103
+├──[ images ]
+│  ├──[ primary_id ]: 4400
+│  └──[ secondary_image_ids ]
+│     ├──[0]: 4401
+│     ├──[1]: 4402
+│     └──[2]: 4403
+└──[ at_text ]
+   └──[ localizations ]
+      ├──[0]
+      │  ├──[ locale ]: "en-us"
+      │  ├──[ description ]: "red running shoe, side view."
+      │  └──[ keywords ]
+      │     ├── [0]: "red shoe"
+      │     ├── [1]: "running"
+      │     └── [2]: "sport"
+      ├──[1]
+      │  ├──[ locale ]: "en-au"
+      │  └──[ keywords ]
+      │     ├── [0]: "red runner"
+      │     └── [1]: "jogging"
+      └──[2]
+         ├──[ locale ]: "en-gb"
+         ├──[ description ]: "red trainer, profile."
+         └──[ keywords ]
+            ├── [0]: "trainer"
+            └── [1]: "athletics"
 ```
 
 Column shredding (aka record shredding) is a technique for flattening deeply
@@ -837,6 +926,7 @@ alt_text.localizations.keywords:
   ]
 ```
 
-# Conclusion
+# Summary
 
-- [ ] TODO
+- [ ] Condense main ideas, supporting arguments, opinions, recap
+
