@@ -12,6 +12,8 @@ layout: layouts/post.njk
 Revision
 --------
 
+# Background
+
 The Dremel paper, "Dremel: Interactive Analysis of Web-Scale Datasets"
 introduced a novel representation for nested data structures in columnar
 storage. The data extracted from the nested data structure is annotated with
@@ -20,89 +22,30 @@ shredding. The reconstruction of the original nested data structure is then
 completed by reading back the column data together with their corresponding
 repetition and definition levels. This is known as record assembly.
 
-parquet, orc, ground breaking
+Prior to this columnar storage was primarily used for flat, relational data.
+A remarkable property of the Dremel representation is that if a query
+contains only a subset of the fields which appear in the nested data
+structure it could take advantage of the columnar representation and read
+only the columns and metadata relevant to the query and skip the other
+columns. This sped up queries by reducing the amount of data it had to read.
+Where before it had to parse the entire nested data structure to access a
+subset of it which was required for a query.
 
-----
+The open source columnar file formats like Apache Parquet, Apache ORC have
+since directly adopted this representation into their own implementations.
 
-# Introduction
+# Anatomy of Nested Data Structures
 
-This post is about how strongly-typed nested data structures are
-This post is about efficiently representing strongly-typed nested data
-structures in column-oriented
+A pre-requisite for record shredding and assembly is a strongly-typed nested
+data structure. This means it has a schema which is defined using an
+Interface Description Language (IDL) like Apache Thrift, Protocol Buffers
+etc. So this naturally excludes data in JSON format which has a flexible
+interpretation and often used in a schema-on-read manner.
 
-When the Parquet columnar file format for data analytics was created, it
-incorporated first-class support for strongly-typed nested data structures.
-It adopted a novel representation introduced by Dremel in this influential
-[VLDB 2010 Dremel Paper]. Dremel is the underlying query execution engine for
-Google BigQuery.
+The nested data structure may contain both optional and repeated (arrays)
+fields at any level.
 
-[VLDB 2010 Dremel Paper]:https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf
-
-A strongly-typed nested data structure contains
-
-# Old: Introduction
-
-A nested data structure with optional and repeated (arrays) fields is
-flattened into a column by column representation. The problem with naive
-flattening is that it does not convey information about the original
-hierarchical structure of the data. Across multiple instances of nested data
-structures it becomes difficult to determine to which instance a flattened
-value belongs. If a nested path contains one or more optional fields, it can
-abruptly terminate because one of the optional fields is not present.
-Therefore, the value itself will not be present in the nested data structure.
-The trouble does not end there as nested repeated (arrays) fields introduce
-substantial complexity.
-
-When Parquet was conceived, it adopted the columnar representation described
-in the [Dremel: VLDB 2010 paper] for nested data structures. Dremel
-is the underlying query execution engine for Google BigQuery.
-
-
-[Dremel: VLDB 2010 paper]:https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf
-
-The defining characteristic of analytical queries is that it scans a large
-part of the dataset, involves aggregations and often have high selectivity.
-If the data is stored in a columnar format like Parquet, the queries read only
-the relevant columns, dramatically reducing the data scanned and improving query
-speeds.
-
-This means a query only has to
-read the relevant columns, and skip the remaining data.
-
-Without an efficient columnar representation for nested data structures, an
-explicit denormalization step is required
-
-- maintenance cost
-- run query directly over nested data
-- transformation job
-- schema evolution (maintenance)
-- explicit denormalization
-  This significantly lowers the barrier as you can now run analytical queries
-  directly over the nested data structures in storage.
-
-You can skip steps in the data pipeline to transform
-a nested schema into a flat schema and the continued cost of maintenance as
-the nested schema evolves.
-
-- flattening
-- terminology
-- projections
-
-A naive flattening of nested data structures into columnar format is not
-enough. The original hierarchical structure of the data is lost
-
-A naive flattening of nested data structures into columnar format fails to
-preserve its original hierarchical structure.
-
-The Dremel paper uses the term
-column striping, while Parquet calls
-
-The Dremel technique involves
-deriving two metadata values which encodes the original structure and
-storing it together with the data. With the metadata it becomes possible to
-reconstruct even
-
-# Nested Data Structure
+-[ ] TODO: schema
 
 ```
 +-----------------+
