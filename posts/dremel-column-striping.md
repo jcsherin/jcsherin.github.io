@@ -42,17 +42,16 @@ layout: layouts/post.njk
 Nested data structures are a natural fit in programming languages when
 building applications. They allow developers to model the data hierarchy in
 a manner which is both intuitive and matches the problem domain. But the
-efficient storage and retrieval of nested data structures is challenging if
+efficient storage and retrieval of nested data structures is essential if
 you have to analyze it to detect trends, aggregate statistics or build a
-real-time dashboard. This is less of issue with flat, relational data in
-columnar storage. The emphasis here is on analytical workloads and not
+real-time dashboard. The emphasis here is on analytical workloads and not
 transactional.
 
 The challenge of shredding nested data structures into column values is easy
 to demonstrate.
 
 ```
-# Examples: nested arrays of integers
+# Examples: nested lists of integers
 1. [ [1], [2], [3], [4], [5], [6] ] # 6 sublists
 2. [ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
 3. [ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
@@ -63,16 +62,14 @@ to demonstrate.
 values: [1, 2, 3, 4, 5, 6]
 ```
 
-In record shredding the values in the nested arrays are extracted into a
-columnar format. The nested arrays share the same elements in the same order.
-So all of them end up sharing an identical physical representation. It is not
-possible to reassemble the original nested structure from the column values
-alone.
+In the above examples, the nested arrays have different structures but share
+the same sequence of elements. After shredding the nested arrays the
+physical representation of the column values ends up being identical. It is
+not possible to identify the beginning of a sublist or know the size of a
+sublist. This is critical information which is missing from the columnar
+representation and prevents us from being able to reassemble the original
+nested data structure.
 
-The column values do not hold any information regarding the structure. This
-helps us identify that the structure is critical metadata which needs to be
-stored together with the column values to make reassembly of the original
-structure possible.
 
 ---
 
