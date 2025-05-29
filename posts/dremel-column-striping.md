@@ -39,6 +39,36 @@ layout: layouts/post.njk
 
 # Introduction
 
+Nested data structures are a natural fit in programming languages when
+building applications. They allow developers to model the data hierarchy in
+a manner which is both intuitive and matches the problem domain. But the
+efficient storage and retrieval of nested data structures is challenging if
+you have to analyze it to detect trends, aggregate statistics or build a
+real-time dashboard. This is less of issue with flat, relational data in
+columnar storage. The emphasis here is on analytical workloads and not
+transactional.
+
+The challenge of shredding nested data structures into column values is easy
+to demonstrate.
+
+```
+[ [1], [2], [3], [4], [5], [6] ] # 6 sublists
+[ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
+[ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
+[ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
+```
+
+All of the above examples have the same column value representation after
+record shredding. It is therefore impossible to reassemble the original
+nested array as we have no way of inferring the original shape from these
+values alone.
+
+```
+values: [1, 2, 3, 4, 5, 6]
+```
+
+The structure is metadata.
+
 
 ---
 
