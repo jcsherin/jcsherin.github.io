@@ -52,23 +52,27 @@ The challenge of shredding nested data structures into column values is easy
 to demonstrate.
 
 ```
-[ [1], [2], [3], [4], [5], [6] ] # 6 sublists
-[ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
-[ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
-[ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
-```
+# Examples: nested arrays of integers
+1. [ [1], [2], [3], [4], [5], [6] ] # 6 sublists
+2. [ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
+3. [ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
+4. [ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
 
-All of the above examples have the same column value representation after
-record shredding. It is therefore impossible to reassemble the original
-nested array as we have no way of inferring the original shape from these
-values alone.
+# After Record Shredding
 
-```
 values: [1, 2, 3, 4, 5, 6]
 ```
 
-The structure is metadata.
+In record shredding the values in the nested arrays are extracted into a
+columnar format. The nested arrays share the same elements in the same order.
+So all of them end up sharing an identical physical representation. It is not
+possible to reassemble the original nested structure from the column values
+alone.
 
+The column values do not hold any information regarding the structure. This
+helps us identify that the structure is critical metadata which needs to be
+stored together with the column values to make reassembly of the original
+structure possible.
 
 ---
 
