@@ -9,10 +9,45 @@ tags:
 layout: layouts/post.njk
 ---
 
-Revision
---------
+# Outline/TOC
 
-# Background
+* Intro/Summary
+  * Priorly column storage used primarily for flat, relational data
+  * Interactively querying is slow and inefficient because ...
+  * Dremel solution -> Repetition, Definition Levels
+  * Interactively querying is now fast because of projection pushdown
+    optimization
+  * Deriving repetition levels,
+    * Hard to wrap my head around why it works correctly?
+    * Moderate difficulties in implementation.
+  * Impact on open-source columnar formats which were designed later high
+    performance analytics.
+* Data Model of Nested Data Structures
+  * Optional fields
+  * Repeated fields
+  * Concrete Example + Schema
+* Record Assembly from subset of fields
+  * Example 1
+  * Example 2
+  * Example 3
+* Challenges in shredding and assembly of nested data structures
+* Simplified Data Model
+  * No optional fields or repeated fields
+  * Add optional fields
+
+---
+
+# Introduction
+
+
+---
+
+# Introduction
+
+The main reason analytical query engines use a column-oriented storage
+format is that a query has to read only those columns which are mentioned
+in the query. This reduces the amount of data which needs to be scanned and
+thereby speeds up query execution.
 
 The Dremel paper, "Dremel: Interactive Analysis of Web-Scale Datasets"
 introduced a novel representation for nested data structures in columnar
