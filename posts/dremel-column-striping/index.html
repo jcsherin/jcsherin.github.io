@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nested Record Shredding</title>
+    <title>An Efficient Representation for Nested Data Structures</title>
     <meta name="description" content="Shredding nested data for columnar storage">
     <meta name="generator" content="Eleventy v1.0.1">
 
@@ -24,45 +24,141 @@
     </header>
 
     <main class="tmpl-post">
-      <h1>Nested Record Shredding</h1>
+      <h1>An Efficient Representation for Nested Data Structures</h1>
 
 <time datetime="2025-04-21">21 Apr 2025</time><a href="/tags/record-shredding/" class="post-tag">record shredding</a><a href="/tags/column-striping/" class="post-tag">column striping</a><a href="/tags/nested-data/" class="post-tag">nested data</a>
 
-<h1 id="summary" tabindex="-1">Summary <a class="direct-link" href="#summary" aria-hidden="true">#</a></h1>
+<h1 id="outlinetoc" tabindex="-1">Outline/TOC <a class="direct-link" href="#outlinetoc" aria-hidden="true">#</a></h1>
 <ul>
-<li>[ ] Condense main ideas, supporting arguments, opinions, recap</li>
+<li>Intro/Summary
+<ul>
+<li>Priorly column storage used primarily for flat, relational data</li>
+<li>Interactively querying is slow and inefficient because ...</li>
+<li>Dremel solution -&gt; Repetition, Definition Levels</li>
+<li>Interactively querying is now fast because of projection pushdown
+optimization</li>
+<li>Deriving repetition levels,
+<ul>
+<li>Hard to wrap my head around why it works correctly?</li>
+<li>Moderate difficulties in implementation.</li>
 </ul>
-<h1 id="nested-data-structure" tabindex="-1">Nested Data Structure <a class="direct-link" href="#nested-data-structure" aria-hidden="true">#</a></h1>
+</li>
+<li>Impact on open-source columnar formats which were designed later high
+performance analytics.</li>
+</ul>
+</li>
+<li>Data Model of Nested Data Structures
+<ul>
+<li>Optional fields</li>
+<li>Repeated fields</li>
+<li>Concrete Example + Schema</li>
+</ul>
+</li>
+<li>Record Assembly from subset of fields
+<ul>
+<li>Example 1</li>
+<li>Example 2</li>
+<li>Example 3</li>
+</ul>
+</li>
+<li>Challenges in shredding and assembly of nested data structures</li>
+<li>Simplified Data Model
+<ul>
+<li>No optional fields or repeated fields</li>
+<li>Add optional fields</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h1 id="introduction" tabindex="-1">Introduction <a class="direct-link" href="#introduction" aria-hidden="true">#</a></h1>
+<p>Nested data structures are a natural fit in programming languages when
+building applications. They allow developers to model the data hierarchy in
+a manner which is both intuitive and matches the problem domain. But the
+efficient storage and retrieval of nested data structures is essential if
+you have to analyze it to detect trends, aggregate statistics or build a
+real-time dashboard. The emphasis here is on analytical workloads and not
+transactional.</p>
+<p>The challenge of shredding nested data structures into column values is easy
+to demonstrate.</p>
+<pre><code># Examples: nested lists of integers
+1. [ [1], [2], [3], [4], [5], [6] ] # 6 sublists
+2. [ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
+3. [ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
+4. [ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
+
+# After Record Shredding
+
+values: [1, 2, 3, 4, 5, 6]
+</code></pre>
+<p>In the above examples, the nested arrays have different structures but share
+the same sequence of elements. After shredding the nested arrays the
+physical representation of the column values ends up being identical. It is
+not possible to identify the beginning of a sublist or know the size of a
+sublist. This is critical information which is missing from the columnar
+representation and prevents us from being able to reassemble the original
+nested data structure.</p>
+<hr>
+<h1 id="introduction-1" tabindex="-1">Introduction <a class="direct-link" href="#introduction-1" aria-hidden="true">#</a></h1>
+<p>The main reason analytical query engines use a column-oriented storage
+format is that a query has to read only those columns which are mentioned
+in the query. This reduces the amount of data which needs to be scanned and
+thereby speeds up query execution.</p>
+<p>The Dremel paper, &quot;Dremel: Interactive Analysis of Web-Scale Datasets&quot;
+introduced a novel representation for nested data structures in columnar
+storage. The data extracted from the nested data structure is annotated with
+derived metadata: repetition and definition levels. This is known as record
+shredding. The reconstruction of the original nested data structure is then
+completed by reading back the column data together with their corresponding
+repetition and definition levels. This is known as record assembly.</p>
+<p>Prior to this columnar storage was primarily used for flat, relational data.
+A remarkable property of the Dremel representation is that if a query
+contains only a subset of the fields which appear in the nested data
+structure it could take advantage of the columnar representation and read
+only the columns and metadata relevant to the query and skip the other
+columns. This sped up queries by reducing the amount of data it had to read.
+Where before it had to parse the entire nested data structure to access a
+subset of it which was required for a query.</p>
+<p>The open source columnar file formats like Apache Parquet, Apache ORC have
+since directly adopted this representation into their own implementations.</p>
+<h1 id="anatomy-of-nested-data-structures" tabindex="-1">Anatomy of Nested Data Structures <a class="direct-link" href="#anatomy-of-nested-data-structures" aria-hidden="true">#</a></h1>
+<p>A pre-requisite for record shredding and assembly is a strongly-typed nested
+data structure. This means it has a schema which is defined using an
+Interface Description Language (IDL) like Apache Thrift, Protocol Buffers
+etc. So this naturally excludes data in JSON format which has a flexible
+interpretation and often used in a schema-on-read manner.</p>
+<p>The nested data structure may contain both optional and repeated (arrays)
+fields at any level.</p>
+<p>-[ ] TODO: schema</p>
 <pre><code>+-----------------+
 | ProductImages   |
 +-----------------+
-├── [ product_id ]: 103
-├── [ images ]
-│   ├── [ primary_id ]: 4400
-│   └── [ secondary_image_ids ]
-│       ├── [0]: 4401
-│       ├── [1]: 4402
-│       └── [2]: 4403
-└── [ alt_text ]
-    └── [ localizations ]
-        ├── [0]
-        │   ├── [ locale ]: &quot;en-us&quot;
-        │   ├── [ description ]: &quot;red running shoe, side view.&quot;
-        │   └── [ keywords ]
-        │       ├── [0]: &quot;red shoe&quot;
-        │       ├── [1]: &quot;running&quot;
-        │       └── [2]: &quot;sport&quot;
-        ├── [1]
-        │   ├── [ locale ]: &quot;en-au&quot;
-        │   └── [ keywords ]
-        │       ├── [0]: &quot;red runner&quot;
-        │       └── [1]: &quot;jogging&quot;
-        └── [2]
-            ├── [ locale ]: &quot;en-gb&quot;
-            ├── [ description ]: &quot;red trainer, profile.&quot;
-            └── [ keywords ]
-                ├── [0]: &quot;trainer&quot;
-                └── [1]: &quot;athletics&quot;
+├──[ product_id ]: 103
+├──[ images ]
+│  ├──[ primary_id ]: 4400
+│  └──[ secondary_image_ids ]
+│     ├──[0]: 4401
+│     ├──[1]: 4402
+│     └──[2]: 4403
+└──[ at_text ]
+   └──[ localizations ]
+      ├──[0]
+      │  ├──[ locale ]: &quot;en-us&quot;
+      │  ├──[ description ]: &quot;red running shoe, side view.&quot;
+      │  └──[ keywords ]
+      │     ├── [0]: &quot;red shoe&quot;
+      │     ├── [1]: &quot;running&quot;
+      │     └── [2]: &quot;sport&quot;
+      ├──[1]
+      │  ├──[ locale ]: &quot;en-au&quot;
+      │  └──[ keywords ]
+      │     ├── [0]: &quot;red runner&quot;
+      │     └── [1]: &quot;jogging&quot;
+      └──[2]
+         ├──[ locale ]: &quot;en-gb&quot;
+         ├──[ description ]: &quot;red trainer, profile.&quot;
+         └──[ keywords ]
+            ├── [0]: &quot;trainer&quot;
+            └── [1]: &quot;athletics&quot;
 </code></pre>
 <p>Column shredding (aka record shredding) is a technique for flattening deeply
 nested data structures and storing them in a columnar format.</p>
@@ -138,7 +234,7 @@ nested data structures and storing them in a columnar format.</p>
 </tr>
 </tbody>
 </table>
-<h1 id="introduction" tabindex="-1">Introduction <a class="direct-link" href="#introduction" aria-hidden="true">#</a></h1>
+<h1 id="introduction-2" tabindex="-1">Introduction <a class="direct-link" href="#introduction-2" aria-hidden="true">#</a></h1>
 <p>The main issue with flattening nested data structures is ensuring the
 process is reversible. The flattened representation needs to contain both data
 and the metadata which encodes the structure. From this representation, one
@@ -148,7 +244,7 @@ efficient to read only those specific attributes, rather than the entire
 nested data structure. Consequently, a core desirable property of
 such flattening is the ability to partially reconstruct the nested data
 structure, skipping any attributes not mentioned in the query.</p>
-<h1 id="nested-data-structure-1" tabindex="-1">Nested Data Structure <a class="direct-link" href="#nested-data-structure-1" aria-hidden="true">#</a></h1>
+<h1 id="nested-data-structure" tabindex="-1">Nested Data Structure <a class="direct-link" href="#nested-data-structure" aria-hidden="true">#</a></h1>
 <pre><code>+-----------------+
 | ProductImages   |
 +-----------------+
@@ -668,9 +764,9 @@ repetition level of 2.</p>
 <p>The final aggregation of keywords after processing D1, D2 and all three
 localization items from D3:</p>
 <pre class="language-yaml"><code class="language-yaml"><span class="token key atrule">alt_text.localizations.keywords</span><span class="token punctuation">:</span><br>  <span class="token key atrule">values</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><br>    <span class="token null important">NULL</span><span class="token punctuation">,</span>                           <span class="token comment"># D1: keywords list is empty</span><br>    NULL<span class="token punctuation">,</span>                           <span class="token comment"># D2: localizations list is empty</span><br>    "red shoe"<span class="token punctuation">,</span> <span class="token string">"running"</span><span class="token punctuation">,</span> <span class="token string">"sport"</span><span class="token punctuation">,</span> <span class="token comment"># D3: 1st localization ("en-us")</span><br>    "red runner"<span class="token punctuation">,</span> <span class="token string">"jogging"</span><span class="token punctuation">,</span>        <span class="token comment"># D3: 2nd localization ("en-au")</span><br>    "trainer"<span class="token punctuation">,</span> <span class="token string">"athletics"</span>          <span class="token comment"># D3: 3rd localization ("en-gb")</span><br>  <span class="token punctuation">]</span><br>  <span class="token key atrule">def</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><br>    <span class="token number">1</span><span class="token punctuation">,</span>        <span class="token comment"># D1: (localizations present, keywords empty)</span><br>    0<span class="token punctuation">,</span>        <span class="token comment"># D2: (localizations empty)</span><br>    2<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>  <span class="token comment"># D3: (both list present and non-empty)</span><br>    2<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span><br>    <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><br>  <span class="token punctuation">]</span><br>  <span class="token key atrule">rep</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><br>    <span class="token number">0</span><span class="token punctuation">,</span>        <span class="token comment"># D1: new record</span><br>    0<span class="token punctuation">,</span>        <span class="token comment"># D2: new record</span><br>    0<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>  <span class="token comment"># D3: 1st localization: r=0 for first keyword, r=2 for remaining</span><br>    1<span class="token punctuation">,</span> <span class="token number">2</span><span class="token punctuation">,</span>     <span class="token comment"># D3: 2nd localization: r=1 for first keyword, r=2 for remaining</span><br>    1<span class="token punctuation">,</span> <span class="token number">2</span>      <span class="token comment"># D3: 3rd localization: r=1 for first keyword, r=2 for remaining</span><br>  <span class="token punctuation">]</span></code></pre>
-<h1 id="conclusion" tabindex="-1">Conclusion <a class="direct-link" href="#conclusion" aria-hidden="true">#</a></h1>
+<h1 id="summary" tabindex="-1">Summary <a class="direct-link" href="#summary" aria-hidden="true">#</a></h1>
 <ul>
-<li>[ ] TODO</li>
+<li>[ ] Condense main ideas, supporting arguments, opinions, recap</li>
 </ul>
 
 <hr>

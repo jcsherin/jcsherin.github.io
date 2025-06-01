@@ -13,45 +13,141 @@
 	</author>
 	
 	<entry>
-		<title>Nested Record Shredding</title>
+		<title>An Efficient Representation for Nested Data Structures</title>
 		<link href="https://jacobsherin.com/posts/dremel-column-striping/"/>
 		<updated>2025-04-21T00:00:00Z</updated>
 		<id>https://jacobsherin.com/posts/dremel-column-striping/</id>
-		<content type="html">&lt;h1 id=&quot;summary&quot; tabindex=&quot;-1&quot;&gt;Summary &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#summary&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+		<content type="html">&lt;h1 id=&quot;outlinetoc&quot; tabindex=&quot;-1&quot;&gt;Outline/TOC &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#outlinetoc&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;ul&gt;
-&lt;li&gt;[ ] Condense main ideas, supporting arguments, opinions, recap&lt;/li&gt;
+&lt;li&gt;Intro/Summary
+&lt;ul&gt;
+&lt;li&gt;Priorly column storage used primarily for flat, relational data&lt;/li&gt;
+&lt;li&gt;Interactively querying is slow and inefficient because ...&lt;/li&gt;
+&lt;li&gt;Dremel solution -&amp;gt; Repetition, Definition Levels&lt;/li&gt;
+&lt;li&gt;Interactively querying is now fast because of projection pushdown
+optimization&lt;/li&gt;
+&lt;li&gt;Deriving repetition levels,
+&lt;ul&gt;
+&lt;li&gt;Hard to wrap my head around why it works correctly?&lt;/li&gt;
+&lt;li&gt;Moderate difficulties in implementation.&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h1 id=&quot;nested-data-structure&quot; tabindex=&quot;-1&quot;&gt;Nested Data Structure &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#nested-data-structure&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;/li&gt;
+&lt;li&gt;Impact on open-source columnar formats which were designed later high
+performance analytics.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Data Model of Nested Data Structures
+&lt;ul&gt;
+&lt;li&gt;Optional fields&lt;/li&gt;
+&lt;li&gt;Repeated fields&lt;/li&gt;
+&lt;li&gt;Concrete Example + Schema&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Record Assembly from subset of fields
+&lt;ul&gt;
+&lt;li&gt;Example 1&lt;/li&gt;
+&lt;li&gt;Example 2&lt;/li&gt;
+&lt;li&gt;Example 3&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Challenges in shredding and assembly of nested data structures&lt;/li&gt;
+&lt;li&gt;Simplified Data Model
+&lt;ul&gt;
+&lt;li&gt;No optional fields or repeated fields&lt;/li&gt;
+&lt;li&gt;Add optional fields&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr /&gt;
+&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;Nested data structures are a natural fit in programming languages when
+building applications. They allow developers to model the data hierarchy in
+a manner which is both intuitive and matches the problem domain. But the
+efficient storage and retrieval of nested data structures is essential if
+you have to analyze it to detect trends, aggregate statistics or build a
+real-time dashboard. The emphasis here is on analytical workloads and not
+transactional.&lt;/p&gt;
+&lt;p&gt;The challenge of shredding nested data structures into column values is easy
+to demonstrate.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;# Examples: nested lists of integers
+1. [ [1], [2], [3], [4], [5], [6] ] # 6 sublists
+2. [ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
+3. [ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
+4. [ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
+
+# After Record Shredding
+
+values: [1, 2, 3, 4, 5, 6]
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In the above examples, the nested arrays have different structures but share
+the same sequence of elements. After shredding the nested arrays the
+physical representation of the column values ends up being identical. It is
+not possible to identify the beginning of a sublist or know the size of a
+sublist. This is critical information which is missing from the columnar
+representation and prevents us from being able to reassemble the original
+nested data structure.&lt;/p&gt;
+&lt;hr /&gt;
+&lt;h1 id=&quot;introduction-1&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction-1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;The main reason analytical query engines use a column-oriented storage
+format is that a query has to read only those columns which are mentioned
+in the query. This reduces the amount of data which needs to be scanned and
+thereby speeds up query execution.&lt;/p&gt;
+&lt;p&gt;The Dremel paper, &amp;quot;Dremel: Interactive Analysis of Web-Scale Datasets&amp;quot;
+introduced a novel representation for nested data structures in columnar
+storage. The data extracted from the nested data structure is annotated with
+derived metadata: repetition and definition levels. This is known as record
+shredding. The reconstruction of the original nested data structure is then
+completed by reading back the column data together with their corresponding
+repetition and definition levels. This is known as record assembly.&lt;/p&gt;
+&lt;p&gt;Prior to this columnar storage was primarily used for flat, relational data.
+A remarkable property of the Dremel representation is that if a query
+contains only a subset of the fields which appear in the nested data
+structure it could take advantage of the columnar representation and read
+only the columns and metadata relevant to the query and skip the other
+columns. This sped up queries by reducing the amount of data it had to read.
+Where before it had to parse the entire nested data structure to access a
+subset of it which was required for a query.&lt;/p&gt;
+&lt;p&gt;The open source columnar file formats like Apache Parquet, Apache ORC have
+since directly adopted this representation into their own implementations.&lt;/p&gt;
+&lt;h1 id=&quot;anatomy-of-nested-data-structures&quot; tabindex=&quot;-1&quot;&gt;Anatomy of Nested Data Structures &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#anatomy-of-nested-data-structures&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;A pre-requisite for record shredding and assembly is a strongly-typed nested
+data structure. This means it has a schema which is defined using an
+Interface Description Language (IDL) like Apache Thrift, Protocol Buffers
+etc. So this naturally excludes data in JSON format which has a flexible
+interpretation and often used in a schema-on-read manner.&lt;/p&gt;
+&lt;p&gt;The nested data structure may contain both optional and repeated (arrays)
+fields at any level.&lt;/p&gt;
+&lt;p&gt;-[ ] TODO: schema&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;+-----------------+
 | ProductImages   |
 +-----------------+
-├── [ product_id ]: 103
-├── [ images ]
-│   ├── [ primary_id ]: 4400
-│   └── [ secondary_image_ids ]
-│       ├── [0]: 4401
-│       ├── [1]: 4402
-│       └── [2]: 4403
-└── [ alt_text ]
-    └── [ localizations ]
-        ├── [0]
-        │   ├── [ locale ]: &amp;quot;en-us&amp;quot;
-        │   ├── [ description ]: &amp;quot;red running shoe, side view.&amp;quot;
-        │   └── [ keywords ]
-        │       ├── [0]: &amp;quot;red shoe&amp;quot;
-        │       ├── [1]: &amp;quot;running&amp;quot;
-        │       └── [2]: &amp;quot;sport&amp;quot;
-        ├── [1]
-        │   ├── [ locale ]: &amp;quot;en-au&amp;quot;
-        │   └── [ keywords ]
-        │       ├── [0]: &amp;quot;red runner&amp;quot;
-        │       └── [1]: &amp;quot;jogging&amp;quot;
-        └── [2]
-            ├── [ locale ]: &amp;quot;en-gb&amp;quot;
-            ├── [ description ]: &amp;quot;red trainer, profile.&amp;quot;
-            └── [ keywords ]
-                ├── [0]: &amp;quot;trainer&amp;quot;
-                └── [1]: &amp;quot;athletics&amp;quot;
+├──[ product_id ]: 103
+├──[ images ]
+│  ├──[ primary_id ]: 4400
+│  └──[ secondary_image_ids ]
+│     ├──[0]: 4401
+│     ├──[1]: 4402
+│     └──[2]: 4403
+└──[ at_text ]
+   └──[ localizations ]
+      ├──[0]
+      │  ├──[ locale ]: &amp;quot;en-us&amp;quot;
+      │  ├──[ description ]: &amp;quot;red running shoe, side view.&amp;quot;
+      │  └──[ keywords ]
+      │     ├── [0]: &amp;quot;red shoe&amp;quot;
+      │     ├── [1]: &amp;quot;running&amp;quot;
+      │     └── [2]: &amp;quot;sport&amp;quot;
+      ├──[1]
+      │  ├──[ locale ]: &amp;quot;en-au&amp;quot;
+      │  └──[ keywords ]
+      │     ├── [0]: &amp;quot;red runner&amp;quot;
+      │     └── [1]: &amp;quot;jogging&amp;quot;
+      └──[2]
+         ├──[ locale ]: &amp;quot;en-gb&amp;quot;
+         ├──[ description ]: &amp;quot;red trainer, profile.&amp;quot;
+         └──[ keywords ]
+            ├── [0]: &amp;quot;trainer&amp;quot;
+            └── [1]: &amp;quot;athletics&amp;quot;
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Column shredding (aka record shredding) is a technique for flattening deeply
 nested data structures and storing them in a columnar format.&lt;/p&gt;
@@ -127,7 +223,7 @@ nested data structures and storing them in a columnar format.&lt;/p&gt;
 &lt;/tr&gt;
 &lt;/tbody&gt;
 &lt;/table&gt;
-&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;h1 id=&quot;introduction-2&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#introduction-2&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;p&gt;The main issue with flattening nested data structures is ensuring the
 process is reversible. The flattened representation needs to contain both data
 and the metadata which encodes the structure. From this representation, one
@@ -137,7 +233,7 @@ efficient to read only those specific attributes, rather than the entire
 nested data structure. Consequently, a core desirable property of
 such flattening is the ability to partially reconstruct the nested data
 structure, skipping any attributes not mentioned in the query.&lt;/p&gt;
-&lt;h1 id=&quot;nested-data-structure-1&quot; tabindex=&quot;-1&quot;&gt;Nested Data Structure &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#nested-data-structure-1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;h1 id=&quot;nested-data-structure&quot; tabindex=&quot;-1&quot;&gt;Nested Data Structure &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#nested-data-structure&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;pre&gt;&lt;code&gt;+-----------------+
 | ProductImages   |
 +-----------------+
@@ -657,9 +753,9 @@ repetition level of 2.&lt;/p&gt;
 &lt;p&gt;The final aggregation of keywords after processing D1, D2 and all three
 localization items from D3:&lt;/p&gt;
 &lt;pre class=&quot;language-yaml&quot;&gt;&lt;code class=&quot;language-yaml&quot;&gt;&lt;span class=&quot;token key atrule&quot;&gt;alt_text.localizations.keywords&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;values&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token null important&quot;&gt;NULL&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;                           &lt;span class=&quot;token comment&quot;&gt;# D1: keywords list is empty&lt;/span&gt;&lt;br /&gt;    NULL&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;                           &lt;span class=&quot;token comment&quot;&gt;# D2: localizations list is empty&lt;/span&gt;&lt;br /&gt;    &quot;red shoe&quot;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;running&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;sport&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token comment&quot;&gt;# D3: 1st localization (&quot;en-us&quot;)&lt;/span&gt;&lt;br /&gt;    &quot;red runner&quot;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;jogging&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D3: 2nd localization (&quot;en-au&quot;)&lt;/span&gt;&lt;br /&gt;    &quot;trainer&quot;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;athletics&quot;&lt;/span&gt;          &lt;span class=&quot;token comment&quot;&gt;# D3: 3rd localization (&quot;en-gb&quot;)&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;def&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D1: (localizations present, keywords empty)&lt;/span&gt;&lt;br /&gt;    0&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D2: (localizations empty)&lt;/span&gt;&lt;br /&gt;    2&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;  &lt;span class=&quot;token comment&quot;&gt;# D3: (both list present and non-empty)&lt;/span&gt;&lt;br /&gt;    2&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token key atrule&quot;&gt;rep&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D1: new record&lt;/span&gt;&lt;br /&gt;    0&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# D2: new record&lt;/span&gt;&lt;br /&gt;    0&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;  &lt;span class=&quot;token comment&quot;&gt;# D3: 1st localization: r=0 for first keyword, r=2 for remaining&lt;/span&gt;&lt;br /&gt;    1&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;     &lt;span class=&quot;token comment&quot;&gt;# D3: 2nd localization: r=1 for first keyword, r=2 for remaining&lt;/span&gt;&lt;br /&gt;    1&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;2&lt;/span&gt;      &lt;span class=&quot;token comment&quot;&gt;# D3: 3rd localization: r=1 for first keyword, r=2 for remaining&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;h1 id=&quot;conclusion&quot; tabindex=&quot;-1&quot;&gt;Conclusion &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#conclusion&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;h1 id=&quot;summary&quot; tabindex=&quot;-1&quot;&gt;Summary &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/dremel-column-striping/#summary&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;ul&gt;
-&lt;li&gt;[ ] TODO&lt;/li&gt;
+&lt;li&gt;[ ] Condense main ideas, supporting arguments, opinions, recap&lt;/li&gt;
 &lt;/ul&gt;
 </content>
 	</entry>
