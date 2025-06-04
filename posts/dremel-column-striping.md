@@ -39,28 +39,29 @@ layout: layouts/post.njk
 
 # Introduction
 
-Nested data structures are a natural fit in programming languages when
-building applications. They allow developers to model the data hierarchy in
-a manner which is both intuitive and matches the problem domain. But the
-efficient storage and retrieval of nested data structures is essential if
-you have to analyze it to detect trends, aggregate statistics or build a
-real-time dashboard. The emphasis here is on analytical workloads and not
-transactional.
-
 The challenge of shredding nested data structures into column values is easy
 to demonstrate.
 
 ```
-# Examples: nested lists of integers
-1. [ [1], [2], [3], [4], [5], [6] ] # 6 sublists
-2. [ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
-3. [ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
-4. [ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
+# Nested Lists of Integers
 
-# After Record Shredding
+      [ [1], [2], [3], [4], [5], [6] ]
+outer:   0    1    2    3    4    5
 
-values: [1, 2, 3, 4, 5, 6]
+      [ [1, 2], [3, 4], [5, 6] ]
+inner:   0  1    0  1    0  1
+outer:   0       1       2
+
+      [ [1, 2, 3], [4, 5, 6] ]
+inner:   0  1  2    0  1  2
+outer:   0          1
+
+      [ [1, 2, 3, 4], [5, 6] ]
+inner:   0  1  2  3    0  1
+outer:   0             1
 ```
+
+
 
 In the above examples, the nested arrays have different structures but share
 the same sequence of elements. After shredding the nested arrays the
