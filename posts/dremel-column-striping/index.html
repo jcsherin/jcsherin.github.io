@@ -71,24 +71,24 @@ performance analytics.</li>
 </ul>
 <hr>
 <h1 id="introduction" tabindex="-1">Introduction <a class="direct-link" href="#introduction" aria-hidden="true">#</a></h1>
-<p>Nested data structures are a natural fit in programming languages when
-building applications. They allow developers to model the data hierarchy in
-a manner which is both intuitive and matches the problem domain. But the
-efficient storage and retrieval of nested data structures is essential if
-you have to analyze it to detect trends, aggregate statistics or build a
-real-time dashboard. The emphasis here is on analytical workloads and not
-transactional.</p>
 <p>The challenge of shredding nested data structures into column values is easy
 to demonstrate.</p>
-<pre><code># Examples: nested lists of integers
-1. [ [1], [2], [3], [4], [5], [6] ] # 6 sublists
-2. [ [1, 2], [3, 4], [5, 6] ]       # 3 sublists
-3. [ [1, 2, 3], [4, 5, 6] ]         # 2 sublists
-4. [ [1, 2, 3, 4], [5, 6] ]         # 2 sublists
+<pre><code># Nested Lists of Integers
 
-# After Record Shredding
+      [ [1], [2], [3], [4], [5], [6] ]
+outer:   0    1    2    3    4    5
 
-values: [1, 2, 3, 4, 5, 6]
+      [ [1, 2], [3, 4], [5, 6] ]
+inner:   0  1    0  1    0  1
+outer:   0       1       2
+
+      [ [1, 2, 3], [4, 5, 6] ]
+inner:   0  1  2    0  1  2
+outer:   0          1
+
+      [ [1, 2, 3, 4], [5, 6] ]
+inner:   0  1  2  3    0  1
+outer:   0             1
 </code></pre>
 <p>In the above examples, the nested arrays have different structures but share
 the same sequence of elements. After shredding the nested arrays the
@@ -770,7 +770,7 @@ localization items from D3:</p>
 </ul>
 
 <hr>
-<ul><li>Previous: <a href="/posts/fourthpost/">This is my fourth post.</a></li>
+<ul><li>Next: <a href="/posts/2025-06-06-record-shredding-part-1/">Record Shredding: Part 1</a></li><li>Previous: <a href="/posts/fourthpost/">This is my fourth post.</a></li>
 </ul>
 
     </main>

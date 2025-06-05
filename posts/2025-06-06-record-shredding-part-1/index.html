@@ -1,0 +1,166 @@
+<style>
+th, td {
+  text-align: center;
+  vertical-align: top;
+  padding: 8px 16px;
+}
+
+.table-container {
+  display: flex;
+  justify-content: space-around;
+  gap: 20px;
+}
+
+.col-view td:nth-child(1) { background-color: #FFFFE0; }
+.col-view td:nth-child(2) { background-color: #FFDAB9; }
+.col-view td:nth-child(3) { background-color: #E6E6FA; }
+
+.row-view tr:nth-child(1) td { background-color: #FFFFE0; }
+.row-view tr:nth-child(2) td { background-color: #FFDAB9; }
+.row-view tr:nth-child(3) td { background-color: #E6E6FA; }
+.row-view tr:nth-child(4) td { background-color: #DDFADD; }
+
+.col-view {
+  border-spacing: 8px 0;
+}
+
+.row-view {
+  border-spacing: 0 8px;
+}
+
+.record-container {
+  display: flex;
+}
+
+/* to be removed later */
+body {
+  max-width: 800px;
+  font-size: 20px;
+  margin: 0 auto 220px;
+}
+</style>
+<h1 id="recap:-flat-relational-data" tabindex="-1">Recap: Flat, Relational Data <a class="direct-link" href="#recap:-flat-relational-data" aria-hidden="true">#</a></h1>
+<h2 id="row-major-vs.-column-major-representation" tabindex="-1">Row-Major vs. Column-Major Representation <a class="direct-link" href="#row-major-vs.-column-major-representation" aria-hidden="true">#</a></h2>
+<p>The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches
+the transactional access patterns which targets to read, modify or delete a specific row of data or a very small set of
+rows. The filtering conditions of the query have high-selectivity. When reading a row all the column attributes in
+the relation are materialized in main memory. Having the entire row contiguous in memory once fetched minimizes
+additional disk I/O.</p>
+<p>On the other hand in an analytical database like ClickHouse or DuckDB, the access pattern is different enough that
+it makes sense to store the same data in column-major order. Data for each column is stored contiguously. This is
+because analytical workloads are primarily read-only, scan-heavy, heavily utilize aggregations with an explicit
+goal of summarizing the data. The primary advantage here is that only those columns which are relevant for a query
+needs to be materialized in memory. For scan-heavy queries which often have low-selectivity, this has a significant
+impact on minimizing disk I/O and reducing memory footprint.</p>
+<div class="table-container">
+  <table class="col-view">
+    <thead>
+      <tr>
+        <th colspan="3">column-major order</th>
+      </tr>
+      <tr>
+        <th>id</th>
+        <th>username</th>
+        <th>role</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>101</td>
+        <td>Alice</td>
+        <td>sender</td>
+      </tr>
+      <tr>
+        <td>102</td>
+        <td>Bob</td>
+        <td>receiver</td>
+      </tr>
+      <tr>
+        <td>103</td>
+        <td>Eve</td>
+        <td>eavesdropper</td>
+      </tr>
+      <tr>
+        <td>104</td>
+        <td>Trudy</td>
+        <td>intruder</td>
+      </tr>
+    </tbody>
+  </table>
+  <table class="row-view">
+    <thead>
+      <tr>
+        <th colspan="3">row-major order</th>
+      </tr>
+      <tr>
+        <th>id</th>
+        <th>username</th>
+        <th>role</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>101</td>
+        <td>Alice</td>
+        <td>sender</td>
+      </tr>
+      <tr>
+        <td>102</td>
+        <td>Bob</td>
+        <td>receiver</td>
+      </tr>
+      <tr>
+        <td>103</td>
+        <td>Eve</td>
+        <td>eavesdropper</td>
+      </tr>
+      <tr>
+        <td>104</td>
+        <td>Trudy</td>
+        <td>intruder</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<h2 id="performance-benefits" tabindex="-1">Performance Benefits <a class="direct-link" href="#performance-benefits" aria-hidden="true">#</a></h2>
+<p>The data locality in columnar storage is crucial for query performance. It enables data parallelism where different
+blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar
+operations with vectorized processing. Together data parallelism and vectorized processing has a big impact in
+making analytical queries execute faster and efficiently.</p>
+<h1 id="record-shredding" tabindex="-1">Record Shredding <a class="direct-link" href="#record-shredding" aria-hidden="true">#</a></h1>
+<p>Record shredding is the act of breaking up nested data structures into a flat, relational format. From above, we know
+the benefits of columnar representation for analytical workloads. By doing this, the benefits of data parallelism,
+vectorization and efficient I/O extends to nested data structures as well. The ability to directly represent nested
+data structures also leads to operational simplicity. A nested data structure doesn't have to be manually normalized
+into relational form which is ready for ad-hoc querying. There is no human judgement required. The ad-hoc queries
+are going to execute on direct columnar representation of the nested data structure. That is the promised land!</p>
+<h1 id="record-assembly" tabindex="-1">Record Assembly <a class="direct-link" href="#record-assembly" aria-hidden="true">#</a></h1>
+<p>Record assembly is how the columnar representation is interpreted to reconstruct either fully or partially the
+stored nested data structures. Similar to flat, relational data here too we want to read only the relevant columns
+and ignore the rest. So the ability to partially reconstruct only the relevant parts of the nested data structure is
+an important feature.</p>
+<h1 id="nested-data-structure" tabindex="-1">Nested Data Structure <a class="direct-link" href="#nested-data-structure" aria-hidden="true">#</a></h1>
+<p>Here is the schema definition for a nested data structure.</p>
+<p><img src="img/user_profile_schema.svg" alt="A tree diagram representation for  nested data type"></p>
+<pre class="language-graphql"><code class="language-graphql"><span class="token keyword">type</span> <span class="token class-name">UserProfile</span> <span class="token punctuation">{</span><br>  <span class="token attr-name">uid</span><span class="token punctuation">:</span> <span class="token scalar">ID</span><span class="token operator">!</span>                  <span class="token comment"># This field is mandatory</span><br>  <span class="token attr-name">displayName</span><span class="token punctuation">:</span> <span class="token scalar">String</span>       <span class="token comment"># This is an optional field</span><br>  <span class="token attr-name">tags</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token scalar">String</span><span class="token operator">!</span><span class="token punctuation">]</span>           <span class="token comment"># This is a repeated (array) field</span><br>  <span class="token attr-name">preferences</span><span class="token punctuation">:</span> <span class="token class-name">Preferences</span>  <span class="token comment"># This is an optional nested field</span><br><span class="token punctuation">}</span><br><br><span class="token comment"># All fields in this type are optional</span><br><span class="token keyword">type</span> <span class="token class-name">Preferences</span> <span class="token punctuation">{</span><br>  <span class="token attr-name">theme</span><span class="token punctuation">:</span> <span class="token scalar">String</span>           <span class="token comment"># Values can be "dark", "light" or "system".</span><br>  <span class="token attr-name">language</span><span class="token punctuation">:</span> <span class="token scalar">String</span>        <span class="token comment"># Uses BCP 47 language tags, e.g., "en-US".</span><br>  <span class="token attr-name">notifications</span><span class="token punctuation">:</span> <span class="token scalar">Boolean</span><br><span class="token punctuation">}</span></code></pre>
+<p>The <code>uid</code> field is the only mandatory field. So a valid instance can be created with the <code>uid</code> alone. The other
+fields can be progressively added.</p>
+<p>The <code>displayName</code> and <code>preferences</code> are optional fields.</p>
+<p>The <code>tags</code> is a repeated (array) field. The schema does not convey any information about the cardinality of this
+field. That can be known only after parsing a raw nested data structure instance.</p>
+<p>The <code>preferences</code> adds a level of nesting. All the fields in it are also optional.</p>
+<p>This is the schema definition for a nested data structure. The syntax I have used here is the GraphQL Schema
+Definition Language. It may as well be a definition written in a programming language or using the syntax of an
+interface definition language like Thrift or Protocol Buffers. It does not matter. The relevant part is how we logically
+define the fields:</p>
+<ul>
+<li>Is a field optional or mandatory?</li>
+<li>Is this a repeated (array)?</li>
+<li>What is the data type of the field?</li>
+<li>What is the name of the field?</li>
+</ul>
+<div class="record-container">
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"a1b2c3d4"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Alice Wonderland"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"reader"</span><span class="token punctuation">,</span><br>    <span class="token string">"dreamer"</span><br>  <span class="token punctuation">]</span><br><span class="token punctuation">}</span></code></pre>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"e5f6g7h8"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Chris Coder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"developer"</span><span class="token punctuation">,</span><br>    <span class="token string">"python"</span><span class="token punctuation">,</span><br>    <span class="token string">"oss"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"light"</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"i9j0k1l2"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Bob The Builder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"builder"</span><span class="token punctuation">,</span><br>    <span class="token string">"diy"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"dark"</span><span class="token punctuation">,</span><br>    <span class="token property">"notifications"</span><span class="token operator">:</span> <span class="token boolean">true</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
+</div>
