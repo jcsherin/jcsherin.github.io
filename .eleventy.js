@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-const { DateTime } = require("luxon");
+const {DateTime} = require("luxon");
 const markdownIt = require("markdown-it");
 const markdownItAnchor = require("markdown-it-anchor");
 
@@ -16,20 +16,22 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("img");
   eleventyConfig.addPassthroughCopy("css");
 
+  eleventyConfig.addPassthroughCopy("posts/2025-06-06-record-shredding-part-1/img");
+
   // Add plugins
   eleventyConfig.addPlugin(pluginRss);
   eleventyConfig.addPlugin(pluginSyntaxHighlight);
   eleventyConfig.addPlugin(pluginNavigation);
 
   eleventyConfig.addFilter("readableDate", (dateObj) => {
-    return DateTime.fromJSDate(dateObj, { zone: "utc" }).toFormat(
+    return DateTime.fromJSDate(dateObj, {zone: "utc"}).toFormat(
       "dd LLL yyyy"
     );
   });
 
   // https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-date-string
   eleventyConfig.addFilter("htmlDateString", (dateObj) => {
-    return DateTime.fromJSDate(dateObj, { zone: "utc" }).toFormat("yyyy-LL-dd");
+    return DateTime.fromJSDate(dateObj, {zone: "utc"}).toFormat("yyyy-LL-dd");
   });
 
   // Get the first `n` elements of a collection.
@@ -91,7 +93,7 @@ module.exports = function (eleventyConfig) {
 
         browserSync.addMiddleware("*", (req, res) => {
           // Provides the 404 content without redirect.
-          res.writeHead(404, { "Content-Type": "text/html; charset=UTF-8" });
+          res.writeHead(404, {"Content-Type": "text/html; charset=UTF-8"});
           res.write(content_404);
           res.end();
         });
