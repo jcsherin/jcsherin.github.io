@@ -20,6 +20,8 @@ th, td {
 .col-view td:nth-child(1) { background-color: #FFFFE0; }
 .col-view td:nth-child(2) { background-color: #FFDAB9; }
 .col-view td:nth-child(3) { background-color: #E6E6FA; }
+.col-view td:nth-child(4) { background-color: #DDFADD; }
+.col-view td:nth-child(5) { background-color: #F0F8FF; }
 
 .row-view tr:nth-child(1) td { background-color: #FFFFE0; }
 .row-view tr:nth-child(2) td { background-color: #FFDAB9; }
@@ -160,51 +162,56 @@ an important feature.
 
 # Nested Data Structure
 
-Here is the schema definition for a nested data structure.
+This is a place for claims:
+
+- structural variation
+- sparse
+- can't shred without schema
+- columns fall out from schema
+
+## Schema: Optional & Repeated Fields
+
+The figure 1. shows all the fields of a _UserProfile_ nested data structure.
+
+A field has a name and a data type.
+
+An _optional_ field is not mandatory. It does not have to be present in the instance of data. Consider _preferences.
+theme_ which is composed of two optional fields. There are three possible variations:
+
+1. Both the fields are present: _preferences.theme_.
+2. The _theme_ field is not present: _preferences_.
+3. Both fields are not present.
+
+A _repeated_ field is an array of values and it can be empty. The element data type of repeated field can be a
+primitive type like Integer, String or Boolean. The _tags_ field belongs to this category. The element data type can
+also be a _Struct_.
 
 ![A tree diagram representation for `UserProfile` nested data type](img/user_profile_schema.svg)
+Figure 1. Schema for UserProfile
 
-```graphql
-type UserProfile {
-  uid: ID!                  # This field is mandatory
-  displayName: String       # This is an optional field
-  tags: [String!]           # This is a repeated (array) field
-  preferences: Preferences  # This is an optional nested field
-}
+## Column Mapping
 
-# All fields in this type are optional
-type Preferences {
-  theme: String           # Values can be "dark", "light" or "system".
-  language: String        # Uses BCP 47 language tags, e.g., "en-US".
-  notifications: Boolean
-}
-```
+The schema is necessary to identify all the columns of a nested data structure. The primitive values exist in the
+leaf nodes. A column name is represented by the field names from root to leaf separated by dot notation. The
+_UserProfile_ schema contains the following set of columns:
 
-The `uid` field is the only mandatory field. So a valid instance can be created with the `uid` alone. The other
-fields can be progressively added.
+1. _uid_
+2. _displayName_
+3. _tags_
+4. _preferences.theme_
+5. _preferences.language_
+6. _preferences.notifications_
 
-The `displayName` and `preferences` are optional fields.
+## Logical Columnar View
 
-The `tags` is a repeated (array) field. The schema does not convey any information about the cardinality of this
-field. That can be known only after parsing a raw nested data structure instance.
-
-The `preferences` adds a level of nesting. All the fields in it are also optional.
-
-This is the schema definition for a nested data structure. The syntax I have used here is the GraphQL Schema
-Definition Language. It may as well be a definition written in a programming language or using the syntax of an
-interface definition language like Thrift or Protocol Buffers. It does not matter. The relevant part is how we logically
-define the fields:
-
-- Is a field optional or mandatory?
-- Is this a repeated (array)?
-- What is the data type of the field?
-- What is the name of the field?
+These are examples of concrete instances of the _UserProfile_ schema defined in Figure 1. They have varying levels
+of completeness.
 
 <div class="record-container">
 
 ```json
 {
-  "uid": "a1b2c3d4",
+  "uid": "1234",
   "displayName": "Alice Wonderland",
   "tags": [
     "reader",
@@ -215,7 +222,7 @@ define the fields:
 
 ```json
 {
-  "uid": "e5f6g7h8",
+  "uid": "5678",
   "displayName": "Chris Coder",
   "tags": [
     "developer",
@@ -230,7 +237,7 @@ define the fields:
 
 ```json
 {
-  "uid": "i9j0k1l2",
+  "uid": "9012",
   "displayName": "Bob The Builder",
   "tags": [
     "builder",
@@ -245,4 +252,338 @@ define the fields:
 
 </div>
 
+Let see how these examples map to a logical columnar view.
 
+<table class="col-view">
+  <thead>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>[reader, dreamer]</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>[developer, python, oss]</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>[builder, diy]</td>
+      <td>dark</td>
+      <td>true</td>
+    </tr>
+  </tbody>
+</table>
+
+The _tag_ array values can be expanded further so that each value is in its own separate row. This is similar to the
+functionality of the _unnest_ function in SQL.
+
+<table class="col-view">
+  <thead>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>reader</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>dreamer</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>developer</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>python</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>oss</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>builder</td>
+      <td>dark</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>diy</td>
+      <td>dark</td>
+      <td>true</td>
+    </tr>
+  </tbody>
+</table>
+
+After expanding the _tags_ the total number of rows exploded. There are more holes (properties which are not present)
+in _preferences.theme_ and _preferences.notifications_.
+
+Maybe we can fill the holes by defining sensible default values. Let the default values for _preferences.theme_ be
+_system_ and _preferences.notifications_ be true.
+
+<table class="col-view">
+  <thead>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>reader</td>
+      <td>system</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>dreamer</td>
+      <td>system</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>developer</td>
+      <td>light</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>python</td>
+      <td>light</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>oss</td>
+      <td>light</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>builder</td>
+      <td>dark</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>diy</td>
+      <td>dark</td>
+      <td>true</td>
+    </tr>
+  </tbody>
+</table>
+
+[//]: # (```graphql)
+
+[//]: # (type UserProfile {)
+
+[//]: # (  uid: ID!                  # This field is mandatory)
+
+[//]: # (  displayName: String       # This is an optional field)
+
+[//]: # (  tags: [String!]           # This is a repeated &#40;array&#41; field)
+
+[//]: # (  preferences: Preferences  # This is an optional nested field)
+
+[//]: # (})
+
+[//]: # ()
+
+[//]: # (# All fields in this type are optional)
+
+[//]: # (type Preferences {)
+
+[//]: # (  theme: String           # Values can be "dark", "light" or "system".)
+
+[//]: # (  language: String        # Uses BCP 47 language tags, e.g., "en-US".)
+
+[//]: # (  notifications: Boolean)
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+
+[//]: # (The `uid` field is the only mandatory field. So a valid instance can be created with the `uid` alone. The other)
+
+[//]: # (fields can be progressively added.)
+
+[//]: # ()
+
+[//]: # (The `displayName` and `preferences` are optional fields.)
+
+[//]: # ()
+
+[//]: # (The `tags` is a repeated &#40;array&#41; field. The schema does not convey any information about the cardinality of this)
+
+[//]: # (field. That can be known only after parsing a raw nested data structure instance.)
+
+[//]: # ()
+
+[//]: # (The `preferences` adds a level of nesting. All the fields in it are also optional.)
+
+[//]: # ()
+
+[//]: # (This is the schema definition for a nested data structure. The syntax I have used here is the GraphQL Schema)
+
+[//]: # (Definition Language. It may as well be a definition written in a programming language or using the syntax of an)
+
+[//]: # (interface definition language like Thrift or Protocol Buffers. It does not matter. The relevant part is how we logically)
+
+[//]: # (define the fields:)
+
+[//]: # ()
+
+[//]: # (- Is a field optional or mandatory?)
+
+[//]: # (- Is this a repeated &#40;array&#41;?)
+
+[//]: # (- What is the data type of the field?)
+
+[//]: # (- What is the name of the field?)
+
+[//]: # ()
+
+[//]: # (<div class="record-container">)
+
+[//]: # ()
+
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "uid": "a1b2c3d4",)
+
+[//]: # (  "displayName": "Alice Wonderland",)
+
+[//]: # (  "tags": [)
+
+[//]: # (    "reader",)
+
+[//]: # (    "dreamer")
+
+[//]: # (  ])
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "uid": "e5f6g7h8",)
+
+[//]: # (  "displayName": "Chris Coder",)
+
+[//]: # (  "tags": [)
+
+[//]: # (    "developer",)
+
+[//]: # (    "python",)
+
+[//]: # (    "oss")
+
+[//]: # (  ],)
+
+[//]: # (  "preferences": {)
+
+[//]: # (    "theme": "light")
+
+[//]: # (  })
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "uid": "i9j0k1l2",)
+
+[//]: # (  "displayName": "Bob The Builder",)
+
+[//]: # (  "tags": [)
+
+[//]: # (    "builder",)
+
+[//]: # (    "diy")
+
+[//]: # (  ],)
+
+[//]: # (  "preferences": {)
+
+[//]: # (    "theme": "dark",)
+
+[//]: # (    "notifications": true)
+
+[//]: # (  })
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+
+[//]: # (</div>)
+
+[//]: # ()
+
+[//]: # ()
