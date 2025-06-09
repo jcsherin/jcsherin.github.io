@@ -17,11 +17,11 @@ th, td {
   gap: 20px;
 }
 
-.col-view td:nth-child(1) { background-color: #FFFFE0; }
-.col-view td:nth-child(2) { background-color: #FFDAB9; }
-.col-view td:nth-child(3) { background-color: #E6E6FA; }
-.col-view td:nth-child(4) { background-color: #DDFADD; }
-.col-view td:nth-child(5) { background-color: #F0F8FF; }
+.col-view td:nth-child(1), .col-view th:nth-child(1):not([colspan]) { background-color: #FFFFE0; }
+.col-view td:nth-child(2), .col-view th:nth-child(2) { background-color: #FFDAB9; }
+.col-view td:nth-child(3), .col-view th:nth-child(3) { background-color: #E6E6FA; }
+.col-view td:nth-child(4), .col-view th:nth-child(4) { background-color: #DDFADD; }
+.col-view td:nth-child(5), .col-view th:nth-child(5) { background-color: #F0F8FF; }
 
 .row-view tr:nth-child(1) td { background-color: #FFFFE0; }
 .row-view tr:nth-child(2) td { background-color: #FFDAB9; }
@@ -40,6 +40,10 @@ th, td {
   display: flex;
 }
 
+.default-value {
+  color: #555555;
+}
+
 /* to be removed later */
 body {
   max-width: 800px;
@@ -47,6 +51,121 @@ body {
   margin: 0 auto 220px;
 }
 </style>
+
+# Introduction
+
+_To be filled in later._
+
+# Record Shredding And Assembly
+
+Conceptually, record shredding is a flattening of a nested data structure into a flat, relational format. Record
+assembly is the reconstructing of that shredded structure back into its original nested form.
+
+Below is a visualization of a _UserProfile_ object which has three levels of nesting.
+
+![Example nested data structure](img/bobthebuilder.svg)
+_Figure 1. Visualization of a nested data structure_
+
+The primitive values appear in the leaf nodes at levels two and three. It is common to use the dot-separated notation to
+represent accessing a leaf node value (e.g. _preferences.theme_ = _"dark"_). The array index notation is used to
+represent accessing the individual values in the repeated (array) field like _tags_ (e.g. tags[0] = _"builder"_, tags
+[1] = _"diy"_).
+
+After shredding the flattened _UserProfile_ value looks like any other row in a relational table. The two array values
+in _tags_ are expanded into separate rows. This is similar to using the _UNNEST_ function in SQL which takes the
+array value in _tags_ as input, and returns rows for each element in the array.
+
+<table class="col-view">
+  <thead>
+    <tr>
+      <th colspan="5">Flattened UserProfile After Record Shredding</th>
+    </tr>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>builder</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>diy</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
+
+Now record assembly takes these row values and the column names as input, to fully reconstruct the nested data
+structure back to its original form.
+
+```json
+{
+  "uid": "9012",
+  "displayName": "Bob The Builder",
+  "tags": [
+    "builder",
+    "diy"
+  ],
+  "preferences": {
+    "theme": "dark",
+    "notifications": false
+  }
+}
+```
+
+Record assembly can also be used with only a subset of the columns. This produces a reconstruction of the nested
+data structure using only the specified columns. For example let the relevant columns be: _uid_ and _preferences.
+notifications_. This returns:
+
+```json
+{
+  "uid": "9012",
+  "preferences": {
+    "notifications": false
+  }
+}
+```
+
+---
+
+### Introduction
+
+TBD
+
+### Record Shredding:
+
+- Flattened representation of (conceptually) a nested data structure.
+- Requires a schema
+  - Repeated Fields
+  - Optional Fields
+- Enumerating Columns From Schema
+- Concrete example: _UserProfile_
+
+### Why Record Shredding Is Necessary?
+
+- Direct efficient columnar representation for fast ad-hoc queries
+- Why columnar for ad-hoc queries?
+  - Read only the relevant columns (projection pushdown)
+  - Data Parallelism
+  - Vectorization
+
+### Repetition Levels
+
+- Is complicated and not trivial to understand or implement
+- Concrete example: [[0, 1], [2, 3]]
+
+---
 
 # Recap: Flat, Relational Data
 
@@ -189,10 +308,13 @@ also be a _Struct_.
 ![A tree diagram representation for `UserProfile` nested data type](img/user_profile_schema.svg)
 Figure 1. Schema for UserProfile
 
-## Column Mapping
+## Enumerating Columns
 
-The schema is necessary to identify all the columns of a nested data structure. The primitive values exist in the
-leaf nodes. A column name is represented by the field names from root to leaf separated by dot notation. The
+In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it
+possible to identify which columns are present in an instance of data, and more important which ones are not. From
+the schema we can enumerate all the columns of the nested data structure.
+
+A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The
 _UserProfile_ schema contains the following set of columns:
 
 1. _uid_
@@ -245,7 +367,7 @@ of completeness.
   ],
   "preferences": {
     "theme": "dark",
-    "notifications": true
+    "notifications": false
   }
 }
 ```
@@ -284,7 +406,7 @@ Let see how these examples map to a logical columnar view.
       <td>Bob The Builder</td>
       <td>[builder, diy]</td>
       <td>dark</td>
-      <td>true</td>
+      <td>false</td>
     </tr>
   </tbody>
 </table>
@@ -343,23 +465,22 @@ functionality of the _unnest_ function in SQL.
       <td>Bob The Builder</td>
       <td>builder</td>
       <td>dark</td>
-      <td>true</td>
+      <td>false</td>
     </tr>
     <tr>
       <td>9012</td>
       <td>Bob The Builder</td>
       <td>diy</td>
       <td>dark</td>
-      <td>true</td>
+      <td>false</td>
     </tr>
   </tbody>
 </table>
 
 After expanding the _tags_ the total number of rows exploded. There are more holes (properties which are not present)
-in _preferences.theme_ and _preferences.notifications_.
+now in _preferences.theme_ and _preferences.notifications_ columns.
 
-Maybe we can fill the holes by defining sensible default values. Let the default values for _preferences.theme_ be
-_system_ and _preferences.notifications_ be true.
+The holes can be filled by defining sensible default values.
 
 <table class="col-view">
   <thead>
@@ -376,53 +497,72 @@ _system_ and _preferences.notifications_ be true.
       <td>1234</td>
       <td>Alice Wonderland</td>
       <td>reader</td>
-      <td>system</td>
-      <td>true</td>
+      <td class="default-value">system</td>
+      <td class="default-value">true</td>
     </tr>
     <tr>
       <td>1234</td>
       <td>Alice Wonderland</td>
       <td>dreamer</td>
-      <td>system</td>
-      <td>true</td>
+      <td class="default-value">system</td>
+      <td class="default-value">true</td>
     </tr>
     <tr>
       <td>5678</td>
       <td>Chris Coder</td>
       <td>developer</td>
       <td>light</td>
-      <td>true</td>
+      <td class="default-value">true</td>
     </tr>
     <tr>
       <td>5678</td>
       <td>Chris Coder</td>
       <td>python</td>
       <td>light</td>
-      <td>true</td>
+      <td class="default-value">true</td>
     </tr>
     <tr>
       <td>5678</td>
       <td>Chris Coder</td>
       <td>oss</td>
       <td>light</td>
-      <td>true</td>
+      <td class="default-value">true</td>
     </tr>
     <tr>
       <td>9012</td>
       <td>Bob The Builder</td>
       <td>builder</td>
       <td>dark</td>
-      <td>true</td>
+      <td>false</td>
     </tr>
     <tr>
       <td>9012</td>
       <td>Bob The Builder</td>
       <td>diy</td>
       <td>dark</td>
-      <td>true</td>
+      <td>false</td>
     </tr>
   </tbody>
 </table>
+
+This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which
+is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data
+structures the same as flat, relational data.
+
+This is not an efficient representation.
+
+---
+
+Real-world nested datasets are sparse.
+
+But this is not an efficient representation.
+
+There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens
+of thousands of elements, or more? What if there are multiple repeated fields?
+
+Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a
+field is not present in the original data instance, physical storage has to be allocated to store the default value.
+
 
 [//]: # (```graphql)
 
