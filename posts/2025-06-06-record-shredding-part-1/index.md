@@ -106,7 +106,7 @@ array value in _tags_ as input, and returns rows for each element in the array.
   </tbody>
 </table>
 
-Now record assembly takes these row values and the column names as input, to fully reconstruct the nested data
+Next record assembly takes these row values and the column names as input, to fully reconstruct the nested data
 structure back to its original form.
 
 ```json
@@ -124,13 +124,13 @@ structure back to its original form.
 }
 ```
 
-Record assembly can also be completed with just a subset of columns. This is a useful feature which closely matches
-real-world usage. Most queries only include a small set of columns relevant to the query. So there is no good reason
-to materialize the complete nested data structure when only a part of it is required to compute the query results.
+Record assembly also works with just a subset of columns. This is a useful feature which closely matches real-world
+usage. Most queries only include a small set of columns relevant to the query. There is no good reason to materialize
+the a complete _UserProfile_ if the query requires only parts of it.
 
-For instance if the query columns are _uid_ and _preferences.notifications_ record assembly will skip the other
-columns and only use two specified column values to reconstruct a partial projection of the _UserProfile_ object
-which after reconstruction looks like this:
+If the columns specified in the query are _uid_ and _preferences.notifications_ then record assembly has to read
+only these columns. It can skip the remaining columns which are not relevant to the query. The reassembled
+_UserProfile_ object preserves its original structure but only contains these fields:
 
 ```json
 {
@@ -140,6 +140,75 @@ which after reconstruction looks like this:
   }
 }
 ```
+
+# Columnar Storage
+
+There is an implicit assumption in how shredded data is organized. During record assembly given a subset of columns
+it should be possible to read only those columns from storage and skip reading the remaining columns. That tells us
+that the shredded data has to be organized by columns. The values of each column are stored next to each
+other.
+
+<table class="col-view">
+  <thead>
+    <tr>
+      <th colspan="3">UserRole</th>
+    </tr>
+    <tr>
+      <th>id</th>
+      <th>username</th>
+      <th>role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>101</td>
+      <td>Alice</td>
+      <td>sender</td>
+    </tr>
+    <tr>
+      <td>102</td>
+      <td>Bob</td>
+      <td>receiver</td>
+    </tr>
+    <tr>
+      <td>103</td>
+      <td>Eve</td>
+      <td>eavesdropper</td>
+    </tr>
+    <tr>
+      <td>104</td>
+      <td>Trudy</td>
+      <td>intruder</td>
+    </tr>
+  </tbody>
+</table>
+
+The _UserRole_ relation is stored as column stripes. This arrangement makes it possible to read only a specific
+column without having to read related row values from the other columns. You can read only the _username_ column
+values without having to read its associated values in the _id_, or _role_ columns.
+
+This is known as columnar storage.
+
+It is the standard for how data is organized internally in the storage engines of modern analytical databases like
+ClickHouse and DuckDB.
+
+There are also column-oriented data formats like Apache Parquet which are not tied to a specific database engine. A
+Parquet file has wide support in variety of modern programming languages. You can also directly run SQL queries on a
+Parquet file from databases like ClickHouse and DuckDB.
+
+## Performance Benefits
+
+The optimization where you read only the relevant columns from columnar storage is known as projection pushdown. By
+reading only what is required, we save on disk I/O. This in turn reduces the memory footprint when the column values are
+read into memory.
+
+The data locality of column values being stored next to each other is crucial for query performance. The values can
+be partitioned into chunks and processed in parallel on multiple CPU cores. This is known as data parallelism. The
+other benefit of data locality is that scalar operations on data can instead be vectorized. It produces the same
+results, but uses fewer instructions per data and executes faster.
+
+These optimizations are commonly associated with flat, relational data. But with record shredding the
+performance benefits of storage, retrieval and query execution now extends to nested data structures in shredded form.
 
 ---
 
@@ -155,6 +224,28 @@ TBD
   - Optional Fields
 - Enumerating Columns From Schema
 - Concrete example: _UserProfile_
+
+### Columnar Storage
+
+- Implied by Record Assembly
+- Performance Benefits
+  - Projection Pushdown
+  - Data Parallelism
+  - Vectorization
+
+### Shredding Challenges
+
+- Structural variations: 1 schema : N instances
+
+### Schema Columns
+
+- Why schema ? (1 schema: N instances)
+- Schema: optional, repeated fields
+- Enumerating Columns From Schema
+
+### Repetition Levels Are Complicated
+
+- [[1,2], [3, 4]]
 
 ### Why Record Shredding Is Necessary?
 
