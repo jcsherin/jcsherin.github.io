@@ -124,9 +124,13 @@ structure back to its original form.
 }
 ```
 
-Record assembly can also be used with only a subset of the columns. This produces a reconstruction of the nested
-data structure using only the specified columns. For example let the relevant columns be: _uid_ and _preferences.
-notifications_. This returns:
+Record assembly can also be completed with just a subset of columns. This is a useful feature which closely matches
+real-world usage. Most queries only include a small set of columns relevant to the query. So there is no good reason
+to materialize the complete nested data structure when only a part of it is required to compute the query results.
+
+For instance if the query columns are _uid_ and _preferences.notifications_ record assembly will skip the other
+columns and only use two specified column values to reconstruct a partial projection of the _UserProfile_ object
+which after reconstruction looks like this:
 
 ```json
 {
