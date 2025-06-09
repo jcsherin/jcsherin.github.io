@@ -30,9 +30,11 @@ th, td {
   gap: 20px;
 }
 
-.col-view td:nth-child(1) { background-color: #FFFFE0; }
-.col-view td:nth-child(2) { background-color: #FFDAB9; }
-.col-view td:nth-child(3) { background-color: #E6E6FA; }
+.col-view td:nth-child(1), .col-view th:nth-child(1):not([colspan]) { background-color: #FFFFE0; }
+.col-view td:nth-child(2), .col-view th:nth-child(2) { background-color: #FFDAB9; }
+.col-view td:nth-child(3), .col-view th:nth-child(3) { background-color: #E6E6FA; }
+.col-view td:nth-child(4), .col-view th:nth-child(4) { background-color: #DDFADD; }
+.col-view td:nth-child(5), .col-view th:nth-child(5) { background-color: #F0F8FF; }
 
 .row-view tr:nth-child(1) td { background-color: #FFFFE0; }
 .row-view tr:nth-child(2) td { background-color: #FFDAB9; }
@@ -51,6 +53,10 @@ th, td {
   display: flex;
 }
 
+.default-value {
+  color: #555555;
+}
+
 /* to be removed later */
 body {
   max-width: 800px;
@@ -58,6 +64,176 @@ body {
   margin: 0 auto 220px;
 }
 &lt;/style&gt;
+&lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;&lt;em&gt;To be filled in later.&lt;/em&gt;&lt;/p&gt;
+&lt;h1 id=&quot;record-shredding-and-assembly&quot; tabindex=&quot;-1&quot;&gt;Record Shredding And Assembly &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#record-shredding-and-assembly&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;Conceptually, record shredding is a flattening of a nested data structure into a flat, relational format. Record
+assembly is the reconstructing of that shredded structure back into its original nested form.&lt;/p&gt;
+&lt;p&gt;Below is a visualization of a &lt;em&gt;UserProfile&lt;/em&gt; object which has three levels of nesting.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/img/bobthebuilder.svg&quot; alt=&quot;Example nested data structure&quot; /&gt;
+&lt;em&gt;Figure 1. Visualization of a nested data structure&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The primitive values appear in the leaf nodes at levels two and three. It is common to use the dot-separated notation to
+represent accessing a leaf node value (e.g. &lt;em&gt;preferences.theme&lt;/em&gt; = &lt;em&gt;&amp;quot;dark&amp;quot;&lt;/em&gt;). The array index notation is used to
+represent accessing the individual values in the repeated (array) field like &lt;em&gt;tags&lt;/em&gt; (e.g. tags[0] = &lt;em&gt;&amp;quot;builder&amp;quot;&lt;/em&gt;, tags
+[1] = &lt;em&gt;&amp;quot;diy&amp;quot;&lt;/em&gt;).&lt;/p&gt;
+&lt;p&gt;After shredding the flattened &lt;em&gt;UserProfile&lt;/em&gt; value looks like any other row in a relational table. The two array values
+in &lt;em&gt;tags&lt;/em&gt; are expanded into separate rows. This is similar to using the &lt;em&gt;UNNEST&lt;/em&gt; function in SQL which takes the
+array value in &lt;em&gt;tags&lt;/em&gt; as input, and returns rows for each element in the array.&lt;/p&gt;
+&lt;table class=&quot;col-view&quot;&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th colspan=&quot;5&quot;&gt;Flattened UserProfile After Record Shredding&lt;/th&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;th&gt;uid&lt;/th&gt;
+      &lt;th&gt;displayName&lt;/th&gt;
+      &lt;th&gt;tags&lt;/th&gt;
+      &lt;th&gt;preferences.theme&lt;/th&gt;
+      &lt;th&gt;preferences.notifications&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;builder&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;diy&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;Next record assembly takes these row values and the column names as input, to fully reconstruct the nested data
+structure back to its original form.&lt;/p&gt;
+&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;9012&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Bob The Builder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;builder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;diy&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;preferences&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;theme&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;dark&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;notifications&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Record assembly also works with just a subset of columns. This is a useful feature which closely matches real-world
+usage. Most queries only include a small set of columns relevant to the query. There is no good reason to materialize
+the a complete &lt;em&gt;UserProfile&lt;/em&gt; if the query requires only parts of it.&lt;/p&gt;
+&lt;p&gt;If the columns specified in the query are &lt;em&gt;uid&lt;/em&gt; and &lt;em&gt;preferences.notifications&lt;/em&gt; then record assembly has to read
+only these columns. It can skip the remaining columns which are not relevant to the query. The reassembled
+&lt;em&gt;UserProfile&lt;/em&gt; object preserves its original structure but only contains these fields:&lt;/p&gt;
+&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;9012&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;preferences&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;notifications&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;h1 id=&quot;columnar-storage&quot; tabindex=&quot;-1&quot;&gt;Columnar Storage &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#columnar-storage&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;There is an implicit assumption in how shredded data is organized. During record assembly given a subset of columns
+it should be possible to read only those columns from storage and skip reading the remaining columns. That tells us
+that the shredded data has to be organized by columns. The values of each column are stored next to each
+other.&lt;/p&gt;
+&lt;table class=&quot;col-view&quot;&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th colspan=&quot;3&quot;&gt;UserRole&lt;/th&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;th&gt;id&lt;/th&gt;
+      &lt;th&gt;username&lt;/th&gt;
+      &lt;th&gt;role&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;101&lt;/td&gt;
+      &lt;td&gt;Alice&lt;/td&gt;
+      &lt;td&gt;sender&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;102&lt;/td&gt;
+      &lt;td&gt;Bob&lt;/td&gt;
+      &lt;td&gt;receiver&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;103&lt;/td&gt;
+      &lt;td&gt;Eve&lt;/td&gt;
+      &lt;td&gt;eavesdropper&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;104&lt;/td&gt;
+      &lt;td&gt;Trudy&lt;/td&gt;
+      &lt;td&gt;intruder&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The &lt;em&gt;UserRole&lt;/em&gt; relation is stored as column stripes. This arrangement makes it possible to read only a specific
+column without having to read related row values from the other columns. You can read only the &lt;em&gt;username&lt;/em&gt; column
+values without having to read its associated values in the &lt;em&gt;id&lt;/em&gt;, or &lt;em&gt;role&lt;/em&gt; columns.&lt;/p&gt;
+&lt;p&gt;This is known as columnar storage.&lt;/p&gt;
+&lt;p&gt;It is the standard for how data is organized internally in the storage engines of modern analytical databases like
+ClickHouse and DuckDB.&lt;/p&gt;
+&lt;p&gt;There are also column-oriented data formats like Apache Parquet which are not tied to a specific database engine. A
+Parquet file has wide support in variety of modern programming languages. You can also directly run SQL queries on a
+Parquet file from databases like ClickHouse and DuckDB.&lt;/p&gt;
+&lt;h2 id=&quot;performance-benefits&quot; tabindex=&quot;-1&quot;&gt;Performance Benefits &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#performance-benefits&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The optimization where you read only the relevant columns from columnar storage is known as projection pushdown. By
+reading only what is required, we save on disk I/O. This in turn reduces the memory footprint when the column values are
+read into memory.&lt;/p&gt;
+&lt;p&gt;The data locality of column values being stored next to each other is crucial for query performance. The values can
+be partitioned into chunks and processed in parallel on multiple CPU cores. This is known as data parallelism. The
+other benefit of data locality is that scalar operations on data can instead be vectorized. It produces the same
+results, but uses fewer instructions per data and executes faster.&lt;/p&gt;
+&lt;p&gt;These optimizations are commonly associated with flat, relational data. But with record shredding the
+performance benefits of storage, retrieval and query execution now extends to nested data structures in shredded form.&lt;/p&gt;
+&lt;hr /&gt;
+&lt;h3 id=&quot;introduction-1&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#introduction-1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;p&gt;TBD&lt;/p&gt;
+&lt;h3 id=&quot;record-shredding:&quot; tabindex=&quot;-1&quot;&gt;Record Shredding: &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#record-shredding:&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Flattened representation of (conceptually) a nested data structure.&lt;/li&gt;
+&lt;li&gt;Requires a schema
+&lt;ul&gt;
+&lt;li&gt;Repeated Fields&lt;/li&gt;
+&lt;li&gt;Optional Fields&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;Enumerating Columns From Schema&lt;/li&gt;
+&lt;li&gt;Concrete example: &lt;em&gt;UserProfile&lt;/em&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&quot;columnar-storage-1&quot; tabindex=&quot;-1&quot;&gt;Columnar Storage &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#columnar-storage-1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Implied by Record Assembly&lt;/li&gt;
+&lt;li&gt;Performance Benefits
+&lt;ul&gt;
+&lt;li&gt;Projection Pushdown&lt;/li&gt;
+&lt;li&gt;Data Parallelism&lt;/li&gt;
+&lt;li&gt;Vectorization&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&quot;shredding-challenges&quot; tabindex=&quot;-1&quot;&gt;Shredding Challenges &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#shredding-challenges&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Structural variations: 1 schema : N instances&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&quot;schema-columns&quot; tabindex=&quot;-1&quot;&gt;Schema Columns &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#schema-columns&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Why schema ? (1 schema: N instances)&lt;/li&gt;
+&lt;li&gt;Schema: optional, repeated fields&lt;/li&gt;
+&lt;li&gt;Enumerating Columns From Schema&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&quot;repetition-levels-are-complicated&quot; tabindex=&quot;-1&quot;&gt;Repetition Levels Are Complicated &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#repetition-levels-are-complicated&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;[[1,2], [3, 4]]&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&quot;why-record-shredding-is-necessary&quot; tabindex=&quot;-1&quot;&gt;Why Record Shredding Is Necessary? &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#why-record-shredding-is-necessary&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Direct efficient columnar representation for fast ad-hoc queries&lt;/li&gt;
+&lt;li&gt;Why columnar for ad-hoc queries?
+&lt;ul&gt;
+&lt;li&gt;Read only the relevant columns (projection pushdown)&lt;/li&gt;
+&lt;li&gt;Data Parallelism&lt;/li&gt;
+&lt;li&gt;Vectorization&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h3 id=&quot;repetition-levels&quot; tabindex=&quot;-1&quot;&gt;Repetition Levels &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#repetition-levels&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;Is complicated and not trivial to understand or implement&lt;/li&gt;
+&lt;li&gt;Concrete example: [[0, 1], [2, 3]]&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr /&gt;
 &lt;h1 id=&quot;recap:-flat-relational-data&quot; tabindex=&quot;-1&quot;&gt;Recap: Flat, Relational Data &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#recap:-flat-relational-data&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;h2 id=&quot;row-major-vs.-column-major-representation&quot; tabindex=&quot;-1&quot;&gt;Row-Major vs. Column-Major Representation &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#row-major-vs.-column-major-representation&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches
@@ -141,7 +317,7 @@ impact on minimizing disk I/O and reducing memory footprint.&lt;/p&gt;
     &lt;/tbody&gt;
   &lt;/table&gt;
 &lt;/div&gt;
-&lt;h2 id=&quot;performance-benefits&quot; tabindex=&quot;-1&quot;&gt;Performance Benefits &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#performance-benefits&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;h2 id=&quot;performance-benefits-1&quot; tabindex=&quot;-1&quot;&gt;Performance Benefits &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#performance-benefits-1&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;The data locality in columnar storage is crucial for query performance. It enables data parallelism where different
 blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar
 operations with vectorized processing. Together data parallelism and vectorized processing has a big impact in
@@ -159,30 +335,225 @@ stored nested data structures. Similar to flat, relational data here too we want
 and ignore the rest. So the ability to partially reconstruct only the relevant parts of the nested data structure is
 an important feature.&lt;/p&gt;
 &lt;h1 id=&quot;nested-data-structure&quot; tabindex=&quot;-1&quot;&gt;Nested Data Structure &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#nested-data-structure&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;Here is the schema definition for a nested data structure.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/img/user_profile_schema.svg&quot; alt=&quot;A tree diagram representation for  nested data type&quot; /&gt;&lt;/p&gt;
-&lt;pre class=&quot;language-graphql&quot;&gt;&lt;code class=&quot;language-graphql&quot;&gt;&lt;span class=&quot;token keyword&quot;&gt;type&lt;/span&gt; &lt;span class=&quot;token class-name&quot;&gt;UserProfile&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;uid&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token scalar&quot;&gt;ID&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;!&lt;/span&gt;                  &lt;span class=&quot;token comment&quot;&gt;# This field is mandatory&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;displayName&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token scalar&quot;&gt;String&lt;/span&gt;       &lt;span class=&quot;token comment&quot;&gt;# This is an optional field&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;tags&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;token scalar&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;!&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;           &lt;span class=&quot;token comment&quot;&gt;# This is a repeated (array) field&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;preferences&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token class-name&quot;&gt;Preferences&lt;/span&gt;  &lt;span class=&quot;token comment&quot;&gt;# This is an optional nested field&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;br /&gt;&lt;span class=&quot;token comment&quot;&gt;# All fields in this type are optional&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token keyword&quot;&gt;type&lt;/span&gt; &lt;span class=&quot;token class-name&quot;&gt;Preferences&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;theme&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token scalar&quot;&gt;String&lt;/span&gt;           &lt;span class=&quot;token comment&quot;&gt;# Values can be &quot;dark&quot;, &quot;light&quot; or &quot;system&quot;.&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;language&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token scalar&quot;&gt;String&lt;/span&gt;        &lt;span class=&quot;token comment&quot;&gt;# Uses BCP 47 language tags, e.g., &quot;en-US&quot;.&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token attr-name&quot;&gt;notifications&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token scalar&quot;&gt;Boolean&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;The &lt;code&gt;uid&lt;/code&gt; field is the only mandatory field. So a valid instance can be created with the &lt;code&gt;uid&lt;/code&gt; alone. The other
-fields can be progressively added.&lt;/p&gt;
-&lt;p&gt;The &lt;code&gt;displayName&lt;/code&gt; and &lt;code&gt;preferences&lt;/code&gt; are optional fields.&lt;/p&gt;
-&lt;p&gt;The &lt;code&gt;tags&lt;/code&gt; is a repeated (array) field. The schema does not convey any information about the cardinality of this
-field. That can be known only after parsing a raw nested data structure instance.&lt;/p&gt;
-&lt;p&gt;The &lt;code&gt;preferences&lt;/code&gt; adds a level of nesting. All the fields in it are also optional.&lt;/p&gt;
-&lt;p&gt;This is the schema definition for a nested data structure. The syntax I have used here is the GraphQL Schema
-Definition Language. It may as well be a definition written in a programming language or using the syntax of an
-interface definition language like Thrift or Protocol Buffers. It does not matter. The relevant part is how we logically
-define the fields:&lt;/p&gt;
+&lt;p&gt;This is a place for claims:&lt;/p&gt;
 &lt;ul&gt;
-&lt;li&gt;Is a field optional or mandatory?&lt;/li&gt;
-&lt;li&gt;Is this a repeated (array)?&lt;/li&gt;
-&lt;li&gt;What is the data type of the field?&lt;/li&gt;
-&lt;li&gt;What is the name of the field?&lt;/li&gt;
+&lt;li&gt;structural variation&lt;/li&gt;
+&lt;li&gt;sparse&lt;/li&gt;
+&lt;li&gt;can&#39;t shred without schema&lt;/li&gt;
+&lt;li&gt;columns fall out from schema&lt;/li&gt;
 &lt;/ul&gt;
+&lt;h2 id=&quot;schema:-optional-and-repeated-fields&quot; tabindex=&quot;-1&quot;&gt;Schema: Optional &amp;amp; Repeated Fields &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#schema:-optional-and-repeated-fields&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;The figure 1. shows all the fields of a &lt;em&gt;UserProfile&lt;/em&gt; nested data structure.&lt;/p&gt;
+&lt;p&gt;A field has a name and a data type.&lt;/p&gt;
+&lt;p&gt;An &lt;em&gt;optional&lt;/em&gt; field is not mandatory. It does not have to be present in the instance of data. Consider &lt;em&gt;preferences.
+theme&lt;/em&gt; which is composed of two optional fields. There are three possible variations:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Both the fields are present: &lt;em&gt;preferences.theme&lt;/em&gt;.&lt;/li&gt;
+&lt;li&gt;The &lt;em&gt;theme&lt;/em&gt; field is not present: &lt;em&gt;preferences&lt;/em&gt;.&lt;/li&gt;
+&lt;li&gt;Both fields are not present.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;A &lt;em&gt;repeated&lt;/em&gt; field is an array of values and it can be empty. The element data type of repeated field can be a
+primitive type like Integer, String or Boolean. The &lt;em&gt;tags&lt;/em&gt; field belongs to this category. The element data type can
+also be a &lt;em&gt;Struct&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/img/user_profile_schema.svg&quot; alt=&quot;A tree diagram representation for  nested data type&quot; /&gt;
+Figure 1. Schema for UserProfile&lt;/p&gt;
+&lt;h2 id=&quot;enumerating-columns&quot; tabindex=&quot;-1&quot;&gt;Enumerating Columns &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#enumerating-columns&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it
+possible to identify which columns are present in an instance of data, and more important which ones are not. From
+the schema we can enumerate all the columns of the nested data structure.&lt;/p&gt;
+&lt;p&gt;A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The
+&lt;em&gt;UserProfile&lt;/em&gt; schema contains the following set of columns:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;em&gt;uid&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;displayName&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;tags&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;preferences.theme&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;preferences.language&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;em&gt;preferences.notifications&lt;/em&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2 id=&quot;logical-columnar-view&quot; tabindex=&quot;-1&quot;&gt;Logical Columnar View &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#logical-columnar-view&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
+&lt;p&gt;These are examples of concrete instances of the &lt;em&gt;UserProfile&lt;/em&gt; schema defined in Figure 1. They have varying levels
+of completeness.&lt;/p&gt;
 &lt;div class=&quot;record-container&quot;&gt;
-&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;a1b2c3d4&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Alice Wonderland&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;reader&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;dreamer&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;e5f6g7h8&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Chris Coder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;developer&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;python&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;oss&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;preferences&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;theme&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;light&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
-&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;i9j0k1l2&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Bob The Builder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;builder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;diy&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;preferences&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;theme&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;dark&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;notifications&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;true&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;1234&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Alice Wonderland&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;reader&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;dreamer&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;5678&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Chris Coder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;developer&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;python&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;oss&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;preferences&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;theme&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;light&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
+&lt;pre class=&quot;language-json&quot;&gt;&lt;code class=&quot;language-json&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;uid&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;9012&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;displayName&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;Bob The Builder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;tags&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;[&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;builder&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token string&quot;&gt;&quot;diy&quot;&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;]&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token property&quot;&gt;&quot;preferences&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;theme&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&quot;dark&quot;&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt;&lt;br /&gt;    &lt;span class=&quot;token property&quot;&gt;&quot;notifications&quot;&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;br /&gt;  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;br /&gt;&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;
+&lt;p&gt;Let see how these examples map to a logical columnar view.&lt;/p&gt;
+&lt;table class=&quot;col-view&quot;&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;uid&lt;/th&gt;
+      &lt;th&gt;displayName&lt;/th&gt;
+      &lt;th&gt;tags&lt;/th&gt;
+      &lt;th&gt;preferences.theme&lt;/th&gt;
+      &lt;th&gt;preferences.notifications&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1234&lt;/td&gt;
+      &lt;td&gt;Alice Wonderland&lt;/td&gt;
+      &lt;td&gt;[reader, dreamer]&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;[developer, python, oss]&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;[builder, diy]&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;The &lt;em&gt;tag&lt;/em&gt; array values can be expanded further so that each value is in its own separate row. This is similar to the
+functionality of the &lt;em&gt;unnest&lt;/em&gt; function in SQL.&lt;/p&gt;
+&lt;table class=&quot;col-view&quot;&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;uid&lt;/th&gt;
+      &lt;th&gt;displayName&lt;/th&gt;
+      &lt;th&gt;tags&lt;/th&gt;
+      &lt;th&gt;preferences.theme&lt;/th&gt;
+      &lt;th&gt;preferences.notifications&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1234&lt;/td&gt;
+      &lt;td&gt;Alice Wonderland&lt;/td&gt;
+      &lt;td&gt;reader&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1234&lt;/td&gt;
+      &lt;td&gt;Alice Wonderland&lt;/td&gt;
+      &lt;td&gt;dreamer&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;developer&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;python&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;oss&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td&gt;&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;builder&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;diy&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;After expanding the &lt;em&gt;tags&lt;/em&gt; the total number of rows exploded. There are more holes (properties which are not present)
+now in &lt;em&gt;preferences.theme&lt;/em&gt; and &lt;em&gt;preferences.notifications&lt;/em&gt; columns.&lt;/p&gt;
+&lt;p&gt;The holes can be filled by defining sensible default values.&lt;/p&gt;
+&lt;table class=&quot;col-view&quot;&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;uid&lt;/th&gt;
+      &lt;th&gt;displayName&lt;/th&gt;
+      &lt;th&gt;tags&lt;/th&gt;
+      &lt;th&gt;preferences.theme&lt;/th&gt;
+      &lt;th&gt;preferences.notifications&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1234&lt;/td&gt;
+      &lt;td&gt;Alice Wonderland&lt;/td&gt;
+      &lt;td&gt;reader&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;system&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;true&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1234&lt;/td&gt;
+      &lt;td&gt;Alice Wonderland&lt;/td&gt;
+      &lt;td&gt;dreamer&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;system&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;true&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;developer&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;true&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;python&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;true&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5678&lt;/td&gt;
+      &lt;td&gt;Chris Coder&lt;/td&gt;
+      &lt;td&gt;oss&lt;/td&gt;
+      &lt;td&gt;light&lt;/td&gt;
+      &lt;td class=&quot;default-value&quot;&gt;true&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;builder&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;9012&lt;/td&gt;
+      &lt;td&gt;Bob The Builder&lt;/td&gt;
+      &lt;td&gt;diy&lt;/td&gt;
+      &lt;td&gt;dark&lt;/td&gt;
+      &lt;td&gt;false&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;p&gt;This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which
+is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data
+structures the same as flat, relational data.&lt;/p&gt;
+&lt;p&gt;This is not an efficient representation.&lt;/p&gt;
+&lt;hr /&gt;
+&lt;p&gt;Real-world nested datasets are sparse.&lt;/p&gt;
+&lt;p&gt;But this is not an efficient representation.&lt;/p&gt;
+&lt;p&gt;There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens
+of thousands of elements, or more? What if there are multiple repeated fields?&lt;/p&gt;
+&lt;p&gt;Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a
+field is not present in the original data instance, physical storage has to be allocated to store the default value.&lt;/p&gt;
 </content>
 	</entry>
 	

@@ -11,9 +11,11 @@ th, td {
   gap: 20px;
 }
 
-.col-view td:nth-child(1) { background-color: #FFFFE0; }
-.col-view td:nth-child(2) { background-color: #FFDAB9; }
-.col-view td:nth-child(3) { background-color: #E6E6FA; }
+.col-view td:nth-child(1), .col-view th:nth-child(1):not([colspan]) { background-color: #FFFFE0; }
+.col-view td:nth-child(2), .col-view th:nth-child(2) { background-color: #FFDAB9; }
+.col-view td:nth-child(3), .col-view th:nth-child(3) { background-color: #E6E6FA; }
+.col-view td:nth-child(4), .col-view th:nth-child(4) { background-color: #DDFADD; }
+.col-view td:nth-child(5), .col-view th:nth-child(5) { background-color: #F0F8FF; }
 
 .row-view tr:nth-child(1) td { background-color: #FFFFE0; }
 .row-view tr:nth-child(2) td { background-color: #FFDAB9; }
@@ -32,6 +34,10 @@ th, td {
   display: flex;
 }
 
+.default-value {
+  color: #555555;
+}
+
 /* to be removed later */
 body {
   max-width: 800px;
@@ -39,6 +45,176 @@ body {
   margin: 0 auto 220px;
 }
 </style>
+<h1 id="introduction" tabindex="-1">Introduction <a class="direct-link" href="#introduction" aria-hidden="true">#</a></h1>
+<p><em>To be filled in later.</em></p>
+<h1 id="record-shredding-and-assembly" tabindex="-1">Record Shredding And Assembly <a class="direct-link" href="#record-shredding-and-assembly" aria-hidden="true">#</a></h1>
+<p>Conceptually, record shredding is a flattening of a nested data structure into a flat, relational format. Record
+assembly is the reconstructing of that shredded structure back into its original nested form.</p>
+<p>Below is a visualization of a <em>UserProfile</em> object which has three levels of nesting.</p>
+<p><img src="img/bobthebuilder.svg" alt="Example nested data structure">
+<em>Figure 1. Visualization of a nested data structure</em></p>
+<p>The primitive values appear in the leaf nodes at levels two and three. It is common to use the dot-separated notation to
+represent accessing a leaf node value (e.g. <em>preferences.theme</em> = <em>&quot;dark&quot;</em>). The array index notation is used to
+represent accessing the individual values in the repeated (array) field like <em>tags</em> (e.g. tags[0] = <em>&quot;builder&quot;</em>, tags
+[1] = <em>&quot;diy&quot;</em>).</p>
+<p>After shredding the flattened <em>UserProfile</em> value looks like any other row in a relational table. The two array values
+in <em>tags</em> are expanded into separate rows. This is similar to using the <em>UNNEST</em> function in SQL which takes the
+array value in <em>tags</em> as input, and returns rows for each element in the array.</p>
+<table class="col-view">
+  <thead>
+    <tr>
+      <th colspan="5">Flattened UserProfile After Record Shredding</th>
+    </tr>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>builder</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>diy</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
+<p>Next record assembly takes these row values and the column names as input, to fully reconstruct the nested data
+structure back to its original form.</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"9012"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Bob The Builder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"builder"</span><span class="token punctuation">,</span><br>    <span class="token string">"diy"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"dark"</span><span class="token punctuation">,</span><br>    <span class="token property">"notifications"</span><span class="token operator">:</span> <span class="token boolean">false</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
+<p>Record assembly also works with just a subset of columns. This is a useful feature which closely matches real-world
+usage. Most queries only include a small set of columns relevant to the query. There is no good reason to materialize
+the a complete <em>UserProfile</em> if the query requires only parts of it.</p>
+<p>If the columns specified in the query are <em>uid</em> and <em>preferences.notifications</em> then record assembly has to read
+only these columns. It can skip the remaining columns which are not relevant to the query. The reassembled
+<em>UserProfile</em> object preserves its original structure but only contains these fields:</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"9012"</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"notifications"</span><span class="token operator">:</span> <span class="token boolean">false</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
+<h1 id="columnar-storage" tabindex="-1">Columnar Storage <a class="direct-link" href="#columnar-storage" aria-hidden="true">#</a></h1>
+<p>There is an implicit assumption in how shredded data is organized. During record assembly given a subset of columns
+it should be possible to read only those columns from storage and skip reading the remaining columns. That tells us
+that the shredded data has to be organized by columns. The values of each column are stored next to each
+other.</p>
+<table class="col-view">
+  <thead>
+    <tr>
+      <th colspan="3">UserRole</th>
+    </tr>
+    <tr>
+      <th>id</th>
+      <th>username</th>
+      <th>role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>101</td>
+      <td>Alice</td>
+      <td>sender</td>
+    </tr>
+    <tr>
+      <td>102</td>
+      <td>Bob</td>
+      <td>receiver</td>
+    </tr>
+    <tr>
+      <td>103</td>
+      <td>Eve</td>
+      <td>eavesdropper</td>
+    </tr>
+    <tr>
+      <td>104</td>
+      <td>Trudy</td>
+      <td>intruder</td>
+    </tr>
+  </tbody>
+</table>
+<p>The <em>UserRole</em> relation is stored as column stripes. This arrangement makes it possible to read only a specific
+column without having to read related row values from the other columns. You can read only the <em>username</em> column
+values without having to read its associated values in the <em>id</em>, or <em>role</em> columns.</p>
+<p>This is known as columnar storage.</p>
+<p>It is the standard for how data is organized internally in the storage engines of modern analytical databases like
+ClickHouse and DuckDB.</p>
+<p>There are also column-oriented data formats like Apache Parquet which are not tied to a specific database engine. A
+Parquet file has wide support in variety of modern programming languages. You can also directly run SQL queries on a
+Parquet file from databases like ClickHouse and DuckDB.</p>
+<h2 id="performance-benefits" tabindex="-1">Performance Benefits <a class="direct-link" href="#performance-benefits" aria-hidden="true">#</a></h2>
+<p>The optimization where you read only the relevant columns from columnar storage is known as projection pushdown. By
+reading only what is required, we save on disk I/O. This in turn reduces the memory footprint when the column values are
+read into memory.</p>
+<p>The data locality of column values being stored next to each other is crucial for query performance. The values can
+be partitioned into chunks and processed in parallel on multiple CPU cores. This is known as data parallelism. The
+other benefit of data locality is that scalar operations on data can instead be vectorized. It produces the same
+results, but uses fewer instructions per data and executes faster.</p>
+<p>These optimizations are commonly associated with flat, relational data. But with record shredding the
+performance benefits of storage, retrieval and query execution now extends to nested data structures in shredded form.</p>
+<hr>
+<h3 id="introduction-1" tabindex="-1">Introduction <a class="direct-link" href="#introduction-1" aria-hidden="true">#</a></h3>
+<p>TBD</p>
+<h3 id="record-shredding:" tabindex="-1">Record Shredding: <a class="direct-link" href="#record-shredding:" aria-hidden="true">#</a></h3>
+<ul>
+<li>Flattened representation of (conceptually) a nested data structure.</li>
+<li>Requires a schema
+<ul>
+<li>Repeated Fields</li>
+<li>Optional Fields</li>
+</ul>
+</li>
+<li>Enumerating Columns From Schema</li>
+<li>Concrete example: <em>UserProfile</em></li>
+</ul>
+<h3 id="columnar-storage-1" tabindex="-1">Columnar Storage <a class="direct-link" href="#columnar-storage-1" aria-hidden="true">#</a></h3>
+<ul>
+<li>Implied by Record Assembly</li>
+<li>Performance Benefits
+<ul>
+<li>Projection Pushdown</li>
+<li>Data Parallelism</li>
+<li>Vectorization</li>
+</ul>
+</li>
+</ul>
+<h3 id="shredding-challenges" tabindex="-1">Shredding Challenges <a class="direct-link" href="#shredding-challenges" aria-hidden="true">#</a></h3>
+<ul>
+<li>Structural variations: 1 schema : N instances</li>
+</ul>
+<h3 id="schema-columns" tabindex="-1">Schema Columns <a class="direct-link" href="#schema-columns" aria-hidden="true">#</a></h3>
+<ul>
+<li>Why schema ? (1 schema: N instances)</li>
+<li>Schema: optional, repeated fields</li>
+<li>Enumerating Columns From Schema</li>
+</ul>
+<h3 id="repetition-levels-are-complicated" tabindex="-1">Repetition Levels Are Complicated <a class="direct-link" href="#repetition-levels-are-complicated" aria-hidden="true">#</a></h3>
+<ul>
+<li>[[1,2], [3, 4]]</li>
+</ul>
+<h3 id="why-record-shredding-is-necessary" tabindex="-1">Why Record Shredding Is Necessary? <a class="direct-link" href="#why-record-shredding-is-necessary" aria-hidden="true">#</a></h3>
+<ul>
+<li>Direct efficient columnar representation for fast ad-hoc queries</li>
+<li>Why columnar for ad-hoc queries?
+<ul>
+<li>Read only the relevant columns (projection pushdown)</li>
+<li>Data Parallelism</li>
+<li>Vectorization</li>
+</ul>
+</li>
+</ul>
+<h3 id="repetition-levels" tabindex="-1">Repetition Levels <a class="direct-link" href="#repetition-levels" aria-hidden="true">#</a></h3>
+<ul>
+<li>Is complicated and not trivial to understand or implement</li>
+<li>Concrete example: [[0, 1], [2, 3]]</li>
+</ul>
+<hr>
 <h1 id="recap:-flat-relational-data" tabindex="-1">Recap: Flat, Relational Data <a class="direct-link" href="#recap:-flat-relational-data" aria-hidden="true">#</a></h1>
 <h2 id="row-major-vs.-column-major-representation" tabindex="-1">Row-Major vs. Column-Major Representation <a class="direct-link" href="#row-major-vs.-column-major-representation" aria-hidden="true">#</a></h2>
 <p>The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches
@@ -122,7 +298,7 @@ impact on minimizing disk I/O and reducing memory footprint.</p>
     </tbody>
   </table>
 </div>
-<h2 id="performance-benefits" tabindex="-1">Performance Benefits <a class="direct-link" href="#performance-benefits" aria-hidden="true">#</a></h2>
+<h2 id="performance-benefits-1" tabindex="-1">Performance Benefits <a class="direct-link" href="#performance-benefits-1" aria-hidden="true">#</a></h2>
 <p>The data locality in columnar storage is crucial for query performance. It enables data parallelism where different
 blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar
 operations with vectorized processing. Together data parallelism and vectorized processing has a big impact in
@@ -140,27 +316,222 @@ stored nested data structures. Similar to flat, relational data here too we want
 and ignore the rest. So the ability to partially reconstruct only the relevant parts of the nested data structure is
 an important feature.</p>
 <h1 id="nested-data-structure" tabindex="-1">Nested Data Structure <a class="direct-link" href="#nested-data-structure" aria-hidden="true">#</a></h1>
-<p>Here is the schema definition for a nested data structure.</p>
-<p><img src="img/user_profile_schema.svg" alt="A tree diagram representation for  nested data type"></p>
-<pre class="language-graphql"><code class="language-graphql"><span class="token keyword">type</span> <span class="token class-name">UserProfile</span> <span class="token punctuation">{</span><br>  <span class="token attr-name">uid</span><span class="token punctuation">:</span> <span class="token scalar">ID</span><span class="token operator">!</span>                  <span class="token comment"># This field is mandatory</span><br>  <span class="token attr-name">displayName</span><span class="token punctuation">:</span> <span class="token scalar">String</span>       <span class="token comment"># This is an optional field</span><br>  <span class="token attr-name">tags</span><span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token scalar">String</span><span class="token operator">!</span><span class="token punctuation">]</span>           <span class="token comment"># This is a repeated (array) field</span><br>  <span class="token attr-name">preferences</span><span class="token punctuation">:</span> <span class="token class-name">Preferences</span>  <span class="token comment"># This is an optional nested field</span><br><span class="token punctuation">}</span><br><br><span class="token comment"># All fields in this type are optional</span><br><span class="token keyword">type</span> <span class="token class-name">Preferences</span> <span class="token punctuation">{</span><br>  <span class="token attr-name">theme</span><span class="token punctuation">:</span> <span class="token scalar">String</span>           <span class="token comment"># Values can be "dark", "light" or "system".</span><br>  <span class="token attr-name">language</span><span class="token punctuation">:</span> <span class="token scalar">String</span>        <span class="token comment"># Uses BCP 47 language tags, e.g., "en-US".</span><br>  <span class="token attr-name">notifications</span><span class="token punctuation">:</span> <span class="token scalar">Boolean</span><br><span class="token punctuation">}</span></code></pre>
-<p>The <code>uid</code> field is the only mandatory field. So a valid instance can be created with the <code>uid</code> alone. The other
-fields can be progressively added.</p>
-<p>The <code>displayName</code> and <code>preferences</code> are optional fields.</p>
-<p>The <code>tags</code> is a repeated (array) field. The schema does not convey any information about the cardinality of this
-field. That can be known only after parsing a raw nested data structure instance.</p>
-<p>The <code>preferences</code> adds a level of nesting. All the fields in it are also optional.</p>
-<p>This is the schema definition for a nested data structure. The syntax I have used here is the GraphQL Schema
-Definition Language. It may as well be a definition written in a programming language or using the syntax of an
-interface definition language like Thrift or Protocol Buffers. It does not matter. The relevant part is how we logically
-define the fields:</p>
+<p>This is a place for claims:</p>
 <ul>
-<li>Is a field optional or mandatory?</li>
-<li>Is this a repeated (array)?</li>
-<li>What is the data type of the field?</li>
-<li>What is the name of the field?</li>
+<li>structural variation</li>
+<li>sparse</li>
+<li>can't shred without schema</li>
+<li>columns fall out from schema</li>
 </ul>
+<h2 id="schema:-optional-and-repeated-fields" tabindex="-1">Schema: Optional &amp; Repeated Fields <a class="direct-link" href="#schema:-optional-and-repeated-fields" aria-hidden="true">#</a></h2>
+<p>The figure 1. shows all the fields of a <em>UserProfile</em> nested data structure.</p>
+<p>A field has a name and a data type.</p>
+<p>An <em>optional</em> field is not mandatory. It does not have to be present in the instance of data. Consider <em>preferences.
+theme</em> which is composed of two optional fields. There are three possible variations:</p>
+<ol>
+<li>Both the fields are present: <em>preferences.theme</em>.</li>
+<li>The <em>theme</em> field is not present: <em>preferences</em>.</li>
+<li>Both fields are not present.</li>
+</ol>
+<p>A <em>repeated</em> field is an array of values and it can be empty. The element data type of repeated field can be a
+primitive type like Integer, String or Boolean. The <em>tags</em> field belongs to this category. The element data type can
+also be a <em>Struct</em>.</p>
+<p><img src="img/user_profile_schema.svg" alt="A tree diagram representation for  nested data type">
+Figure 1. Schema for UserProfile</p>
+<h2 id="enumerating-columns" tabindex="-1">Enumerating Columns <a class="direct-link" href="#enumerating-columns" aria-hidden="true">#</a></h2>
+<p>In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it
+possible to identify which columns are present in an instance of data, and more important which ones are not. From
+the schema we can enumerate all the columns of the nested data structure.</p>
+<p>A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The
+<em>UserProfile</em> schema contains the following set of columns:</p>
+<ol>
+<li><em>uid</em></li>
+<li><em>displayName</em></li>
+<li><em>tags</em></li>
+<li><em>preferences.theme</em></li>
+<li><em>preferences.language</em></li>
+<li><em>preferences.notifications</em></li>
+</ol>
+<h2 id="logical-columnar-view" tabindex="-1">Logical Columnar View <a class="direct-link" href="#logical-columnar-view" aria-hidden="true">#</a></h2>
+<p>These are examples of concrete instances of the <em>UserProfile</em> schema defined in Figure 1. They have varying levels
+of completeness.</p>
 <div class="record-container">
-<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"a1b2c3d4"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Alice Wonderland"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"reader"</span><span class="token punctuation">,</span><br>    <span class="token string">"dreamer"</span><br>  <span class="token punctuation">]</span><br><span class="token punctuation">}</span></code></pre>
-<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"e5f6g7h8"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Chris Coder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"developer"</span><span class="token punctuation">,</span><br>    <span class="token string">"python"</span><span class="token punctuation">,</span><br>    <span class="token string">"oss"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"light"</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
-<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"i9j0k1l2"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Bob The Builder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"builder"</span><span class="token punctuation">,</span><br>    <span class="token string">"diy"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"dark"</span><span class="token punctuation">,</span><br>    <span class="token property">"notifications"</span><span class="token operator">:</span> <span class="token boolean">true</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"1234"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Alice Wonderland"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"reader"</span><span class="token punctuation">,</span><br>    <span class="token string">"dreamer"</span><br>  <span class="token punctuation">]</span><br><span class="token punctuation">}</span></code></pre>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"5678"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Chris Coder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"developer"</span><span class="token punctuation">,</span><br>    <span class="token string">"python"</span><span class="token punctuation">,</span><br>    <span class="token string">"oss"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"light"</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span><br>  <span class="token property">"uid"</span><span class="token operator">:</span> <span class="token string">"9012"</span><span class="token punctuation">,</span><br>  <span class="token property">"displayName"</span><span class="token operator">:</span> <span class="token string">"Bob The Builder"</span><span class="token punctuation">,</span><br>  <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>    <span class="token string">"builder"</span><span class="token punctuation">,</span><br>    <span class="token string">"diy"</span><br>  <span class="token punctuation">]</span><span class="token punctuation">,</span><br>  <span class="token property">"preferences"</span><span class="token operator">:</span> <span class="token punctuation">{</span><br>    <span class="token property">"theme"</span><span class="token operator">:</span> <span class="token string">"dark"</span><span class="token punctuation">,</span><br>    <span class="token property">"notifications"</span><span class="token operator">:</span> <span class="token boolean">false</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
 </div>
+<p>Let see how these examples map to a logical columnar view.</p>
+<table class="col-view">
+  <thead>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>[reader, dreamer]</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>[developer, python, oss]</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>[builder, diy]</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
+<p>The <em>tag</em> array values can be expanded further so that each value is in its own separate row. This is similar to the
+functionality of the <em>unnest</em> function in SQL.</p>
+<table class="col-view">
+  <thead>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>reader</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>dreamer</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>developer</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>python</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>oss</td>
+      <td>light</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>builder</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>diy</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
+<p>After expanding the <em>tags</em> the total number of rows exploded. There are more holes (properties which are not present)
+now in <em>preferences.theme</em> and <em>preferences.notifications</em> columns.</p>
+<p>The holes can be filled by defining sensible default values.</p>
+<table class="col-view">
+  <thead>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>reader</td>
+      <td class="default-value">system</td>
+      <td class="default-value">true</td>
+    </tr>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>dreamer</td>
+      <td class="default-value">system</td>
+      <td class="default-value">true</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>developer</td>
+      <td>light</td>
+      <td class="default-value">true</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>python</td>
+      <td>light</td>
+      <td class="default-value">true</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>oss</td>
+      <td>light</td>
+      <td class="default-value">true</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>builder</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>diy</td>
+      <td>dark</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
+<p>This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which
+is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data
+structures the same as flat, relational data.</p>
+<p>This is not an efficient representation.</p>
+<hr>
+<p>Real-world nested datasets are sparse.</p>
+<p>But this is not an efficient representation.</p>
+<p>There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens
+of thousands of elements, or more? What if there are multiple repeated fields?</p>
+<p>Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a
+field is not present in the original data instance, physical storage has to be allocated to store the default value.</p>
