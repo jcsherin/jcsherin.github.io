@@ -228,6 +228,15 @@ schema both the fields are marked as optional.&lt;/p&gt;
 identify which properties are missing from it. We need the schema to validate an instance and also know which
 properties are not present in it.&lt;/p&gt;
 &lt;h1 id=&quot;the-dremel-encoding&quot; tabindex=&quot;-1&quot;&gt;The Dremel Encoding &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#the-dremel-encoding&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;A desirable property of record shredding is that it should not inflate the size of the stored nested data structure.
+If the shredded encoding ended up being smaller than directly storing the nested data structure itself, that will
+be a great win.&lt;/p&gt;
+&lt;p&gt;The abstract representation of record shredding introduced in the beginning is not well-designed. The most obvious
+issue is the data redundancy required for the &lt;em&gt;tags&lt;/em&gt; repeated field. The number of rows in this representation
+depends on the cardinality (number of elements) of the &lt;em&gt;tags&lt;/em&gt; property.&lt;/p&gt;
+&lt;p&gt;Also to keep complexity low without sacrificing the essence of how record shredding works we deliberately did not tackle
+the problem of how missing properties should be represented.&lt;/p&gt;
+&lt;p&gt;The three examples of &lt;em&gt;UserProfile&lt;/em&gt; from above after shredding using the Dremel technique is represented as shown below.&lt;/p&gt;
 &lt;table class=&quot;col-view&quot;&gt;
   &lt;thead&gt;
     &lt;tr&gt;
@@ -293,6 +302,12 @@ properties are not present in it.&lt;/p&gt;
     &lt;/tr&gt;
   &lt;/tbody&gt;
 &lt;/table&gt;
+&lt;p&gt;This representation wastes no space for representing properties which are missing in the values. The cardinality of
+a repeated field like &lt;em&gt;tags&lt;/em&gt; has no effect on other columns. This representation ends up taking less space than
+directly storing the &lt;em&gt;UserProfile&lt;/em&gt; objects.&lt;/p&gt;
+&lt;p&gt;But they do not line up nicely into rows which informs you where a record begins and ends just by visual inspection.
+So if you are thinking there is not enough information here to be able to reassemble the original values, you are on
+the right track.&lt;/p&gt;
 </content>
 	</entry>
 	
