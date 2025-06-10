@@ -106,6 +106,8 @@ array value in _tags_ as input, and returns rows for each element in the array.
   </tbody>
 </table>
 
+## Record Assembly
+
 Next record assembly takes these row values and the column names as input, to fully reconstruct the nested data
 structure back to its original form.
 
@@ -143,8 +145,9 @@ _UserProfile_ object preserves its original structure but only contains these fi
 
 ## Columnar Data Layout
 
-It is implied above that record shredding and assembly uses a columnar data layout. And it is evident how this
-critical for being able to reconstruct a partial projection from the shredded values.
+It is implied above that record shredding and assembly uses a columnar data layout. And this is critical for
+reassembly of partial projection from the shredded values in storage. It is an efficient representation because only
+the subset of columns required for reassembly have to be scanned.
 
 Typically relational data is associated with row storage. If you access the row (say _id_ = 103) it retrieves all
 the related attributes from storage and writes _(103, "Eve", "eavesdropper")_ to memory. This matches the access
@@ -231,458 +234,854 @@ result. In this layout the values of a column are stored next to each other.
   </tbody>
 </table>
 
-In database terminology this optimization where you scan only the relevant columns in a query is known as
-_projection pushdown_. It helps reduce the total amount of I/O required for scan-heavy analytical queries by reading
-only what is required by the query from storage into memory.
-
----
-
-### Introduction
-
-TBD
-
-### Record Shredding:
-
-- Flattened representation of (conceptually) a nested data structure.
-- Requires a schema
-  - Repeated Fields
-  - Optional Fields
-- Enumerating Columns From Schema
-- Concrete example: _UserProfile_
-
-### Columnar Storage
-
-- Implied by Record Assembly
-- Performance Benefits
-  - Projection Pushdown
-  - Data Parallelism
-  - Vectorization
-
-### Shredding Challenges
-
-- Structural variations: 1 schema : N instances
-
-### Schema Columns
-
-- Why schema ? (1 schema: N instances)
-- Schema: optional, repeated fields
-- Enumerating Columns From Schema
-
-### Repetition Levels Are Complicated
-
-- [[1,2], [3, 4]]
-
-### Why Record Shredding Is Necessary?
-
-- Direct efficient columnar representation for fast ad-hoc queries
-- Why columnar for ad-hoc queries?
-  - Read only the relevant columns (projection pushdown)
-  - Data Parallelism
-  - Vectorization
-
-### Repetition Levels
-
-- Is complicated and not trivial to understand or implement
-- Concrete example: [[0, 1], [2, 3]]
-
----
-
-# Recap: Flat, Relational Data
-
-## Row-Major vs. Column-Major Representation
-
-The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches
-the transactional access patterns which targets to read, modify or delete a specific row of data or a very small set of
-rows. The filtering conditions of the query have high-selectivity. When reading a row all the column attributes in
-the relation are materialized in main memory. Having the entire row contiguous in memory once fetched minimizes
-additional disk I/O.
-
-On the other hand in an analytical database like ClickHouse or DuckDB, the access pattern is different enough that
-it makes sense to store the same data in column-major order. Data for each column is stored contiguously. This is
-because analytical workloads are primarily read-only, scan-heavy, heavily utilize aggregations with an explicit
-goal of summarizing the data. The primary advantage here is that only those columns which are relevant for a query
-needs to be materialized in memory. For scan-heavy queries which often have low-selectivity, this has a significant
-impact on minimizing disk I/O and reducing memory footprint.
-
-<div class="table-container">
-  <table class="col-view">
-    <thead>
-      <tr>
-        <th colspan="3">column-major order</th>
-      </tr>
-      <tr>
-        <th>id</th>
-        <th>username</th>
-        <th>role</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>101</td>
-        <td>Alice</td>
-        <td>sender</td>
-      </tr>
-      <tr>
-        <td>102</td>
-        <td>Bob</td>
-        <td>receiver</td>
-      </tr>
-      <tr>
-        <td>103</td>
-        <td>Eve</td>
-        <td>eavesdropper</td>
-      </tr>
-      <tr>
-        <td>104</td>
-        <td>Trudy</td>
-        <td>intruder</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <table class="row-view">
-    <thead>
-      <tr>
-        <th colspan="3">row-major order</th>
-      </tr>
-      <tr>
-        <th>id</th>
-        <th>username</th>
-        <th>role</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>101</td>
-        <td>Alice</td>
-        <td>sender</td>
-      </tr>
-      <tr>
-        <td>102</td>
-        <td>Bob</td>
-        <td>receiver</td>
-      </tr>
-      <tr>
-        <td>103</td>
-        <td>Eve</td>
-        <td>eavesdropper</td>
-      </tr>
-      <tr>
-        <td>104</td>
-        <td>Trudy</td>
-        <td>intruder</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
-## Performance Benefits
-
-The data locality in columnar storage is crucial for query performance. It enables data parallelism where different
-blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar
-operations with vectorized processing. Together data parallelism and vectorized processing has a big impact in
-making analytical queries execute faster and efficiently.
-
-# Record Shredding
-
-Record shredding is the act of breaking up nested data structures into a flat, relational format. From above, we know
-the benefits of columnar representation for analytical workloads. By doing this, the benefits of data parallelism,
-vectorization and efficient I/O extends to nested data structures as well. The ability to directly represent nested
-data structures also leads to operational simplicity. A nested data structure doesn't have to be manually normalized
-into relational form which is ready for ad-hoc querying. There is no human judgement required. The ad-hoc queries
-are going to execute on direct columnar representation of the nested data structure. That is the promised land!
-
-# Record Assembly
-
-Record assembly is how the columnar representation is interpreted to reconstruct either fully or partially the
-stored nested data structures. Similar to flat, relational data here too we want to read only the relevant columns
-and ignore the rest. So the ability to partially reconstruct only the relevant parts of the nested data structure is
-an important feature.
-
-# Nested Data Structure
-
-This is a place for claims:
-
-- structural variation
-- sparse
-- can't shred without schema
-- columns fall out from schema
-
-## Schema: Optional & Repeated Fields
-
-The figure 1. shows all the fields of a _UserProfile_ nested data structure.
-
-A field has a name and a data type.
-
-An _optional_ field is not mandatory. It does not have to be present in the instance of data. Consider _preferences.
-theme_ which is composed of two optional fields. There are three possible variations:
-
-1. Both the fields are present: _preferences.theme_.
-2. The _theme_ field is not present: _preferences_.
-3. Both fields are not present.
-
-A _repeated_ field is an array of values and it can be empty. The element data type of repeated field can be a
-primitive type like Integer, String or Boolean. The _tags_ field belongs to this category. The element data type can
-also be a _Struct_.
-
-![A tree diagram representation for `UserProfile` nested data type](img/user_profile_schema.svg)
-Figure 1. Schema for UserProfile
-
-## Enumerating Columns
-
-In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it
-possible to identify which columns are present in an instance of data, and more important which ones are not. From
-the schema we can enumerate all the columns of the nested data structure.
-
-A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The
-_UserProfile_ schema contains the following set of columns:
-
-1. _uid_
-2. _displayName_
-3. _tags_
-4. _preferences.theme_
-5. _preferences.language_
-6. _preferences.notifications_
-
-## Logical Columnar View
-
-These are examples of concrete instances of the _UserProfile_ schema defined in Figure 1. They have varying levels
-of completeness.
-
-<div class="record-container">
-
-```json
-{
-  "uid": "1234",
-  "displayName": "Alice Wonderland",
-  "tags": [
-    "reader",
-    "dreamer"
-  ]
-}
-```
-
-```json
-{
-  "uid": "5678",
-  "displayName": "Chris Coder",
-  "tags": [
-    "developer",
-    "python",
-    "oss"
-  ],
-  "preferences": {
-    "theme": "light"
-  }
-}
-```
-
-```json
-{
-  "uid": "9012",
-  "displayName": "Bob The Builder",
-  "tags": [
-    "builder",
-    "diy"
-  ],
-  "preferences": {
-    "theme": "dark",
-    "notifications": false
-  }
-}
-```
-
-</div>
-
-Let see how these examples map to a logical columnar view.
-
-<table class="col-view">
-  <thead>
-    <tr>
-      <th>uid</th>
-      <th>displayName</th>
-      <th>tags</th>
-      <th>preferences.theme</th>
-      <th>preferences.notifications</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>1234</td>
-      <td>Alice Wonderland</td>
-      <td>[reader, dreamer]</td>
-      <td></td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>[developer, python, oss]</td>
-      <td>light</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>9012</td>
-      <td>Bob The Builder</td>
-      <td>[builder, diy]</td>
-      <td>dark</td>
-      <td>false</td>
-    </tr>
-  </tbody>
-</table>
-
-The _tag_ array values can be expanded further so that each value is in its own separate row. This is similar to the
-functionality of the _unnest_ function in SQL.
-
-<table class="col-view">
-  <thead>
-    <tr>
-      <th>uid</th>
-      <th>displayName</th>
-      <th>tags</th>
-      <th>preferences.theme</th>
-      <th>preferences.notifications</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>1234</td>
-      <td>Alice Wonderland</td>
-      <td>reader</td>
-      <td></td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>1234</td>
-      <td>Alice Wonderland</td>
-      <td>dreamer</td>
-      <td></td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>developer</td>
-      <td>light</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>python</td>
-      <td>light</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>oss</td>
-      <td>light</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td>9012</td>
-      <td>Bob The Builder</td>
-      <td>builder</td>
-      <td>dark</td>
-      <td>false</td>
-    </tr>
-    <tr>
-      <td>9012</td>
-      <td>Bob The Builder</td>
-      <td>diy</td>
-      <td>dark</td>
-      <td>false</td>
-    </tr>
-  </tbody>
-</table>
-
-After expanding the _tags_ the total number of rows exploded. There are more holes (properties which are not present)
-now in _preferences.theme_ and _preferences.notifications_ columns.
-
-The holes can be filled by defining sensible default values.
-
-<table class="col-view">
-  <thead>
-    <tr>
-      <th>uid</th>
-      <th>displayName</th>
-      <th>tags</th>
-      <th>preferences.theme</th>
-      <th>preferences.notifications</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>1234</td>
-      <td>Alice Wonderland</td>
-      <td>reader</td>
-      <td class="default-value">system</td>
-      <td class="default-value">true</td>
-    </tr>
-    <tr>
-      <td>1234</td>
-      <td>Alice Wonderland</td>
-      <td>dreamer</td>
-      <td class="default-value">system</td>
-      <td class="default-value">true</td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>developer</td>
-      <td>light</td>
-      <td class="default-value">true</td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>python</td>
-      <td>light</td>
-      <td class="default-value">true</td>
-    </tr>
-    <tr>
-      <td>5678</td>
-      <td>Chris Coder</td>
-      <td>oss</td>
-      <td>light</td>
-      <td class="default-value">true</td>
-    </tr>
-    <tr>
-      <td>9012</td>
-      <td>Bob The Builder</td>
-      <td>builder</td>
-      <td>dark</td>
-      <td>false</td>
-    </tr>
-    <tr>
-      <td>9012</td>
-      <td>Bob The Builder</td>
-      <td>diy</td>
-      <td>dark</td>
-      <td>false</td>
-    </tr>
-  </tbody>
-</table>
-
-This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which
-is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data
-structures the same as flat, relational data.
-
-This is not an efficient representation.
-
----
-
-Real-world nested datasets are sparse.
-
-But this is not an efficient representation.
-
-There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens
-of thousands of elements, or more? What if there are multiple repeated fields?
-
-Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a
-field is not present in the original data instance, physical storage has to be allocated to store the default value.
+In database terms this optimization is known as _projection pushdown_. It helps optimize the amount of disk I/O
+necessary for scanning data from physical storage.
 
+# Schema
+
+The schema is the single source of truth which is used for record shredding and assembly.
+
+![UserProfile Schema](img/schema_userprofile.svg)
+_Figure 2. Schema of UserProfile object_
+
+If you refer to Figure 1 it contains a concrete instance of the _UserProfile_ schema. The _preferences.language_ is
+not present in it. In the schema it is defined as an optional field.
+
+
+
+## Optional Fields
+
+[//]: # (---)
+
+[//]: # ()
+[//]: # (### Introduction)
+
+[//]: # ()
+[//]: # (TBD)
+
+[//]: # ()
+[//]: # (### Record Shredding:)
+
+[//]: # ()
+[//]: # (- Flattened representation of &#40;conceptually&#41; a nested data structure.)
+
+[//]: # (- Requires a schema)
+
+[//]: # (  - Repeated Fields)
+
+[//]: # (  - Optional Fields)
+
+[//]: # (- Enumerating Columns From Schema)
+
+[//]: # (- Concrete example: _UserProfile_)
+
+[//]: # ()
+[//]: # (### Columnar Storage)
+
+[//]: # ()
+[//]: # (- Implied by Record Assembly)
+
+[//]: # (- Performance Benefits)
+
+[//]: # (  - Projection Pushdown)
+
+[//]: # (  - Data Parallelism)
+
+[//]: # (  - Vectorization)
+
+[//]: # ()
+[//]: # (### Shredding Challenges)
+
+[//]: # ()
+[//]: # (- Structural variations: 1 schema : N instances)
+
+[//]: # ()
+[//]: # (### Schema Columns)
+
+[//]: # ()
+[//]: # (- Why schema ? &#40;1 schema: N instances&#41;)
+
+[//]: # (- Schema: optional, repeated fields)
+
+[//]: # (- Enumerating Columns From Schema)
+
+[//]: # ()
+[//]: # (### Repetition Levels Are Complicated)
+
+[//]: # ()
+[//]: # (- [[1,2], [3, 4]])
+
+[//]: # ()
+[//]: # (### Why Record Shredding Is Necessary?)
+
+[//]: # ()
+[//]: # (- Direct efficient columnar representation for fast ad-hoc queries)
+
+[//]: # (- Why columnar for ad-hoc queries?)
+
+[//]: # (  - Read only the relevant columns &#40;projection pushdown&#41;)
+
+[//]: # (  - Data Parallelism)
+
+[//]: # (  - Vectorization)
+
+[//]: # ()
+[//]: # (### Repetition Levels)
+
+[//]: # ()
+[//]: # (- Is complicated and not trivial to understand or implement)
+
+[//]: # (- Concrete example: [[0, 1], [2, 3]])
+
+[//]: # ()
+[//]: # (---)
+
+[//]: # ()
+[//]: # (# Recap: Flat, Relational Data)
+
+[//]: # ()
+[//]: # (## Row-Major vs. Column-Major Representation)
+
+[//]: # ()
+[//]: # (The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches)
+
+[//]: # (the transactional access patterns which targets to read, modify or delete a specific row of data or a very small set of)
+
+[//]: # (rows. The filtering conditions of the query have high-selectivity. When reading a row all the column attributes in)
+
+[//]: # (the relation are materialized in main memory. Having the entire row contiguous in memory once fetched minimizes)
+
+[//]: # (additional disk I/O.)
+
+[//]: # ()
+[//]: # (On the other hand in an analytical database like ClickHouse or DuckDB, the access pattern is different enough that)
+
+[//]: # (it makes sense to store the same data in column-major order. Data for each column is stored contiguously. This is)
+
+[//]: # (because analytical workloads are primarily read-only, scan-heavy, heavily utilize aggregations with an explicit)
+
+[//]: # (goal of summarizing the data. The primary advantage here is that only those columns which are relevant for a query)
+
+[//]: # (needs to be materialized in memory. For scan-heavy queries which often have low-selectivity, this has a significant)
+
+[//]: # (impact on minimizing disk I/O and reducing memory footprint.)
+
+[//]: # ()
+[//]: # (<div class="table-container">)
+
+[//]: # (  <table class="col-view">)
+
+[//]: # (    <thead>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <th colspan="3">column-major order</th>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <th>id</th>)
+
+[//]: # (        <th>username</th>)
+
+[//]: # (        <th>role</th>)
+
+[//]: # (      </tr>)
+
+[//]: # (    </thead>)
+
+[//]: # (    <tbody>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>101</td>)
+
+[//]: # (        <td>Alice</td>)
+
+[//]: # (        <td>sender</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>102</td>)
+
+[//]: # (        <td>Bob</td>)
+
+[//]: # (        <td>receiver</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>103</td>)
+
+[//]: # (        <td>Eve</td>)
+
+[//]: # (        <td>eavesdropper</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>104</td>)
+
+[//]: # (        <td>Trudy</td>)
+
+[//]: # (        <td>intruder</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (    </tbody>)
+
+[//]: # (  </table>)
+
+[//]: # ()
+[//]: # (  <table class="row-view">)
+
+[//]: # (    <thead>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <th colspan="3">row-major order</th>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <th>id</th>)
+
+[//]: # (        <th>username</th>)
+
+[//]: # (        <th>role</th>)
+
+[//]: # (      </tr>)
+
+[//]: # (    </thead>)
+
+[//]: # (    <tbody>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>101</td>)
+
+[//]: # (        <td>Alice</td>)
+
+[//]: # (        <td>sender</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>102</td>)
+
+[//]: # (        <td>Bob</td>)
+
+[//]: # (        <td>receiver</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>103</td>)
+
+[//]: # (        <td>Eve</td>)
+
+[//]: # (        <td>eavesdropper</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (      <tr>)
+
+[//]: # (        <td>104</td>)
+
+[//]: # (        <td>Trudy</td>)
+
+[//]: # (        <td>intruder</td>)
+
+[//]: # (      </tr>)
+
+[//]: # (    </tbody>)
+
+[//]: # (  </table>)
+
+[//]: # (</div>)
+
+[//]: # ()
+[//]: # (## Performance Benefits)
+
+[//]: # ()
+[//]: # (The data locality in columnar storage is crucial for query performance. It enables data parallelism where different)
+
+[//]: # (blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar)
+
+[//]: # (operations with vectorized processing. Together data parallelism and vectorized processing has a big impact in)
+
+[//]: # (making analytical queries execute faster and efficiently.)
+
+[//]: # ()
+[//]: # (# Record Shredding)
+
+[//]: # ()
+[//]: # (Record shredding is the act of breaking up nested data structures into a flat, relational format. From above, we know)
+
+[//]: # (the benefits of columnar representation for analytical workloads. By doing this, the benefits of data parallelism,)
+
+[//]: # (vectorization and efficient I/O extends to nested data structures as well. The ability to directly represent nested)
+
+[//]: # (data structures also leads to operational simplicity. A nested data structure doesn't have to be manually normalized)
+
+[//]: # (into relational form which is ready for ad-hoc querying. There is no human judgement required. The ad-hoc queries)
+
+[//]: # (are going to execute on direct columnar representation of the nested data structure. That is the promised land!)
+
+[//]: # ()
+[//]: # (# Record Assembly)
+
+[//]: # ()
+[//]: # (Record assembly is how the columnar representation is interpreted to reconstruct either fully or partially the)
+
+[//]: # (stored nested data structures. Similar to flat, relational data here too we want to read only the relevant columns)
+
+[//]: # (and ignore the rest. So the ability to partially reconstruct only the relevant parts of the nested data structure is)
+
+[//]: # (an important feature.)
+
+[//]: # ()
+[//]: # (# Nested Data Structure)
+
+[//]: # ()
+[//]: # (This is a place for claims:)
+
+[//]: # ()
+[//]: # (- structural variation)
+
+[//]: # (- sparse)
+
+[//]: # (- can't shred without schema)
+
+[//]: # (- columns fall out from schema)
+
+[//]: # ()
+[//]: # (## Schema: Optional & Repeated Fields)
+
+[//]: # ()
+[//]: # (The figure 1. shows all the fields of a _UserProfile_ nested data structure.)
+
+[//]: # ()
+[//]: # (A field has a name and a data type.)
+
+[//]: # ()
+[//]: # (An _optional_ field is not mandatory. It does not have to be present in the instance of data. Consider _preferences.)
+
+[//]: # (theme_ which is composed of two optional fields. There are three possible variations:)
+
+[//]: # ()
+[//]: # (1. Both the fields are present: _preferences.theme_.)
+
+[//]: # (2. The _theme_ field is not present: _preferences_.)
+
+[//]: # (3. Both fields are not present.)
+
+[//]: # ()
+[//]: # (A _repeated_ field is an array of values and it can be empty. The element data type of repeated field can be a)
+
+[//]: # (primitive type like Integer, String or Boolean. The _tags_ field belongs to this category. The element data type can)
+
+[//]: # (also be a _Struct_.)
+
+[//]: # ()
+[//]: # (![A tree diagram representation for `UserProfile` nested data type]&#40;img/user_profile_schema.svg&#41;)
+
+[//]: # (Figure 1. Schema for UserProfile)
+
+[//]: # ()
+[//]: # (## Enumerating Columns)
+
+[//]: # ()
+[//]: # (In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it)
+
+[//]: # (possible to identify which columns are present in an instance of data, and more important which ones are not. From)
+
+[//]: # (the schema we can enumerate all the columns of the nested data structure.)
+
+[//]: # ()
+[//]: # (A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The)
+
+[//]: # (_UserProfile_ schema contains the following set of columns:)
+
+[//]: # ()
+[//]: # (1. _uid_)
+
+[//]: # (2. _displayName_)
+
+[//]: # (3. _tags_)
+
+[//]: # (4. _preferences.theme_)
+
+[//]: # (5. _preferences.language_)
+
+[//]: # (6. _preferences.notifications_)
+
+[//]: # ()
+[//]: # (## Logical Columnar View)
+
+[//]: # ()
+[//]: # (These are examples of concrete instances of the _UserProfile_ schema defined in Figure 1. They have varying levels)
+
+[//]: # (of completeness.)
+
+[//]: # ()
+[//]: # (<div class="record-container">)
+
+[//]: # ()
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "uid": "1234",)
+
+[//]: # (  "displayName": "Alice Wonderland",)
+
+[//]: # (  "tags": [)
+
+[//]: # (    "reader",)
+
+[//]: # (    "dreamer")
+
+[//]: # (  ])
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "uid": "5678",)
+
+[//]: # (  "displayName": "Chris Coder",)
+
+[//]: # (  "tags": [)
+
+[//]: # (    "developer",)
+
+[//]: # (    "python",)
+
+[//]: # (    "oss")
+
+[//]: # (  ],)
+
+[//]: # (  "preferences": {)
+
+[//]: # (    "theme": "light")
+
+[//]: # (  })
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (```json)
+
+[//]: # ({)
+
+[//]: # (  "uid": "9012",)
+
+[//]: # (  "displayName": "Bob The Builder",)
+
+[//]: # (  "tags": [)
+
+[//]: # (    "builder",)
+
+[//]: # (    "diy")
+
+[//]: # (  ],)
+
+[//]: # (  "preferences": {)
+
+[//]: # (    "theme": "dark",)
+
+[//]: # (    "notifications": false)
+
+[//]: # (  })
+
+[//]: # (})
+
+[//]: # (```)
+
+[//]: # ()
+[//]: # (</div>)
+
+[//]: # ()
+[//]: # (Let see how these examples map to a logical columnar view.)
+
+[//]: # ()
+[//]: # (<table class="col-view">)
+
+[//]: # (  <thead>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <th>uid</th>)
+
+[//]: # (      <th>displayName</th>)
+
+[//]: # (      <th>tags</th>)
+
+[//]: # (      <th>preferences.theme</th>)
+
+[//]: # (      <th>preferences.notifications</th>)
+
+[//]: # (    </tr>)
+
+[//]: # (  </thead>)
+
+[//]: # (  <tbody>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>1234</td>)
+
+[//]: # (      <td>Alice Wonderland</td>)
+
+[//]: # (      <td>[reader, dreamer]</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>[developer, python, oss]</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>9012</td>)
+
+[//]: # (      <td>Bob The Builder</td>)
+
+[//]: # (      <td>[builder, diy]</td>)
+
+[//]: # (      <td>dark</td>)
+
+[//]: # (      <td>false</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (  </tbody>)
+
+[//]: # (</table>)
+
+[//]: # ()
+[//]: # (The _tag_ array values can be expanded further so that each value is in its own separate row. This is similar to the)
+
+[//]: # (functionality of the _unnest_ function in SQL.)
+
+[//]: # ()
+[//]: # (<table class="col-view">)
+
+[//]: # (  <thead>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <th>uid</th>)
+
+[//]: # (      <th>displayName</th>)
+
+[//]: # (      <th>tags</th>)
+
+[//]: # (      <th>preferences.theme</th>)
+
+[//]: # (      <th>preferences.notifications</th>)
+
+[//]: # (    </tr>)
+
+[//]: # (  </thead>)
+
+[//]: # (  <tbody>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>1234</td>)
+
+[//]: # (      <td>Alice Wonderland</td>)
+
+[//]: # (      <td>reader</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>1234</td>)
+
+[//]: # (      <td>Alice Wonderland</td>)
+
+[//]: # (      <td>dreamer</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>developer</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>python</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>oss</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td></td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>9012</td>)
+
+[//]: # (      <td>Bob The Builder</td>)
+
+[//]: # (      <td>builder</td>)
+
+[//]: # (      <td>dark</td>)
+
+[//]: # (      <td>false</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>9012</td>)
+
+[//]: # (      <td>Bob The Builder</td>)
+
+[//]: # (      <td>diy</td>)
+
+[//]: # (      <td>dark</td>)
+
+[//]: # (      <td>false</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (  </tbody>)
+
+[//]: # (</table>)
+
+[//]: # ()
+[//]: # (After expanding the _tags_ the total number of rows exploded. There are more holes &#40;properties which are not present&#41;)
+
+[//]: # (now in _preferences.theme_ and _preferences.notifications_ columns.)
+
+[//]: # ()
+[//]: # (The holes can be filled by defining sensible default values.)
+
+[//]: # ()
+[//]: # (<table class="col-view">)
+
+[//]: # (  <thead>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <th>uid</th>)
+
+[//]: # (      <th>displayName</th>)
+
+[//]: # (      <th>tags</th>)
+
+[//]: # (      <th>preferences.theme</th>)
+
+[//]: # (      <th>preferences.notifications</th>)
+
+[//]: # (    </tr>)
+
+[//]: # (  </thead>)
+
+[//]: # (  <tbody>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>1234</td>)
+
+[//]: # (      <td>Alice Wonderland</td>)
+
+[//]: # (      <td>reader</td>)
+
+[//]: # (      <td class="default-value">system</td>)
+
+[//]: # (      <td class="default-value">true</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>1234</td>)
+
+[//]: # (      <td>Alice Wonderland</td>)
+
+[//]: # (      <td>dreamer</td>)
+
+[//]: # (      <td class="default-value">system</td>)
+
+[//]: # (      <td class="default-value">true</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>developer</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td class="default-value">true</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>python</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td class="default-value">true</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>5678</td>)
+
+[//]: # (      <td>Chris Coder</td>)
+
+[//]: # (      <td>oss</td>)
+
+[//]: # (      <td>light</td>)
+
+[//]: # (      <td class="default-value">true</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>9012</td>)
+
+[//]: # (      <td>Bob The Builder</td>)
+
+[//]: # (      <td>builder</td>)
+
+[//]: # (      <td>dark</td>)
+
+[//]: # (      <td>false</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (    <tr>)
+
+[//]: # (      <td>9012</td>)
+
+[//]: # (      <td>Bob The Builder</td>)
+
+[//]: # (      <td>diy</td>)
+
+[//]: # (      <td>dark</td>)
+
+[//]: # (      <td>false</td>)
+
+[//]: # (    </tr>)
+
+[//]: # (  </tbody>)
+
+[//]: # (</table>)
+
+[//]: # ()
+[//]: # (This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which)
+
+[//]: # (is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data)
+
+[//]: # (structures the same as flat, relational data.)
+
+[//]: # ()
+[//]: # (This is not an efficient representation.)
+
+[//]: # ()
+[//]: # (---)
+
+[//]: # ()
+[//]: # (Real-world nested datasets are sparse.)
+
+[//]: # ()
+[//]: # (But this is not an efficient representation.)
+
+[//]: # ()
+[//]: # (There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens)
+
+[//]: # (of thousands of elements, or more? What if there are multiple repeated fields?)
+
+[//]: # ()
+[//]: # (Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a)
+
+[//]: # (field is not present in the original data instance, physical storage has to be allocated to store the default value.)
+
+[//]: # ()
 
 [//]: # (```graphql)
 
