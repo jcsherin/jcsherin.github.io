@@ -141,17 +141,21 @@ _UserProfile_ object preserves its original structure but only contains these fi
 }
 ```
 
-# Columnar Storage
+## Columnar Data Layout
 
-There is an implicit assumption in how shredded data is organized. During record assembly given a subset of columns
-it should be possible to read only those columns from storage and skip reading the remaining columns. That tells us
-that the shredded data has to be organized by columns. The values of each column are stored next to each
-other.
+It is implied above that record shredding and assembly uses a columnar data layout. And it is evident how this
+critical for being able to reconstruct a partial projection from the shredded values.
 
-<table class="col-view">
+Typically relational data is associated with row storage. If you access the row (say _id_ = 103) it retrieves all
+the related attributes from storage and writes _(103, "Eve", "eavesdropper")_ to memory. This matches the access
+patterns of transactional applications which needs to read or write a single row or a very small set of rows at a
+time. The row storage is optimized for heavy read-write workloads which works on a single row or a very small set of
+rows.
+
+<table class="row-view">
   <thead>
     <tr>
-      <th colspan="3">UserRole</th>
+      <th colspan="3">Row Format</th>
     </tr>
     <tr>
       <th>id</th>
@@ -183,32 +187,53 @@ other.
   </tbody>
 </table>
 
-The _UserRole_ relation is stored as column stripes. This arrangement makes it possible to read only a specific
-column without having to read related row values from the other columns. You can read only the _username_ column
-values without having to read its associated values in the _id_, or _role_ columns.
+The row storage format is not optimized for access patterns of analytical queries. For example to compute the value
+of _COUNT (DISTINCT role)_ all data will have to be retrieved from storage, written to memory and scanned to
+compute the result. Even though the _id_ and _username_ columns serves no purpose in computing the final result,
+they are still materialized into memory from storage. This is unavoidable because row value are stored next to each
+other.
 
-This is known as columnar storage.
+If the data is instead stored in a columnar layout, only the _role_ column needs to be scanned to compute the final
+result. In this layout the values of a column are stored next to each other.
 
-It is the standard for how data is organized internally in the storage engines of modern analytical databases like
-ClickHouse and DuckDB.
+<table class="col-view">
+  <thead>
+    <tr>
+      <th colspan="3">Columnar Format</th>
+    </tr>
+    <tr>
+      <th>id</th>
+      <th>username</th>
+      <th>role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>101</td>
+      <td>Alice</td>
+      <td>sender</td>
+    </tr>
+    <tr>
+      <td>102</td>
+      <td>Bob</td>
+      <td>receiver</td>
+    </tr>
+    <tr>
+      <td>103</td>
+      <td>Eve</td>
+      <td>eavesdropper</td>
+    </tr>
+    <tr>
+      <td>104</td>
+      <td>Trudy</td>
+      <td>intruder</td>
+    </tr>
+  </tbody>
+</table>
 
-There are also column-oriented data formats like Apache Parquet which are not tied to a specific database engine. A
-Parquet file has wide support in variety of modern programming languages. You can also directly run SQL queries on a
-Parquet file from databases like ClickHouse and DuckDB.
-
-## Performance Benefits
-
-The optimization where you read only the relevant columns from columnar storage is known as projection pushdown. By
-reading only what is required, we save on disk I/O. This in turn reduces the memory footprint when the column values are
-read into memory.
-
-The data locality of column values being stored next to each other is crucial for query performance. The values can
-be partitioned into chunks and processed in parallel on multiple CPU cores. This is known as data parallelism. The
-other benefit of data locality is that scalar operations on data can instead be vectorized. It produces the same
-results, but uses fewer instructions per data and executes faster.
-
-These optimizations are commonly associated with flat, relational data. But with record shredding the
-performance benefits of storage, retrieval and query execution now extends to nested data structures in shredded form.
+In database terminology this optimization where you scan only the relevant columns in a query is known as
+_projection pushdown_. It helps reduce the total amount of I/O required for scan-heavy analytical queries by reading
+only what is required by the query from storage into memory.
 
 ---
 
