@@ -77,17 +77,7 @@
   </url>
   
   <url>
-    <loc>https://jacobsherin.com/tags/columnar-storage/</loc>
-    <lastmod>2025-06-10</lastmod>
-  </url>
-  
-  <url>
     <loc>https://jacobsherin.com/tags/another-tag/</loc>
-    <lastmod>2025-06-10</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/tags/second-tag/</loc>
     <lastmod>2025-06-10</lastmod>
   </url>
   
@@ -97,7 +87,17 @@
   </url>
   
   <url>
+    <loc>https://jacobsherin.com/tags/second-tag/</loc>
+    <lastmod>2025-06-10</lastmod>
+  </url>
+  
+  <url>
     <loc>https://jacobsherin.com/tags/posts-with-two-tags/</loc>
+    <lastmod>2025-06-10</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://jacobsherin.com/tags/columnar-storage/</loc>
     <lastmod>2025-06-10</lastmod>
   </url>
 </urlset>
