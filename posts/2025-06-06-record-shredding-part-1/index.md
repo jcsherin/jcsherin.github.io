@@ -306,7 +306,73 @@ The recurring theme here is that by looking at an instance of a nested structure
 identify which properties are missing from it. We need the schema to validate an instance and also know which
 properties are not present in it.
 
-## Optional Fields
+# The Dremel Encoding
+
+<table class="col-view">
+  <thead>
+    <tr>
+      <th colspan="5">Dremel Encoding</th>
+    </tr>
+    <tr>
+      <th>uid</th>
+      <th>displayName</th>
+      <th>tags</th>
+      <th>preferences.theme</th>
+      <th>preferences.notifications</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1234</td>
+      <td>Alice Wonderland</td>
+      <td>reader</td>
+      <td>light</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>5678</td>
+      <td>Chris Coder</td>
+      <td>dreamer</td>
+      <td>dark</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>9012</td>
+      <td>Bob The Builder</td>
+      <td>developer</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>python</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>oss</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>builder</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>diy</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
 
 [//]: # (---)
 
