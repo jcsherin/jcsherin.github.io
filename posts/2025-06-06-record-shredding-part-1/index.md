@@ -239,30 +239,91 @@ necessary for scanning data from physical storage.
 
 # Schema
 
-The schema is the single source of truth which is used for record shredding and assembly.
+The schema is the single source of truth which is used for implementing record shredding and assembly.
+
+A schema is a collection of _fields_. Each _field_ has a name, a data type and a marker which identifies if the
+field is optional or not.
+
+A _repeated_ field is an array of values. The data type can be either a primitive type or even a struct data type. The
+order of values is important and is preserved during shredding and reassembly.
+
+A _Struct_ data type adds another level of nesting and contains one or more fields.
 
 ![UserProfile Schema](img/schema_userprofile.svg)
 _Figure 2. Schema of UserProfile object_
 
-If you refer to Figure 1 it contains a concrete instance of the _UserProfile_ schema. The _preferences.language_ is
-not present in it. In the schema it is defined as an optional field.
+The example below (same as Figure 1.) is a valid construction of the _UserProfile_ schema. The _preferences.language_
+property is not present in this instance. In the schema, the _language_ field is marked as an optional field.
 
+```json
+{
+  "uid": "9012",
+  "displayName": "Bob The Builder",
+  "tags": [
+    "builder",
+    "diy"
+  ],
+  "preferences": {
+    "theme": "dark",
+    "notifications": false
+  }
+}
+```
 
+In the next example, the _preferences_ property is not present. In the schema, the _preferences_ field is marked as an
+optional field.
+
+```json
+{
+  "uid": "1234",
+  "displayName": "Alice Wonderland",
+  "tags": [
+    "reader",
+    "dreamer"
+  ]
+}
+```
+
+In the next example, the _preferences.language_ and _preferences.notifications_ properties are not present. In the
+schema both the fields are marked as optional.
+
+```json
+{
+  "uid": "5678",
+  "displayName": "Chris Coder",
+  "tags": [
+    "developer",
+    "python",
+    "oss"
+  ],
+  "preferences": {
+    "theme": "light"
+  }
+}
+```
+
+The recurring theme here is that by looking at an instance of a nested structure by itself, it is not possible to
+identify which properties are missing from it. We need the schema to validate an instance and also know which
+properties are not present in it.
 
 ## Optional Fields
 
 [//]: # (---)
 
 [//]: # ()
+
 [//]: # (### Introduction)
 
 [//]: # ()
+
 [//]: # (TBD)
 
 [//]: # ()
+
 [//]: # (### Record Shredding:)
 
 [//]: # ()
+
 [//]: # (- Flattened representation of &#40;conceptually&#41; a nested data structure.)
 
 [//]: # (- Requires a schema)
@@ -276,9 +337,11 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (- Concrete example: _UserProfile_)
 
 [//]: # ()
+
 [//]: # (### Columnar Storage)
 
 [//]: # ()
+
 [//]: # (- Implied by Record Assembly)
 
 [//]: # (- Performance Benefits)
@@ -290,15 +353,19 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (  - Vectorization)
 
 [//]: # ()
+
 [//]: # (### Shredding Challenges)
 
 [//]: # ()
+
 [//]: # (- Structural variations: 1 schema : N instances)
 
 [//]: # ()
+
 [//]: # (### Schema Columns)
 
 [//]: # ()
+
 [//]: # (- Why schema ? &#40;1 schema: N instances&#41;)
 
 [//]: # (- Schema: optional, repeated fields)
@@ -306,15 +373,19 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (- Enumerating Columns From Schema)
 
 [//]: # ()
+
 [//]: # (### Repetition Levels Are Complicated)
 
 [//]: # ()
+
 [//]: # (- [[1,2], [3, 4]])
 
 [//]: # ()
+
 [//]: # (### Why Record Shredding Is Necessary?)
 
 [//]: # ()
+
 [//]: # (- Direct efficient columnar representation for fast ad-hoc queries)
 
 [//]: # (- Why columnar for ad-hoc queries?)
@@ -326,23 +397,29 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (  - Vectorization)
 
 [//]: # ()
+
 [//]: # (### Repetition Levels)
 
 [//]: # ()
+
 [//]: # (- Is complicated and not trivial to understand or implement)
 
 [//]: # (- Concrete example: [[0, 1], [2, 3]])
 
 [//]: # ()
+
 [//]: # (---)
 
 [//]: # ()
+
 [//]: # (# Recap: Flat, Relational Data)
 
 [//]: # ()
+
 [//]: # (## Row-Major vs. Column-Major Representation)
 
 [//]: # ()
+
 [//]: # (The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches)
 
 [//]: # (the transactional access patterns which targets to read, modify or delete a specific row of data or a very small set of)
@@ -354,6 +431,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (additional disk I/O.)
 
 [//]: # ()
+
 [//]: # (On the other hand in an analytical database like ClickHouse or DuckDB, the access pattern is different enough that)
 
 [//]: # (it makes sense to store the same data in column-major order. Data for each column is stored contiguously. This is)
@@ -367,6 +445,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (impact on minimizing disk I/O and reducing memory footprint.)
 
 [//]: # ()
+
 [//]: # (<div class="table-container">)
 
 [//]: # (  <table class="col-view">)
@@ -438,6 +517,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (  </table>)
 
 [//]: # ()
+
 [//]: # (  <table class="row-view">)
 
 [//]: # (    <thead>)
@@ -509,9 +589,11 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (</div>)
 
 [//]: # ()
+
 [//]: # (## Performance Benefits)
 
 [//]: # ()
+
 [//]: # (The data locality in columnar storage is crucial for query performance. It enables data parallelism where different)
 
 [//]: # (blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar)
@@ -521,9 +603,11 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (making analytical queries execute faster and efficiently.)
 
 [//]: # ()
+
 [//]: # (# Record Shredding)
 
 [//]: # ()
+
 [//]: # (Record shredding is the act of breaking up nested data structures into a flat, relational format. From above, we know)
 
 [//]: # (the benefits of columnar representation for analytical workloads. By doing this, the benefits of data parallelism,)
@@ -537,9 +621,11 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (are going to execute on direct columnar representation of the nested data structure. That is the promised land!)
 
 [//]: # ()
+
 [//]: # (# Record Assembly)
 
 [//]: # ()
+
 [//]: # (Record assembly is how the columnar representation is interpreted to reconstruct either fully or partially the)
 
 [//]: # (stored nested data structures. Similar to flat, relational data here too we want to read only the relevant columns)
@@ -549,12 +635,15 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (an important feature.)
 
 [//]: # ()
+
 [//]: # (# Nested Data Structure)
 
 [//]: # ()
+
 [//]: # (This is a place for claims:)
 
 [//]: # ()
+
 [//]: # (- structural variation)
 
 [//]: # (- sparse)
@@ -564,20 +653,25 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (- columns fall out from schema)
 
 [//]: # ()
+
 [//]: # (## Schema: Optional & Repeated Fields)
 
 [//]: # ()
+
 [//]: # (The figure 1. shows all the fields of a _UserProfile_ nested data structure.)
 
 [//]: # ()
+
 [//]: # (A field has a name and a data type.)
 
 [//]: # ()
+
 [//]: # (An _optional_ field is not mandatory. It does not have to be present in the instance of data. Consider _preferences.)
 
 [//]: # (theme_ which is composed of two optional fields. There are three possible variations:)
 
 [//]: # ()
+
 [//]: # (1. Both the fields are present: _preferences.theme_.)
 
 [//]: # (2. The _theme_ field is not present: _preferences_.)
@@ -585,6 +679,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (3. Both fields are not present.)
 
 [//]: # ()
+
 [//]: # (A _repeated_ field is an array of values and it can be empty. The element data type of repeated field can be a)
 
 [//]: # (primitive type like Integer, String or Boolean. The _tags_ field belongs to this category. The element data type can)
@@ -592,14 +687,17 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (also be a _Struct_.)
 
 [//]: # ()
+
 [//]: # (![A tree diagram representation for `UserProfile` nested data type]&#40;img/user_profile_schema.svg&#41;)
 
 [//]: # (Figure 1. Schema for UserProfile)
 
 [//]: # ()
+
 [//]: # (## Enumerating Columns)
 
 [//]: # ()
+
 [//]: # (In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it)
 
 [//]: # (possible to identify which columns are present in an instance of data, and more important which ones are not. From)
@@ -607,11 +705,13 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (the schema we can enumerate all the columns of the nested data structure.)
 
 [//]: # ()
+
 [//]: # (A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The)
 
 [//]: # (_UserProfile_ schema contains the following set of columns:)
 
 [//]: # ()
+
 [//]: # (1. _uid_)
 
 [//]: # (2. _displayName_)
@@ -625,17 +725,21 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (6. _preferences.notifications_)
 
 [//]: # ()
+
 [//]: # (## Logical Columnar View)
 
 [//]: # ()
+
 [//]: # (These are examples of concrete instances of the _UserProfile_ schema defined in Figure 1. They have varying levels)
 
 [//]: # (of completeness.)
 
 [//]: # ()
+
 [//]: # (<div class="record-container">)
 
 [//]: # ()
+
 [//]: # (```json)
 
 [//]: # ({)
@@ -657,6 +761,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (```)
 
 [//]: # ()
+
 [//]: # (```json)
 
 [//]: # ({)
@@ -686,6 +791,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (```)
 
 [//]: # ()
+
 [//]: # (```json)
 
 [//]: # ({)
@@ -715,12 +821,15 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (```)
 
 [//]: # ()
+
 [//]: # (</div>)
 
 [//]: # ()
+
 [//]: # (Let see how these examples map to a logical columnar view.)
 
 [//]: # ()
+
 [//]: # (<table class="col-view">)
 
 [//]: # (  <thead>)
@@ -790,11 +899,13 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (</table>)
 
 [//]: # ()
+
 [//]: # (The _tag_ array values can be expanded further so that each value is in its own separate row. This is similar to the)
 
 [//]: # (functionality of the _unnest_ function in SQL.)
 
 [//]: # ()
+
 [//]: # (<table class="col-view">)
 
 [//]: # (  <thead>)
@@ -920,14 +1031,17 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (</table>)
 
 [//]: # ()
+
 [//]: # (After expanding the _tags_ the total number of rows exploded. There are more holes &#40;properties which are not present&#41;)
 
 [//]: # (now in _preferences.theme_ and _preferences.notifications_ columns.)
 
 [//]: # ()
+
 [//]: # (The holes can be filled by defining sensible default values.)
 
 [//]: # ()
+
 [//]: # (<table class="col-view">)
 
 [//]: # (  <thead>)
@@ -1053,6 +1167,7 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (</table>)
 
 [//]: # ()
+
 [//]: # (This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which)
 
 [//]: # (is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data)
@@ -1060,23 +1175,29 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (structures the same as flat, relational data.)
 
 [//]: # ()
+
 [//]: # (This is not an efficient representation.)
 
 [//]: # ()
+
 [//]: # (---)
 
 [//]: # ()
+
 [//]: # (Real-world nested datasets are sparse.)
 
 [//]: # ()
+
 [//]: # (But this is not an efficient representation.)
 
 [//]: # ()
+
 [//]: # (There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens)
 
 [//]: # (of thousands of elements, or more? What if there are multiple repeated fields?)
 
 [//]: # ()
+
 [//]: # (Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a)
 
 [//]: # (field is not present in the original data instance, physical storage has to be allocated to store the default value.)
@@ -1161,6 +1282,8 @@ not present in it. In the schema it is defined as an optional field.
 
 [//]: # (```json)
 
+[//]: # ()
+
 [//]: # ({)
 
 [//]: # (  "uid": "a1b2c3d4",)
@@ -1177,11 +1300,15 @@ not present in it. In the schema it is defined as an optional field.
 
 [//]: # (})
 
+[//]: # ()
+
 [//]: # (```)
 
 [//]: # ()
 
 [//]: # (```json)
+
+[//]: # ()
 
 [//]: # ({)
 
@@ -1206,6 +1333,8 @@ not present in it. In the schema it is defined as an optional field.
 [//]: # (  })
 
 [//]: # (})
+
+[//]: # ()
 
 [//]: # (```)
 
