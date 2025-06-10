@@ -308,6 +308,19 @@ properties are not present in it.
 
 # The Dremel Encoding
 
+A desirable property of record shredding is that it should not inflate the size of the stored nested data structure.
+If the shredded encoding ended up being smaller than directly storing the nested data structure itself, that will
+be a great win.
+
+The abstract representation of record shredding introduced in the beginning is not well-designed. The most obvious
+issue is the data redundancy required for the _tags_ repeated field. The number of rows in this representation
+depends on the cardinality (number of elements) of the _tags_ property.
+
+Also to keep complexity low without sacrificing the essence of how record shredding works we deliberately did not tackle
+the problem of how missing properties should be represented.
+
+The three examples of _UserProfile_ from above after shredding using the Dremel technique is represented as shown below.
+
 <table class="col-view">
   <thead>
     <tr>
@@ -373,6 +386,16 @@ properties are not present in it.
     </tr>
   </tbody>
 </table>
+
+This representation wastes no space for representing properties which are missing in the values. The cardinality of
+a repeated field like _tags_ has no effect on other columns. This representation ends up taking less space than
+directly storing the _UserProfile_ objects.
+
+But they do not line up nicely into rows which informs you where a record begins and ends just by visual inspection.
+So if you are thinking there is not enough information here to be able to reassemble the original values, you are on
+the right track.
+
+
 
 [//]: # (---)
 
