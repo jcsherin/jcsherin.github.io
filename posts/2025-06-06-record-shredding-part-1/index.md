@@ -54,7 +54,28 @@ body {
 
 # Introduction
 
-_To be filled in later._
+In the 2010 VLDB
+paper, [Dremel: Interactive Analysis of Web-Scale Datasets](https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf)
+reports being able to run ad-hoc analytical queries over a _trillion-row_ tables in seconds. The contents of the
+table were nested data structures and not flat, relational data. The compressed size of the dataset exceeded 100TB
+and the nested data structures contained around 50 fields.
+
+The Dremel (underlying engine of Google BigQuery) folks invented a representation which for the first time made it
+possible to represent nested data structures directly in the internal storage format of Dremel. This reduced the
+average query execution time from hours to seconds. The provide the example of a query to compute the average number
+of terms in a field. To compute the results the query had to scan 87TB of records stored in its original form,
+compared to just 0.5TB of compressed data in the new representation. That is an impressive reduction in data scanned
+from storage to compute query results.
+
+This technique was directly adopted by Apache Parquet file format for efficiently storing and querying nested data
+structures.
+
+The design of the Dremel encoding is deceptively simple. In an attempt to implement my own version of this from
+scratch - https://github.com/jcsherin/denester, I kept thinking I understand this enough to implement it and I can
+also convince myself that it works correctly, but the intuition behind it was missing. Slogging through the
+implementation after several tiny moments of epiphany, I finally understood its essence. This blog post is an
+attempt to write it down not as a how to implement it, but really get to the bottom of why it works through first
+principles reasoning and capture some of the magic and elegance in its design.
 
 # Record Shredding And Assembly
 
@@ -654,6 +675,7 @@ its correctness by trying to apply the rules and trying to compute the values by
       <th>Record 1</th>
       <th>Record 2</th>
       <th>Record 3</th>
+      <th>definition levels</th>
     </tr>
   </thead>
   <tbody>
@@ -662,8 +684,10 @@ its correctness by trying to apply the rules and trying to compute the values by
       <td>0</td>
       <td>0</td>
       <td>0</td>
+      <td>2</td>
     </tr>
     <tr>
+      <td>2</td>
       <td>2</td>
       <td>2</td>
       <td>2</td>
@@ -674,10 +698,12 @@ its correctness by trying to apply the rules and trying to compute the values by
       <td>2</td>
       <td>1</td>
       <td>1</td>
+      <td>2</td>
     </tr>
     <tr>
       <td>4</td>
       <td>1</td>
+      <td>2</td>
       <td>2</td>
       <td>2</td>
     </tr>
@@ -686,9 +712,11 @@ its correctness by trying to apply the rules and trying to compute the values by
       <td>2</td>
       <td>1</td>
       <td>2</td>
+      <td>2</td>
     </tr>
     <tr>
       <td>6</td>
+      <td>2</td>
       <td>2</td>
       <td>2</td>
       <td>2</td>
