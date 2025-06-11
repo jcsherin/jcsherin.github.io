@@ -289,25 +289,18 @@ directly storing the <em>UserProfile</em> objects.</p>
 <p>But they do not line up nicely into rows which informs you where a record begins and ends just by visual inspection.
 So if you are thinking there is not enough information here to be able to reassemble the original values, you are on
 the right track.</p>
-<h2 id="structure-is-data" tabindex="-1">Structure is Data <a class="direct-link" href="#structure-is-data" aria-hidden="true">#</a></h2>
-<p>The key insight from the Dremel encoding is in recognizing that the structure of nested data structure is also a
-part of the shredded representation.</p>
-<p>The <em>UserProfile</em> schema (see Figure 2) contains five optional fields, and one repeated field. An optional field is
-a property which may or may not be present in a data instance. A repeated field maybe empty or contain any number of
-elements.</p>
-<p>So a single schema definition can lead to a variety of structures as shown below.</p>
+<h2 id="structure-is-metadata" tabindex="-1">Structure is Metadata <a class="direct-link" href="#structure-is-metadata" aria-hidden="true">#</a></h2>
+<p>A schema definition leads to a variety of possible structures. This can be seen in the below visualization of the three
+<em>UserProfile</em> examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.
+What causes the structural variability?</p>
 <p><img src="img/structure_userprofile.svg" alt="Tree node illustration of UserProfile objects">
 <em>Figure 3. Structure of UserProfile Objects</em></p>
-<p>The elegance of the Dremel encoding is in how it is able to represent any structure which can arise from a schema
-with just two computed numeric values. The first metadata tracks the presence of optional fields in a data instance
-and is known as definition levels. The second metadata is related to the elements which are part of repeated (array)
-fields and is known as repetition levels.</p>
-<hr>
-<p>Pending:</p>
-<ul>
-<li>Repetition levels are complicated</li>
-<li>Definition levels are simple</li>
-<li>Show <em>tags</em> with definition, repetition levels</li>
-<li>Conclusion</li>
-<li>Introduction</li>
-</ul>
+<p>The <em>UserProfile</em> schema contains many optional fields. If any those fields are not present, it creates a hole in
+the structure. The <em>UserProfile</em> schema contains a single repeated field - <em>tags</em>. The cardinality of a repeated field
+affects the structure.</p>
+<p>This is the key insight of the Dremel encoding. The variability is created by holes in the nested data structure and
+cardinality of repeated fields. Both these sources can be distilled into distinct metadata values which are computed
+during record shredding. In Dremel encoding they are known as <em>definition levels</em> and <em>repetition levels</em>.</p>
+<h1 id="how-repetition-levels-work" tabindex="-1">How Repetition Levels Work <a class="direct-link" href="#how-repetition-levels-work" aria-hidden="true">#</a></h1>
+<h1 id="how-definition-levels-work" tabindex="-1">How Definition Levels Work <a class="direct-link" href="#how-definition-levels-work" aria-hidden="true">#</a></h1>
+<h1 id="conclusion" tabindex="-1">Conclusion <a class="direct-link" href="#conclusion" aria-hidden="true">#</a></h1>
