@@ -484,6 +484,218 @@ in this path.
 
 # How Repetition Levels Work
 
+When compared to definition levels the computation of repetition levels is complicated.
+
+![Repeated field with same value sequence but different arrangements](img/example_1_rep_levels.svg)
+_Figure 5. Nested repeated fields with similar values but different structures_
+
+All the examples in figure 5. have the same sequence of values. The repetition levels is the key metadata which has
+to be computed during shredding which will allow us to reassemble any of them back to its original form.
+
+The repetition level is a count of the repeated fields in a path. So the _n<sup>th</sup>_ repeated field will have a
+repetition level of _n_. Non-repeated fields contribute to overall nesting of the structure but do not increment the
+repetition level count.
+
+Let us begin by computing the repetition levels for _Record 1_.
+
+For simplicity let us substitute the outer list with variable names like _x_ and _y_ instead of the actual list
+contents to reduce verbosity. So the outer list is `[x, y]` where _x_ and _y_ represents the original inner list
+elements.
+
+The first rule says, the repetition level of the first list element is the same as that of its parent repeated field.
+
+The outer list is the first repeated field in this path and its repetition level is one. Since it does not have a
+parent repeated field, we treat this as a special case and give _x_ the repetition level of zero (instead of one) as
+an application of the first rule.
+
+The second rule is that every subsequent element within that same list will have a repetition level equal to the
+repeated field.
+
+The outer list has a repetition level of one. So the remaining elements which is just _y_ will have a repetition
+level of one.
+
+What we have at this point is an intermediate result. The inner lists have not been evaluated.
+
+<table>
+  <thead>
+    <tr><th colspan="3">Intermediate Result</th></tr>
+    <tr>
+      <th>value</th>
+      <th>contents</th>
+      <th>repetition level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>x</td>
+      <td>[1, 2, 3]</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>y</td>
+      <td>[4, 5, 6]</td>
+      <td>1</td>
+    </tr>
+  </tbody>
+</table>
+
+Let us next process _x_ which is _[1, 2, 3]_.
+
+The inner list is the second repeated field, so it has a repetition level of two. For the first element _1_ we apply
+_Rule 1_. The repetition level of _x_ is zero, so the repetition level of _1_ is also zero. For the remaining elements
+_2_ and _3_, the repetition level is two because this is the second repeated field.
+
+
+<table>
+  <thead>
+    <tr><th colspan="2">Intermediate Result</th></tr>
+    <tr>
+      <th>value</th>
+      <th>repetition level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>2</td>
+    </tr>
+  </tbody>
+</table>
+
+Let us now process _y_ which is _[4, 5, 6]_.
+
+The repetition level is two for the inner list because it is the second repeated field. For the first element _4_ we
+again apply Rule 1. The repetition level of parent _y_ is one, so the repetition level of _4_ is also 1. For the
+remaining elements _5_ and _6_ the repetition level is two because it is same as the repetition level of the inner list.
+
+<table>
+  <thead>
+    <tr><th colspan="2">Intermediate Result</th></tr>
+    <tr>
+      <th>value</th>
+      <th>repetition level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>4</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>2</td>
+    </tr>
+  </tbody>
+</table>
+
+All the repeated fields have been counted and all list elements accounted for. Now all we have to do is merge the
+intermediate results.
+
+<table>
+  <thead>
+    <tr><th colspan="2">Final Result</th></tr>
+    <tr>
+      <th>value</th>
+      <th>repetition level</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>2</td>
+    </tr>
+  </tbody>
+</table>
+
+By recursively applying the process to all repeated fields the repetition levels can be computed for other records
+as well. This is the final computed repetition levels without the intermediate work shown. You are free to verify
+its correctness by trying to apply the rules and trying to compute the values by yourself.
+
+<table>
+  <thead>
+    <tr>
+      <th></th>
+      <th colspan="3">Repetition Levels</th>
+    </tr>
+    <tr>
+      <th>values</th>
+      <th>Record 1</th>
+      <th>Record 2</th>
+      <th>Record 3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>2</td>
+      <td>1</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>1</td>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+  </tbody>
+</table>
+
 # Conclusion
 
 [//]: # (---)
