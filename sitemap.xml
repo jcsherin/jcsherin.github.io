@@ -67,11 +67,6 @@
   </url>
   
   <url>
-    <loc>https://jacobsherin.com/tags/number-2/</loc>
-    <lastmod>2025-06-11</lastmod>
-  </url>
-  
-  <url>
     <loc>https://jacobsherin.com/tags/record-shredding/</loc>
     <lastmod>2025-06-11</lastmod>
   </url>
@@ -87,12 +82,17 @@
   </url>
   
   <url>
-    <loc>https://jacobsherin.com/tags/second-tag/</loc>
+    <loc>https://jacobsherin.com/tags/number-2/</loc>
     <lastmod>2025-06-11</lastmod>
   </url>
   
   <url>
     <loc>https://jacobsherin.com/tags/another-tag/</loc>
+    <lastmod>2025-06-11</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://jacobsherin.com/tags/second-tag/</loc>
     <lastmod>2025-06-11</lastmod>
   </url>
   

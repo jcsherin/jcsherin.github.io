@@ -65,7 +65,25 @@ body {
 }
 &lt;/style&gt;
 &lt;h1 id=&quot;introduction&quot; tabindex=&quot;-1&quot;&gt;Introduction &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#introduction&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
-&lt;p&gt;&lt;em&gt;To be filled in later.&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;In the 2010 VLDB
+paper, &lt;a href=&quot;https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/36632.pdf&quot;&gt;Dremel: Interactive Analysis of Web-Scale Datasets&lt;/a&gt;
+reports being able to run ad-hoc analytical queries over a &lt;em&gt;trillion-row&lt;/em&gt; tables in seconds. The contents of the
+table were nested data structures and not flat, relational data. The compressed size of the dataset exceeded 100TB
+and the nested data structures contained around 50 fields.&lt;/p&gt;
+&lt;p&gt;The Dremel (underlying engine of Google BigQuery) folks invented a representation which for the first time made it
+possible to represent nested data structures directly in the internal storage format of Dremel. This reduced the
+average query execution time from hours to seconds. The provide the example of a query to compute the average number
+of terms in a field. To compute the results the query had to scan 87TB of records stored in its original form,
+compared to just 0.5TB of compressed data in the new representation. That is an impressive reduction in data scanned
+from storage to compute query results.&lt;/p&gt;
+&lt;p&gt;This technique was directly adopted by Apache Parquet file format for efficiently storing and querying nested data
+structures.&lt;/p&gt;
+&lt;p&gt;The design of the Dremel encoding is deceptively simple. In an attempt to implement my own version of this from
+scratch - &lt;a href=&quot;https://github.com/jcsherin/denester&quot;&gt;https://github.com/jcsherin/denester&lt;/a&gt;, I kept thinking I understand this enough to implement it and I can
+also convince myself that it works correctly, but the intuition behind it was missing. Slogging through the
+implementation after several tiny moments of epiphany, I finally understood its essence. This blog post is an
+attempt to write it down not as a how to implement it, but really get to the bottom of why it works through first
+principles reasoning and capture some of the magic and elegance in its design.&lt;/p&gt;
 &lt;h1 id=&quot;record-shredding-and-assembly&quot; tabindex=&quot;-1&quot;&gt;Record Shredding And Assembly &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#record-shredding-and-assembly&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;p&gt;Conceptually, record shredding is a flattening of a nested data structure into a flat, relational format. Record
 assembly is the reconstructing of that shredded structure back into its original nested form.&lt;/p&gt;
@@ -531,6 +549,7 @@ its correctness by trying to apply the rules and trying to compute the values by
       &lt;th&gt;Record 1&lt;/th&gt;
       &lt;th&gt;Record 2&lt;/th&gt;
       &lt;th&gt;Record 3&lt;/th&gt;
+      &lt;th&gt;definition levels&lt;/th&gt;
     &lt;/tr&gt;
   &lt;/thead&gt;
   &lt;tbody&gt;
@@ -539,8 +558,10 @@ its correctness by trying to apply the rules and trying to compute the values by
       &lt;td&gt;0&lt;/td&gt;
       &lt;td&gt;0&lt;/td&gt;
       &lt;td&gt;0&lt;/td&gt;
+      &lt;td&gt;2&lt;/td&gt;
     &lt;/tr&gt;
     &lt;tr&gt;
+      &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
@@ -551,10 +572,12 @@ its correctness by trying to apply the rules and trying to compute the values by
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;1&lt;/td&gt;
       &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;2&lt;/td&gt;
     &lt;/tr&gt;
     &lt;tr&gt;
       &lt;td&gt;4&lt;/td&gt;
       &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
     &lt;/tr&gt;
@@ -563,9 +586,11 @@ its correctness by trying to apply the rules and trying to compute the values by
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;1&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;2&lt;/td&gt;
     &lt;/tr&gt;
     &lt;tr&gt;
       &lt;td&gt;6&lt;/td&gt;
+      &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
       &lt;td&gt;2&lt;/td&gt;
