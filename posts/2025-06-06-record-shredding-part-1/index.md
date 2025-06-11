@@ -399,22 +399,90 @@ the right track.
 
 A schema definition leads to a variety of possible structures. This can be seen in the below visualization of the three
 _UserProfile_ examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.
-What causes the structural variability?
 
 ![Tree node illustration of UserProfile objects](img/structure_userprofile.svg)
 _Figure 3. Structure of UserProfile Objects_
 
-The _UserProfile_ schema contains many optional fields. If any those fields are not present, it creates a hole in
-the structure. The _UserProfile_ schema contains a single repeated field - _tags_. The cardinality of a repeated field
-affects the structure.
+What causes the structural variability?
 
-This is the key insight of the Dremel encoding. The variability is created by holes in the nested data structure and
-cardinality of repeated fields. Both these sources can be distilled into distinct metadata values which are computed
-during record shredding. In Dremel encoding they are known as _definition levels_ and _repetition levels_.
+If any of the optional fields are not present, or if a repeated (array) field is empty it manifests as a hole in the
+structure. The cardinality of the repeated field also modifies the structure.
 
-# How Repetition Levels Work
+The key insight in Dremel encoding is to distill both these sources of structural variability into a computed
+numeric value during the process of record shredding. By interpreting the values extracted from the leaf nodes
+together with the two derived metadata values the original nested data structure can be reassembled.
+
+In Dremel these metadata columns are known as _definition levels_ and _repetition levels_.
 
 # How Definition Levels Work
+
+Consider a single nested path of interleaving optional and repeated fields. The definition level is computed by
+counting the optional fields which are present, and the repeated fields which are present and not empty.
+
+![Annotated definition levels for path with interleaving optional and repeated fields](img/example_def_levels.svg)
+_Figure 4. Annotated definition levels for a nested path_
+
+The example path _a.b.c.d.e_ shown above contains three optional fields and two repeated fields. The definition
+levels for this path will be in the range (inclusive) [0, 5]. The calculation is simple. If a field is present then
+we increment the definition level count. We continue doing this for each optional and repeated field until the path
+terminates. The final count tell us exact point at which a path terminates.
+
+In this example a definition level of zero indicates that the path is not present in the data instance. If a path
+defined in the schema contains only required fields then the definition levels will be always zero for all values.
+In this case we do not need to compute or store the definition levels. For example, the _uid_ is a required field in
+the _UserProfile_ schema. We can simply skip computing definition levels as there are no optional or repeated fields
+in this path.
+
+<table>
+  <thead>
+    <tr>
+      <th>No.</th>
+      <th>Path</th>
+      <th>Definition Level</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>Ø</td>
+      <td>0</td>
+      <td>Empty path. The field <em>a</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>a</td>
+      <td>1</td>
+      <td>The repeated field <em>b</em> is empty and not present.</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>a.b</td>
+      <td>2</td>
+      <td>The optional field <em>c</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>4.</td>
+      <td>a.b.c</td>
+      <td>3</td>
+      <td>The repeated field <em>d</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>a.b.c.d</td>
+      <td>4</td>
+      <td>The optional field <em>e</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>6.</td>
+      <td>a.b.c.d.e</td>
+      <td>5</td>
+      <td>All the fields in this path are present.</td>
+    </tr>
+  </tbody>
+</table>
+
+# How Repetition Levels Work
 
 # Conclusion
 
