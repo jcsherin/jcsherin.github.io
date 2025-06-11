@@ -395,34 +395,28 @@ But they do not line up nicely into rows which informs you where a record begins
 So if you are thinking there is not enough information here to be able to reassemble the original values, you are on
 the right track.
 
-## Structure is Data
+## Structure is Metadata
 
-The key insight from the Dremel encoding is in recognizing that the structure of nested data structure is also a
-part of the shredded representation.
-
-The _UserProfile_ schema (see Figure 2) contains five optional fields, and one repeated field. An optional field is
-a property which may or may not be present in a data instance. A repeated field maybe empty or contain any number of
-elements.
-
-So a single schema definition can lead to a variety of structures as shown below.
+A schema definition leads to a variety of possible structures. This can be seen in the below visualization of the three
+_UserProfile_ examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.
+What causes the structural variability?
 
 ![Tree node illustration of UserProfile objects](img/structure_userprofile.svg)
 _Figure 3. Structure of UserProfile Objects_
 
-The elegance of the Dremel encoding is in how it is able to represent any structure which can arise from a schema
-with just two computed numeric values. The first metadata tracks the presence of optional fields in a data instance
-and is known as definition levels. The second metadata is related to the elements which are part of repeated (array)
-fields and is known as repetition levels.
+The _UserProfile_ schema contains many optional fields. If any those fields are not present, it creates a hole in
+the structure. The _UserProfile_ schema contains a single repeated field - _tags_. The cardinality of a repeated field
+affects the structure.
 
----
+This is the key insight of the Dremel encoding. The variability is created by holes in the nested data structure and
+cardinality of repeated fields. Both these sources can be distilled into distinct metadata values which are computed
+during record shredding. In Dremel encoding they are known as _definition levels_ and _repetition levels_.
 
-Pending:
+# How Repetition Levels Work
 
-- Repetition levels are complicated
-- Definition levels are simple
-- Show _tags_ with definition, repetition levels
-- Conclusion
-- Introduction
+# How Definition Levels Work
+
+# Conclusion
 
 [//]: # (---)
 
