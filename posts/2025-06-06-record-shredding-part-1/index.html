@@ -291,16 +291,77 @@ So if you are thinking there is not enough information here to be able to reasse
 the right track.</p>
 <h2 id="structure-is-metadata" tabindex="-1">Structure is Metadata <a class="direct-link" href="#structure-is-metadata" aria-hidden="true">#</a></h2>
 <p>A schema definition leads to a variety of possible structures. This can be seen in the below visualization of the three
-<em>UserProfile</em> examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.
-What causes the structural variability?</p>
+<em>UserProfile</em> examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.</p>
 <p><img src="img/structure_userprofile.svg" alt="Tree node illustration of UserProfile objects">
 <em>Figure 3. Structure of UserProfile Objects</em></p>
-<p>The <em>UserProfile</em> schema contains many optional fields. If any those fields are not present, it creates a hole in
-the structure. The <em>UserProfile</em> schema contains a single repeated field - <em>tags</em>. The cardinality of a repeated field
-affects the structure.</p>
-<p>This is the key insight of the Dremel encoding. The variability is created by holes in the nested data structure and
-cardinality of repeated fields. Both these sources can be distilled into distinct metadata values which are computed
-during record shredding. In Dremel encoding they are known as <em>definition levels</em> and <em>repetition levels</em>.</p>
-<h1 id="how-repetition-levels-work" tabindex="-1">How Repetition Levels Work <a class="direct-link" href="#how-repetition-levels-work" aria-hidden="true">#</a></h1>
+<p>What causes the structural variability?</p>
+<p>If any of the optional fields are not present, or if a repeated (array) field is empty it manifests as a hole in the
+structure. The cardinality of the repeated field also modifies the structure.</p>
+<p>The key insight in Dremel encoding is to distill both these sources of structural variability into a computed
+numeric value during the process of record shredding. By interpreting the values extracted from the leaf nodes
+together with the two derived metadata values the original nested data structure can be reassembled.</p>
+<p>In Dremel these metadata columns are known as <em>definition levels</em> and <em>repetition levels</em>.</p>
 <h1 id="how-definition-levels-work" tabindex="-1">How Definition Levels Work <a class="direct-link" href="#how-definition-levels-work" aria-hidden="true">#</a></h1>
+<p>Consider a single nested path of interleaving optional and repeated fields. The definition level is computed by
+counting the optional fields which are present, and the repeated fields which are present and not empty.</p>
+<p><img src="img/example_def_levels.svg" alt="Annotated definition levels for path with interleaving optional and repeated fields">
+<em>Figure 4. Annotated definition levels for a nested path</em></p>
+<p>The example path <em>a.b.c.d.e</em> shown above contains three optional fields and two repeated fields. The definition
+levels for this path will be in the range (inclusive) [0, 5]. The calculation is simple. If a field is present then
+we increment the definition level count. We continue doing this for each optional and repeated field until the path
+terminates. The final count tell us exact point at which a path terminates.</p>
+<p>In this example a definition level of zero indicates that the path is not present in the data instance. If a path
+defined in the schema contains only required fields then the definition levels will be always zero for all values.
+In this case we do not need to compute or store the definition levels. For example, the <em>uid</em> is a required field in
+the <em>UserProfile</em> schema. We can simply skip computing definition levels as there are no optional or repeated fields
+in this path.</p>
+<table>
+  <thead>
+    <tr>
+      <th>No.</th>
+      <th>Path</th>
+      <th>Definition Level</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>Ø</td>
+      <td>0</td>
+      <td>Empty path. The field <em>a</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>a</td>
+      <td>1</td>
+      <td>The repeated field <em>b</em> is empty and not present.</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>a.b</td>
+      <td>2</td>
+      <td>The optional field <em>c</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>4.</td>
+      <td>a.b.c</td>
+      <td>3</td>
+      <td>The repeated field <em>d</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>a.b.c.d</td>
+      <td>4</td>
+      <td>The optional field <em>e</em> is not present.</td>
+    </tr>
+    <tr>
+      <td>6.</td>
+      <td>a.b.c.d.e</td>
+      <td>5</td>
+      <td>All the fields in this path are present.</td>
+    </tr>
+  </tbody>
+</table>
+<h1 id="how-repetition-levels-work" tabindex="-1">How Repetition Levels Work <a class="direct-link" href="#how-repetition-levels-work" aria-hidden="true">#</a></h1>
 <h1 id="conclusion" tabindex="-1">Conclusion <a class="direct-link" href="#conclusion" aria-hidden="true">#</a></h1>

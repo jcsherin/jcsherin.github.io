@@ -310,18 +310,79 @@ So if you are thinking there is not enough information here to be able to reasse
 the right track.&lt;/p&gt;
 &lt;h2 id=&quot;structure-is-metadata&quot; tabindex=&quot;-1&quot;&gt;Structure is Metadata &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#structure-is-metadata&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h2&gt;
 &lt;p&gt;A schema definition leads to a variety of possible structures. This can be seen in the below visualization of the three
-&lt;em&gt;UserProfile&lt;/em&gt; examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.
-What causes the structural variability?&lt;/p&gt;
+&lt;em&gt;UserProfile&lt;/em&gt; examples introduced earlier. Without the distraction of labels, we can look at the structure by itself.&lt;/p&gt;
 &lt;p&gt;&lt;img src=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/img/structure_userprofile.svg&quot; alt=&quot;Tree node illustration of UserProfile objects&quot; /&gt;
 &lt;em&gt;Figure 3. Structure of UserProfile Objects&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;The &lt;em&gt;UserProfile&lt;/em&gt; schema contains many optional fields. If any those fields are not present, it creates a hole in
-the structure. The &lt;em&gt;UserProfile&lt;/em&gt; schema contains a single repeated field - &lt;em&gt;tags&lt;/em&gt;. The cardinality of a repeated field
-affects the structure.&lt;/p&gt;
-&lt;p&gt;This is the key insight of the Dremel encoding. The variability is created by holes in the nested data structure and
-cardinality of repeated fields. Both these sources can be distilled into distinct metadata values which are computed
-during record shredding. In Dremel encoding they are known as &lt;em&gt;definition levels&lt;/em&gt; and &lt;em&gt;repetition levels&lt;/em&gt;.&lt;/p&gt;
-&lt;h1 id=&quot;how-repetition-levels-work&quot; tabindex=&quot;-1&quot;&gt;How Repetition Levels Work &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#how-repetition-levels-work&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;What causes the structural variability?&lt;/p&gt;
+&lt;p&gt;If any of the optional fields are not present, or if a repeated (array) field is empty it manifests as a hole in the
+structure. The cardinality of the repeated field also modifies the structure.&lt;/p&gt;
+&lt;p&gt;The key insight in Dremel encoding is to distill both these sources of structural variability into a computed
+numeric value during the process of record shredding. By interpreting the values extracted from the leaf nodes
+together with the two derived metadata values the original nested data structure can be reassembled.&lt;/p&gt;
+&lt;p&gt;In Dremel these metadata columns are known as &lt;em&gt;definition levels&lt;/em&gt; and &lt;em&gt;repetition levels&lt;/em&gt;.&lt;/p&gt;
 &lt;h1 id=&quot;how-definition-levels-work&quot; tabindex=&quot;-1&quot;&gt;How Definition Levels Work &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#how-definition-levels-work&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
+&lt;p&gt;Consider a single nested path of interleaving optional and repeated fields. The definition level is computed by
+counting the optional fields which are present, and the repeated fields which are present and not empty.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/img/example_def_levels.svg&quot; alt=&quot;Annotated definition levels for path with interleaving optional and repeated fields&quot; /&gt;
+&lt;em&gt;Figure 4. Annotated definition levels for a nested path&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The example path &lt;em&gt;a.b.c.d.e&lt;/em&gt; shown above contains three optional fields and two repeated fields. The definition
+levels for this path will be in the range (inclusive) [0, 5]. The calculation is simple. If a field is present then
+we increment the definition level count. We continue doing this for each optional and repeated field until the path
+terminates. The final count tell us exact point at which a path terminates.&lt;/p&gt;
+&lt;p&gt;In this example a definition level of zero indicates that the path is not present in the data instance. If a path
+defined in the schema contains only required fields then the definition levels will be always zero for all values.
+In this case we do not need to compute or store the definition levels. For example, the &lt;em&gt;uid&lt;/em&gt; is a required field in
+the &lt;em&gt;UserProfile&lt;/em&gt; schema. We can simply skip computing definition levels as there are no optional or repeated fields
+in this path.&lt;/p&gt;
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;No.&lt;/th&gt;
+      &lt;th&gt;Path&lt;/th&gt;
+      &lt;th&gt;Definition Level&lt;/th&gt;
+      &lt;th&gt;Notes&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;Ø&lt;/td&gt;
+      &lt;td&gt;0&lt;/td&gt;
+      &lt;td&gt;Empty path. The field &lt;em&gt;a&lt;/em&gt; is not present.&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;a&lt;/td&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;The repeated field &lt;em&gt;b&lt;/em&gt; is empty and not present.&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;3&lt;/td&gt;
+      &lt;td&gt;a.b&lt;/td&gt;
+      &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;The optional field &lt;em&gt;c&lt;/em&gt; is not present.&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;4.&lt;/td&gt;
+      &lt;td&gt;a.b.c&lt;/td&gt;
+      &lt;td&gt;3&lt;/td&gt;
+      &lt;td&gt;The repeated field &lt;em&gt;d&lt;/em&gt; is not present.&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5&lt;/td&gt;
+      &lt;td&gt;a.b.c.d&lt;/td&gt;
+      &lt;td&gt;4&lt;/td&gt;
+      &lt;td&gt;The optional field &lt;em&gt;e&lt;/em&gt; is not present.&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;6.&lt;/td&gt;
+      &lt;td&gt;a.b.c.d.e&lt;/td&gt;
+      &lt;td&gt;5&lt;/td&gt;
+      &lt;td&gt;All the fields in this path are present.&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+&lt;h1 id=&quot;how-repetition-levels-work&quot; tabindex=&quot;-1&quot;&gt;How Repetition Levels Work &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#how-repetition-levels-work&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 &lt;h1 id=&quot;conclusion&quot; tabindex=&quot;-1&quot;&gt;Conclusion &lt;a class=&quot;direct-link&quot; href=&quot;https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/#conclusion&quot; aria-hidden=&quot;true&quot;&gt;#&lt;/a&gt;&lt;/h1&gt;
 </content>
 	</entry>
