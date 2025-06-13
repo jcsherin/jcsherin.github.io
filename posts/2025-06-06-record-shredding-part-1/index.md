@@ -522,7 +522,7 @@ This is repeated for additional levels of nesting.
 The zero repetition level therefore is valuable in identifying record boundaries. It indicates the start of a new
 record.
 
-## Same Sequence Different Shapes
+## How Repetition Levels Capture Nested Structure
 
 All three examples in Figure 5. have the same sequence of values but the nested list structure is different in each
 case. By working through this example it will become evident how repetition levels correctly encodes the different
@@ -702,8 +702,8 @@ This is the final computed repetition levels for all three examples. You are fre
   </tbody>
 </table>
 
-Note that the repetition level of zero indicates the start of a new record. Within a record the repetition level
-shifts when a list begins. The repetition levels therefore identifies both record boundaries, and also nested list
-boundaries.
+The definition levels is identical for all three records and not useful for learning about the structure of the
+records. However, the repetition levels vary for each record. We can distinctly identify the start of a new record
+with by zero repetition level. The start of new list within a record is identifiable by the change in repetition level.
 
 # Conclusion
