@@ -505,45 +505,46 @@ in this path.
 
 # How Repetition Levels Work
 
-When compared to definition levels the computation of repetition levels is complicated.
+The computation of repetition levels is complicated relative to definition levels.
+
+The repetition level is a count of the repeated fields in path. The _n<sup>th</sup>_ repeated field has a repetition
+level of _n_. Non-repeated fields contribute to overall nesting of the structure but does not increment the
+repetition level count.
+
+To demarcate the beginning of a new list the first element inherits the repetition level of its parent repeated
+field. The subsequent elements in the list have a repetition level equal to the repeated field.
+
+The first repeated field has a repetition level of one. But it does not have a parent. So the repetition level of
+the first element is chosen to be zero. This is a special case. If the data type of the first repeated field is
+non-primitive, then the first element in the nested repeated field will inherit the repetition level value of zero.
+This is repeated for additional levels of nesting.
+
+The zero repetition level therefore is valuable in identifying record boundaries. It indicates the start of a new
+record.
+
+## Same Sequence Different Shapes
+
+All three examples in Figure 5. have the same sequence of values but the nested list structure is different in each
+case. By working through this example it will become evident how repetition levels correctly encodes the different
+structures making it possible to correctly reassemble the original nested data structure.
 
 ![Repeated field with same value sequence but different arrangements](img/example_1_rep_levels.svg)
 _Figure 5. Nested repeated fields with similar values but different structures_
 
-All the examples in figure 5. have the same sequence of values. The repetition levels is the key metadata which has
-to be computed during shredding which will allow us to reassemble any of them back to its original form.
+Let us begin with _Record 1_ and for improved readability substitute the inner lists with variable names _x_ and _y_.
 
-The repetition level is a count of the repeated fields in a path. So the _n<sup>th</sup>_ repeated field will have a
-repetition level of _n_. Non-repeated fields contribute to overall nesting of the structure but do not increment the
-repetition level count.
+_[x, y]_
 
-Let us begin by computing the repetition levels for _Record 1_.
-
-For simplicity let us substitute the outer list with variable names like _x_ and _y_ instead of the actual list
-contents to reduce verbosity. So the outer list is `[x, y]` where _x_ and _y_ represents the original inner list
-elements.
-
-The first rule says, the repetition level of the first list element is the same as that of its parent repeated field.
-
-The outer list is the first repeated field in this path and its repetition level is one. Since it does not have a
-parent repeated field, we treat this as a special case and give _x_ the repetition level of zero (instead of one) as
-an application of the first rule.
-
-The second rule is that every subsequent element within that same list will have a repetition level equal to the
-repeated field.
-
-The outer list has a repetition level of one. So the remaining elements which is just _y_ will have a repetition
-level of one.
-
-What we have at this point is an intermediate result. The inner lists have not been evaluated.
+The goal here is to compute the repetition levels for _x_ and _y_ in the first repeated field.
 
 <table>
   <thead>
-    <tr><th colspan="3">Intermediate Result</th></tr>
+    <tr><th colspan="4">Outer List</th></tr>
     <tr>
-      <th>value</th>
-      <th>contents</th>
-      <th>repetition level</th>
+      <th>Variable Name</th>
+      <th>Value</th>
+      <th>Repetition Level</th>
+      <th>Reason</th>
     </tr>
   </thead>
   <tbody>
@@ -551,171 +552,148 @@ What we have at this point is an intermediate result. The inner lists have not b
       <td>x</td>
       <td>[1, 2, 3]</td>
       <td>0</td>
+      <td>Beginning of a new record.</td>
     </tr>
     <tr>
       <td>y</td>
       <td>[4, 5, 6]</td>
       <td>1</td>
+      <td>Same as repetition level of outer list.</td>
     </tr>
   </tbody>
 </table>
 
-Let us next process _x_ which is _[1, 2, 3]_.
-
-The inner list is the second repeated field, so it has a repetition level of two. For the first element _1_ we apply
-_Rule 1_. The repetition level of _x_ is zero, so the repetition level of _1_ is also zero. For the remaining elements
-_2_ and _3_, the repetition level is two because this is the second repeated field.
-
+Next let us proceed with calculating the repetition levels for _x_ (first inner list).
 
 <table>
   <thead>
-    <tr><th colspan="2">Intermediate Result</th></tr>
+    <tr><th colspan="3">First Inner List (x)</th></tr>
     <tr>
-      <th>value</th>
-      <th>repetition level</th>
+      <th>Value</th>
+      <th>Repetition Level</th>
+      <th>Reason</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>1</td>
       <td>0</td>
+      <td>First element inherits repetition level of parent (see x)</td>
     </tr>
     <tr>
       <td>2</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
     <tr>
       <td>3</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
   </tbody>
 </table>
 
-Let us now process _y_ which is _[4, 5, 6]_.
-
-The repetition level is two for the inner list because it is the second repeated field. For the first element _4_ we
-again apply Rule 1. The repetition level of parent _y_ is one, so the repetition level of _4_ is also 1. For the
-remaining elements _5_ and _6_ the repetition level is two because it is same as the repetition level of the inner list.
+Similar line of reason applies for the next element _y_ (second inner list).
 
 <table>
   <thead>
-    <tr><th colspan="2">Intermediate Result</th></tr>
+    <tr><th colspan="3">Second Inner List (y)</th></tr>
     <tr>
-      <th>value</th>
-      <th>repetition level</th>
+      <th>Value</th>
+      <th>Repetition Level</th>
+      <th>Reason</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>4</td>
       <td>1</td>
+      <td>First element inherits repetition level of parent (see y)</td>
     </tr>
     <tr>
       <td>5</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
     <tr>
       <td>6</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
   </tbody>
 </table>
 
-All the repeated fields have been counted and all list elements accounted for. Now all we have to do is merge the
-intermediate results.
+Merging both the tables we get.
 
 <table>
-  <thead>
-    <tr><th colspan="2">Final Result</th></tr>
-    <tr>
-      <th>value</th>
-      <th>repetition level</th>
-    </tr>
-  </thead>
+  <caption>Final Result</caption>
   <tbody>
     <tr>
+      <th>Value</th>
       <td>1</td>
+      <td>2</td>
+      <td>3</td>
+      <td>4</td>
+      <td>5</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <th>Repetition Level</th>
       <td>0</td>
-    </tr>
-    <tr>
       <td>2</td>
       <td>2</td>
-    </tr>
-    <tr>
-      <td>3</td>
-      <td>2</td>
-    </tr>
-    <tr>
-      <td>4</td>
       <td>1</td>
-    </tr>
-    <tr>
-      <td>5</td>
       <td>2</td>
-    </tr>
-    <tr>
-      <td>6</td>
       <td>2</td>
     </tr>
   </tbody>
 </table>
 
-By recursively applying the process to all repeated fields the repetition levels can be computed for other records
-as well. This is the final computed repetition levels without the intermediate work shown. You are free to verify
-its correctness by trying to apply the rules and trying to compute the values by yourself.
+This is the final computed repetition levels for all three examples. You are free to check the results yourself.
 
 <table>
-  <thead>
-    <tr>
-      <th></th>
-      <th colspan="3">Repetition Levels</th>
-    </tr>
+  <caption>Repetition Levels</caption>
+  <tbody>
     <tr>
       <th>values</th>
-      <th>Record 1</th>
-      <th>Record 2</th>
-      <th>Record 3</th>
-      <th>definition levels</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
       <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
       <td>2</td>
-    </tr>
-    <tr>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-    </tr>
-    <tr>
       <td>3</td>
-      <td>2</td>
-      <td>1</td>
-      <td>1</td>
-      <td>2</td>
-    </tr>
-    <tr>
       <td>4</td>
-      <td>1</td>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-    </tr>
-    <tr>
       <td>5</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <th>Record 1</th>
+      <td>0</td>
+      <td>2</td>
       <td>2</td>
       <td>1</td>
       <td>2</td>
       <td>2</td>
     </tr>
     <tr>
-      <td>6</td>
+      <th>Record 2</th>
+      <td>0</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <th>Record 3</th>
+      <td>0</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <th>definition levels</th>
+      <td>2</td>
+      <td>2</td>
       <td>2</td>
       <td>2</td>
       <td>2</td>
@@ -724,1072 +702,8 @@ its correctness by trying to apply the rules and trying to compute the values by
   </tbody>
 </table>
 
+Note that the repetition level of zero indicates the start of a new record. Within a record the repetition level
+shifts when a list begins. The repetition levels therefore identifies both record boundaries, and also nested list
+boundaries.
+
 # Conclusion
-
-[//]: # (---)
-
-[//]: # ()
-
-[//]: # (### Introduction)
-
-[//]: # ()
-
-[//]: # (TBD)
-
-[//]: # ()
-
-[//]: # (### Record Shredding:)
-
-[//]: # ()
-
-[//]: # (- Flattened representation of &#40;conceptually&#41; a nested data structure.)
-
-[//]: # (- Requires a schema)
-
-[//]: # (  - Repeated Fields)
-
-[//]: # (  - Optional Fields)
-
-[//]: # (- Enumerating Columns From Schema)
-
-[//]: # (- Concrete example: _UserProfile_)
-
-[//]: # ()
-
-[//]: # (### Columnar Storage)
-
-[//]: # ()
-
-[//]: # (- Implied by Record Assembly)
-
-[//]: # (- Performance Benefits)
-
-[//]: # (  - Projection Pushdown)
-
-[//]: # (  - Data Parallelism)
-
-[//]: # (  - Vectorization)
-
-[//]: # ()
-
-[//]: # (### Shredding Challenges)
-
-[//]: # ()
-
-[//]: # (- Structural variations: 1 schema : N instances)
-
-[//]: # ()
-
-[//]: # (### Schema Columns)
-
-[//]: # ()
-
-[//]: # (- Why schema ? &#40;1 schema: N instances&#41;)
-
-[//]: # (- Schema: optional, repeated fields)
-
-[//]: # (- Enumerating Columns From Schema)
-
-[//]: # ()
-
-[//]: # (### Repetition Levels Are Complicated)
-
-[//]: # ()
-
-[//]: # (- [[1,2], [3, 4]])
-
-[//]: # ()
-
-[//]: # (### Why Record Shredding Is Necessary?)
-
-[//]: # ()
-
-[//]: # (- Direct efficient columnar representation for fast ad-hoc queries)
-
-[//]: # (- Why columnar for ad-hoc queries?)
-
-[//]: # (  - Read only the relevant columns &#40;projection pushdown&#41;)
-
-[//]: # (  - Data Parallelism)
-
-[//]: # (  - Vectorization)
-
-[//]: # ()
-
-[//]: # (### Repetition Levels)
-
-[//]: # ()
-
-[//]: # (- Is complicated and not trivial to understand or implement)
-
-[//]: # (- Concrete example: [[0, 1], [2, 3]])
-
-[//]: # ()
-
-[//]: # (---)
-
-[//]: # ()
-
-[//]: # (# Recap: Flat, Relational Data)
-
-[//]: # ()
-
-[//]: # (## Row-Major vs. Column-Major Representation)
-
-[//]: # ()
-
-[//]: # (The data is stored in row-major order in transactional storage engines like PostgreSQL, MySQL or SQLite. This matches)
-
-[//]: # (the transactional access patterns which targets to read, modify or delete a specific row of data or a very small set of)
-
-[//]: # (rows. The filtering conditions of the query have high-selectivity. When reading a row all the column attributes in)
-
-[//]: # (the relation are materialized in main memory. Having the entire row contiguous in memory once fetched minimizes)
-
-[//]: # (additional disk I/O.)
-
-[//]: # ()
-
-[//]: # (On the other hand in an analytical database like ClickHouse or DuckDB, the access pattern is different enough that)
-
-[//]: # (it makes sense to store the same data in column-major order. Data for each column is stored contiguously. This is)
-
-[//]: # (because analytical workloads are primarily read-only, scan-heavy, heavily utilize aggregations with an explicit)
-
-[//]: # (goal of summarizing the data. The primary advantage here is that only those columns which are relevant for a query)
-
-[//]: # (needs to be materialized in memory. For scan-heavy queries which often have low-selectivity, this has a significant)
-
-[//]: # (impact on minimizing disk I/O and reducing memory footprint.)
-
-[//]: # ()
-
-[//]: # (<div class="table-container">)
-
-[//]: # (  <table class="col-view">)
-
-[//]: # (    <thead>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <th colspan="3">column-major order</th>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <th>id</th>)
-
-[//]: # (        <th>username</th>)
-
-[//]: # (        <th>role</th>)
-
-[//]: # (      </tr>)
-
-[//]: # (    </thead>)
-
-[//]: # (    <tbody>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>101</td>)
-
-[//]: # (        <td>Alice</td>)
-
-[//]: # (        <td>sender</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>102</td>)
-
-[//]: # (        <td>Bob</td>)
-
-[//]: # (        <td>receiver</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>103</td>)
-
-[//]: # (        <td>Eve</td>)
-
-[//]: # (        <td>eavesdropper</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>104</td>)
-
-[//]: # (        <td>Trudy</td>)
-
-[//]: # (        <td>intruder</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (    </tbody>)
-
-[//]: # (  </table>)
-
-[//]: # ()
-
-[//]: # (  <table class="row-view">)
-
-[//]: # (    <thead>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <th colspan="3">row-major order</th>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <th>id</th>)
-
-[//]: # (        <th>username</th>)
-
-[//]: # (        <th>role</th>)
-
-[//]: # (      </tr>)
-
-[//]: # (    </thead>)
-
-[//]: # (    <tbody>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>101</td>)
-
-[//]: # (        <td>Alice</td>)
-
-[//]: # (        <td>sender</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>102</td>)
-
-[//]: # (        <td>Bob</td>)
-
-[//]: # (        <td>receiver</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>103</td>)
-
-[//]: # (        <td>Eve</td>)
-
-[//]: # (        <td>eavesdropper</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (      <tr>)
-
-[//]: # (        <td>104</td>)
-
-[//]: # (        <td>Trudy</td>)
-
-[//]: # (        <td>intruder</td>)
-
-[//]: # (      </tr>)
-
-[//]: # (    </tbody>)
-
-[//]: # (  </table>)
-
-[//]: # (</div>)
-
-[//]: # ()
-
-[//]: # (## Performance Benefits)
-
-[//]: # ()
-
-[//]: # (The data locality in columnar storage is crucial for query performance. It enables data parallelism where different)
-
-[//]: # (blocks of column values can be processed in parallel on multiple CPU cores. It helps with replacing scalar)
-
-[//]: # (operations with vectorized processing. Together data parallelism and vectorized processing has a big impact in)
-
-[//]: # (making analytical queries execute faster and efficiently.)
-
-[//]: # ()
-
-[//]: # (# Record Shredding)
-
-[//]: # ()
-
-[//]: # (Record shredding is the act of breaking up nested data structures into a flat, relational format. From above, we know)
-
-[//]: # (the benefits of columnar representation for analytical workloads. By doing this, the benefits of data parallelism,)
-
-[//]: # (vectorization and efficient I/O extends to nested data structures as well. The ability to directly represent nested)
-
-[//]: # (data structures also leads to operational simplicity. A nested data structure doesn't have to be manually normalized)
-
-[//]: # (into relational form which is ready for ad-hoc querying. There is no human judgement required. The ad-hoc queries)
-
-[//]: # (are going to execute on direct columnar representation of the nested data structure. That is the promised land!)
-
-[//]: # ()
-
-[//]: # (# Record Assembly)
-
-[//]: # ()
-
-[//]: # (Record assembly is how the columnar representation is interpreted to reconstruct either fully or partially the)
-
-[//]: # (stored nested data structures. Similar to flat, relational data here too we want to read only the relevant columns)
-
-[//]: # (and ignore the rest. So the ability to partially reconstruct only the relevant parts of the nested data structure is)
-
-[//]: # (an important feature.)
-
-[//]: # ()
-
-[//]: # (# Nested Data Structure)
-
-[//]: # ()
-
-[//]: # (This is a place for claims:)
-
-[//]: # ()
-
-[//]: # (- structural variation)
-
-[//]: # (- sparse)
-
-[//]: # (- can't shred without schema)
-
-[//]: # (- columns fall out from schema)
-
-[//]: # ()
-
-[//]: # (## Schema: Optional & Repeated Fields)
-
-[//]: # ()
-
-[//]: # (The figure 1. shows all the fields of a _UserProfile_ nested data structure.)
-
-[//]: # ()
-
-[//]: # (A field has a name and a data type.)
-
-[//]: # ()
-
-[//]: # (An _optional_ field is not mandatory. It does not have to be present in the instance of data. Consider _preferences.)
-
-[//]: # (theme_ which is composed of two optional fields. There are three possible variations:)
-
-[//]: # ()
-
-[//]: # (1. Both the fields are present: _preferences.theme_.)
-
-[//]: # (2. The _theme_ field is not present: _preferences_.)
-
-[//]: # (3. Both fields are not present.)
-
-[//]: # ()
-
-[//]: # (A _repeated_ field is an array of values and it can be empty. The element data type of repeated field can be a)
-
-[//]: # (primitive type like Integer, String or Boolean. The _tags_ field belongs to this category. The element data type can)
-
-[//]: # (also be a _Struct_.)
-
-[//]: # ()
-
-[//]: # (![A tree diagram representation for `UserProfile` nested data type]&#40;img/user_profile_schema.svg&#41;)
-
-[//]: # (Figure 1. Schema for UserProfile)
-
-[//]: # ()
-
-[//]: # (## Enumerating Columns)
-
-[//]: # ()
-
-[//]: # (In a data instance an optional field may not be present, and a repeated field can be empty. The schema makes it)
-
-[//]: # (possible to identify which columns are present in an instance of data, and more important which ones are not. From)
-
-[//]: # (the schema we can enumerate all the columns of the nested data structure.)
-
-[//]: # ()
-
-[//]: # (A column is uniquely identified by the field names from root to leaf using a dot-separated notation. The)
-
-[//]: # (_UserProfile_ schema contains the following set of columns:)
-
-[//]: # ()
-
-[//]: # (1. _uid_)
-
-[//]: # (2. _displayName_)
-
-[//]: # (3. _tags_)
-
-[//]: # (4. _preferences.theme_)
-
-[//]: # (5. _preferences.language_)
-
-[//]: # (6. _preferences.notifications_)
-
-[//]: # ()
-
-[//]: # (## Logical Columnar View)
-
-[//]: # ()
-
-[//]: # (These are examples of concrete instances of the _UserProfile_ schema defined in Figure 1. They have varying levels)
-
-[//]: # (of completeness.)
-
-[//]: # ()
-
-[//]: # (<div class="record-container">)
-
-[//]: # ()
-
-[//]: # (```json)
-
-[//]: # ({)
-
-[//]: # (  "uid": "1234",)
-
-[//]: # (  "displayName": "Alice Wonderland",)
-
-[//]: # (  "tags": [)
-
-[//]: # (    "reader",)
-
-[//]: # (    "dreamer")
-
-[//]: # (  ])
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (```json)
-
-[//]: # ({)
-
-[//]: # (  "uid": "5678",)
-
-[//]: # (  "displayName": "Chris Coder",)
-
-[//]: # (  "tags": [)
-
-[//]: # (    "developer",)
-
-[//]: # (    "python",)
-
-[//]: # (    "oss")
-
-[//]: # (  ],)
-
-[//]: # (  "preferences": {)
-
-[//]: # (    "theme": "light")
-
-[//]: # (  })
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (```json)
-
-[//]: # ({)
-
-[//]: # (  "uid": "9012",)
-
-[//]: # (  "displayName": "Bob The Builder",)
-
-[//]: # (  "tags": [)
-
-[//]: # (    "builder",)
-
-[//]: # (    "diy")
-
-[//]: # (  ],)
-
-[//]: # (  "preferences": {)
-
-[//]: # (    "theme": "dark",)
-
-[//]: # (    "notifications": false)
-
-[//]: # (  })
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (</div>)
-
-[//]: # ()
-
-[//]: # (Let see how these examples map to a logical columnar view.)
-
-[//]: # ()
-
-[//]: # (<table class="col-view">)
-
-[//]: # (  <thead>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <th>uid</th>)
-
-[//]: # (      <th>displayName</th>)
-
-[//]: # (      <th>tags</th>)
-
-[//]: # (      <th>preferences.theme</th>)
-
-[//]: # (      <th>preferences.notifications</th>)
-
-[//]: # (    </tr>)
-
-[//]: # (  </thead>)
-
-[//]: # (  <tbody>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>1234</td>)
-
-[//]: # (      <td>Alice Wonderland</td>)
-
-[//]: # (      <td>[reader, dreamer]</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>[developer, python, oss]</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>9012</td>)
-
-[//]: # (      <td>Bob The Builder</td>)
-
-[//]: # (      <td>[builder, diy]</td>)
-
-[//]: # (      <td>dark</td>)
-
-[//]: # (      <td>false</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (  </tbody>)
-
-[//]: # (</table>)
-
-[//]: # ()
-
-[//]: # (The _tag_ array values can be expanded further so that each value is in its own separate row. This is similar to the)
-
-[//]: # (functionality of the _unnest_ function in SQL.)
-
-[//]: # ()
-
-[//]: # (<table class="col-view">)
-
-[//]: # (  <thead>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <th>uid</th>)
-
-[//]: # (      <th>displayName</th>)
-
-[//]: # (      <th>tags</th>)
-
-[//]: # (      <th>preferences.theme</th>)
-
-[//]: # (      <th>preferences.notifications</th>)
-
-[//]: # (    </tr>)
-
-[//]: # (  </thead>)
-
-[//]: # (  <tbody>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>1234</td>)
-
-[//]: # (      <td>Alice Wonderland</td>)
-
-[//]: # (      <td>reader</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>1234</td>)
-
-[//]: # (      <td>Alice Wonderland</td>)
-
-[//]: # (      <td>dreamer</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>developer</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>python</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>oss</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td></td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>9012</td>)
-
-[//]: # (      <td>Bob The Builder</td>)
-
-[//]: # (      <td>builder</td>)
-
-[//]: # (      <td>dark</td>)
-
-[//]: # (      <td>false</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>9012</td>)
-
-[//]: # (      <td>Bob The Builder</td>)
-
-[//]: # (      <td>diy</td>)
-
-[//]: # (      <td>dark</td>)
-
-[//]: # (      <td>false</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (  </tbody>)
-
-[//]: # (</table>)
-
-[//]: # ()
-
-[//]: # (After expanding the _tags_ the total number of rows exploded. There are more holes &#40;properties which are not present&#41;)
-
-[//]: # (now in _preferences.theme_ and _preferences.notifications_ columns.)
-
-[//]: # ()
-
-[//]: # (The holes can be filled by defining sensible default values.)
-
-[//]: # ()
-
-[//]: # (<table class="col-view">)
-
-[//]: # (  <thead>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <th>uid</th>)
-
-[//]: # (      <th>displayName</th>)
-
-[//]: # (      <th>tags</th>)
-
-[//]: # (      <th>preferences.theme</th>)
-
-[//]: # (      <th>preferences.notifications</th>)
-
-[//]: # (    </tr>)
-
-[//]: # (  </thead>)
-
-[//]: # (  <tbody>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>1234</td>)
-
-[//]: # (      <td>Alice Wonderland</td>)
-
-[//]: # (      <td>reader</td>)
-
-[//]: # (      <td class="default-value">system</td>)
-
-[//]: # (      <td class="default-value">true</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>1234</td>)
-
-[//]: # (      <td>Alice Wonderland</td>)
-
-[//]: # (      <td>dreamer</td>)
-
-[//]: # (      <td class="default-value">system</td>)
-
-[//]: # (      <td class="default-value">true</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>developer</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td class="default-value">true</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>python</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td class="default-value">true</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>5678</td>)
-
-[//]: # (      <td>Chris Coder</td>)
-
-[//]: # (      <td>oss</td>)
-
-[//]: # (      <td>light</td>)
-
-[//]: # (      <td class="default-value">true</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>9012</td>)
-
-[//]: # (      <td>Bob The Builder</td>)
-
-[//]: # (      <td>builder</td>)
-
-[//]: # (      <td>dark</td>)
-
-[//]: # (      <td>false</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (    <tr>)
-
-[//]: # (      <td>9012</td>)
-
-[//]: # (      <td>Bob The Builder</td>)
-
-[//]: # (      <td>diy</td>)
-
-[//]: # (      <td>dark</td>)
-
-[//]: # (      <td>false</td>)
-
-[//]: # (    </tr>)
-
-[//]: # (  </tbody>)
-
-[//]: # (</table>)
-
-[//]: # ()
-
-[//]: # (This logical columnar representation now looks similar to flat, relational data in tables. It is in a form which)
-
-[//]: # (is ready for querying. This is the primary goal of record shredding, so that we can interactively query nested data)
-
-[//]: # (structures the same as flat, relational data.)
-
-[//]: # ()
-
-[//]: # (This is not an efficient representation.)
-
-[//]: # ()
-
-[//]: # (---)
-
-[//]: # ()
-
-[//]: # (Real-world nested datasets are sparse.)
-
-[//]: # ()
-
-[//]: # (But this is not an efficient representation.)
-
-[//]: # ()
-
-[//]: # (There is a lot of data redundancy from expanding repeated fields. What if a repeated fields contains thousands, or tens)
-
-[//]: # (of thousands of elements, or more? What if there are multiple repeated fields?)
-
-[//]: # ()
-
-[//]: # (Typically, real-world nested datasets are sparse, as only a subset of optional fields are populated. Even when a)
-
-[//]: # (field is not present in the original data instance, physical storage has to be allocated to store the default value.)
-
-[//]: # ()
-
-[//]: # (```graphql)
-
-[//]: # (type UserProfile {)
-
-[//]: # (  uid: ID!                  # This field is mandatory)
-
-[//]: # (  displayName: String       # This is an optional field)
-
-[//]: # (  tags: [String!]           # This is a repeated &#40;array&#41; field)
-
-[//]: # (  preferences: Preferences  # This is an optional nested field)
-
-[//]: # (})
-
-[//]: # ()
-
-[//]: # (# All fields in this type are optional)
-
-[//]: # (type Preferences {)
-
-[//]: # (  theme: String           # Values can be "dark", "light" or "system".)
-
-[//]: # (  language: String        # Uses BCP 47 language tags, e.g., "en-US".)
-
-[//]: # (  notifications: Boolean)
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (The `uid` field is the only mandatory field. So a valid instance can be created with the `uid` alone. The other)
-
-[//]: # (fields can be progressively added.)
-
-[//]: # ()
-
-[//]: # (The `displayName` and `preferences` are optional fields.)
-
-[//]: # ()
-
-[//]: # (The `tags` is a repeated &#40;array&#41; field. The schema does not convey any information about the cardinality of this)
-
-[//]: # (field. That can be known only after parsing a raw nested data structure instance.)
-
-[//]: # ()
-
-[//]: # (The `preferences` adds a level of nesting. All the fields in it are also optional.)
-
-[//]: # ()
-
-[//]: # (This is the schema definition for a nested data structure. The syntax I have used here is the GraphQL Schema)
-
-[//]: # (Definition Language. It may as well be a definition written in a programming language or using the syntax of an)
-
-[//]: # (interface definition language like Thrift or Protocol Buffers. It does not matter. The relevant part is how we logically)
-
-[//]: # (define the fields:)
-
-[//]: # ()
-
-[//]: # (- Is a field optional or mandatory?)
-
-[//]: # (- Is this a repeated &#40;array&#41;?)
-
-[//]: # (- What is the data type of the field?)
-
-[//]: # (- What is the name of the field?)
-
-[//]: # ()
-
-[//]: # (<div class="record-container">)
-
-[//]: # ()
-
-[//]: # (```json)
-
-[//]: # ()
-
-[//]: # ({)
-
-[//]: # (  "uid": "a1b2c3d4",)
-
-[//]: # (  "displayName": "Alice Wonderland",)
-
-[//]: # (  "tags": [)
-
-[//]: # (    "reader",)
-
-[//]: # (    "dreamer")
-
-[//]: # (  ])
-
-[//]: # (})
-
-[//]: # ()
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (```json)
-
-[//]: # ()
-
-[//]: # ({)
-
-[//]: # (  "uid": "e5f6g7h8",)
-
-[//]: # (  "displayName": "Chris Coder",)
-
-[//]: # (  "tags": [)
-
-[//]: # (    "developer",)
-
-[//]: # (    "python",)
-
-[//]: # (    "oss")
-
-[//]: # (  ],)
-
-[//]: # (  "preferences": {)
-
-[//]: # (    "theme": "light")
-
-[//]: # (  })
-
-[//]: # (})
-
-[//]: # ()
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (```json)
-
-[//]: # ({)
-
-[//]: # (  "uid": "i9j0k1l2",)
-
-[//]: # (  "displayName": "Bob The Builder",)
-
-[//]: # (  "tags": [)
-
-[//]: # (    "builder",)
-
-[//]: # (    "diy")
-
-[//]: # (  ],)
-
-[//]: # (  "preferences": {)
-
-[//]: # (    "theme": "dark",)
-
-[//]: # (    "notifications": true)
-
-[//]: # (  })
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-
-[//]: # (</div>)
-
-[//]: # ()
-
-[//]: # ()
