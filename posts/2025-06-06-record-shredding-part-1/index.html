@@ -1,3 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Shredding: Part 1</title>
+    <meta name="description" content="jcsherin writes about programming">
+    <meta name="generator" content="Eleventy v1.0.1">
+
+    <link rel="stylesheet" href="/css/index.css">
+    <link rel="stylesheet" href="/css/prism-base16-monokai.dark.css">
+    <link rel="stylesheet" href="/css/prism-diff.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="jcsherin">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="jcsherin">
+  </head>
+  <body>
+    <header>
+      <h1 class="home"><a href="/">jcsherin</a></h1>
+      <ul class="nav">
+        <li class="nav-item"><a href="/">Home</a></li>
+        <li class="nav-item"><a href="/posts/">Archive</a></li>
+        <li class="nav-item"><a href="/about/">About Me</a></li>
+      </ul>
+    </header>
+
+    <main class="tmpl-post">
+      <h1>Record Shredding: Part 1</h1>
+
+<time datetime="2025-06-06">06 Jun 2025</time>
+
 <style>
 th, td {
   text-align: center;
@@ -382,34 +412,35 @@ in this path.</p>
   </tbody>
 </table>
 <h1 id="how-repetition-levels-work" tabindex="-1">How Repetition Levels Work <a class="direct-link" href="#how-repetition-levels-work" aria-hidden="true">#</a></h1>
-<p>When compared to definition levels the computation of repetition levels is complicated.</p>
+<p>The computation of repetition levels is complicated relative to definition levels.</p>
+<p>The repetition level is a count of the repeated fields in path. The <em>n<sup>th</sup></em> repeated field has a repetition
+level of <em>n</em>. Non-repeated fields contribute to overall nesting of the structure but does not increment the
+repetition level count.</p>
+<p>To demarcate the beginning of a new list the first element inherits the repetition level of its parent repeated
+field. The subsequent elements in the list have a repetition level equal to the repeated field.</p>
+<p>The first repeated field has a repetition level of one. But it does not have a parent. So the repetition level of
+the first element is chosen to be zero. This is a special case. If the data type of the first repeated field is
+non-primitive, then the first element in the nested repeated field will inherit the repetition level value of zero.
+This is repeated for additional levels of nesting.</p>
+<p>The zero repetition level therefore is valuable in identifying record boundaries. It indicates the start of a new
+record.</p>
+<h2 id="how-repetition-levels-capture-nested-structure" tabindex="-1">How Repetition Levels Capture Nested Structure <a class="direct-link" href="#how-repetition-levels-capture-nested-structure" aria-hidden="true">#</a></h2>
+<p>All three examples in Figure 5. have the same sequence of values but the nested list structure is different in each
+case. By working through this example it will become evident how repetition levels correctly encodes the different
+structures making it possible to correctly reassemble the original nested data structure.</p>
 <p><img src="img/example_1_rep_levels.svg" alt="Repeated field with same value sequence but different arrangements">
 <em>Figure 5. Nested repeated fields with similar values but different structures</em></p>
-<p>All the examples in figure 5. have the same sequence of values. The repetition levels is the key metadata which has
-to be computed during shredding which will allow us to reassemble any of them back to its original form.</p>
-<p>The repetition level is a count of the repeated fields in a path. So the <em>n<sup>th</sup></em> repeated field will have a
-repetition level of <em>n</em>. Non-repeated fields contribute to overall nesting of the structure but do not increment the
-repetition level count.</p>
-<p>Let us begin by computing the repetition levels for <em>Record 1</em>.</p>
-<p>For simplicity let us substitute the outer list with variable names like <em>x</em> and <em>y</em> instead of the actual list
-contents to reduce verbosity. So the outer list is <code>[x, y]</code> where <em>x</em> and <em>y</em> represents the original inner list
-elements.</p>
-<p>The first rule says, the repetition level of the first list element is the same as that of its parent repeated field.</p>
-<p>The outer list is the first repeated field in this path and its repetition level is one. Since it does not have a
-parent repeated field, we treat this as a special case and give <em>x</em> the repetition level of zero (instead of one) as
-an application of the first rule.</p>
-<p>The second rule is that every subsequent element within that same list will have a repetition level equal to the
-repeated field.</p>
-<p>The outer list has a repetition level of one. So the remaining elements which is just <em>y</em> will have a repetition
-level of one.</p>
-<p>What we have at this point is an intermediate result. The inner lists have not been evaluated.</p>
+<p>Let us begin with <em>Record 1</em> and for improved readability substitute the inner lists with variable names <em>x</em> and <em>y</em>.</p>
+<p><em>[x, y]</em></p>
+<p>The goal here is to compute the repetition levels for <em>x</em> and <em>y</em> in the first repeated field.</p>
 <table>
   <thead>
-    <tr><th colspan="3">Intermediate Result</th></tr>
+    <tr><th colspan="4">Outer List</th></tr>
     <tr>
-      <th>value</th>
-      <th>contents</th>
-      <th>repetition level</th>
+      <th>Variable Name</th>
+      <th>Value</th>
+      <th>Repetition Level</th>
+      <th>Reason</th>
     </tr>
   </thead>
   <tbody>
@@ -417,160 +448,140 @@ level of one.</p>
       <td>x</td>
       <td>[1, 2, 3]</td>
       <td>0</td>
+      <td>Beginning of a new record.</td>
     </tr>
     <tr>
       <td>y</td>
       <td>[4, 5, 6]</td>
       <td>1</td>
+      <td>Same as repetition level of outer list.</td>
     </tr>
   </tbody>
 </table>
-<p>Let us next process <em>x</em> which is <em>[1, 2, 3]</em>.</p>
-<p>The inner list is the second repeated field, so it has a repetition level of two. For the first element <em>1</em> we apply
-<em>Rule 1</em>. The repetition level of <em>x</em> is zero, so the repetition level of <em>1</em> is also zero. For the remaining elements
-<em>2</em> and <em>3</em>, the repetition level is two because this is the second repeated field.</p>
+<p>Next let us proceed with calculating the repetition levels for <em>x</em> (first inner list).</p>
 <table>
   <thead>
-    <tr><th colspan="2">Intermediate Result</th></tr>
+    <tr><th colspan="3">First Inner List (x)</th></tr>
     <tr>
-      <th>value</th>
-      <th>repetition level</th>
+      <th>Value</th>
+      <th>Repetition Level</th>
+      <th>Reason</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>1</td>
       <td>0</td>
+      <td>First element inherits repetition level of parent (see x)</td>
     </tr>
     <tr>
       <td>2</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
     <tr>
       <td>3</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
   </tbody>
 </table>
-<p>Let us now process <em>y</em> which is <em>[4, 5, 6]</em>.</p>
-<p>The repetition level is two for the inner list because it is the second repeated field. For the first element <em>4</em> we
-again apply Rule 1. The repetition level of parent <em>y</em> is one, so the repetition level of <em>4</em> is also 1. For the
-remaining elements <em>5</em> and <em>6</em> the repetition level is two because it is same as the repetition level of the inner list.</p>
+<p>Similar line of reason applies for the next element <em>y</em> (second inner list).</p>
 <table>
   <thead>
-    <tr><th colspan="2">Intermediate Result</th></tr>
+    <tr><th colspan="3">Second Inner List (y)</th></tr>
     <tr>
-      <th>value</th>
-      <th>repetition level</th>
+      <th>Value</th>
+      <th>Repetition Level</th>
+      <th>Reason</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td>4</td>
       <td>1</td>
+      <td>First element inherits repetition level of parent (see y)</td>
     </tr>
     <tr>
       <td>5</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
     <tr>
       <td>6</td>
       <td>2</td>
+      <td>Same as repetition level of inner list which is the second repeated field.</td>
     </tr>
   </tbody>
 </table>
-<p>All the repeated fields have been counted and all list elements accounted for. Now all we have to do is merge the
-intermediate results.</p>
+<p>Merging both the tables we get.</p>
 <table>
-  <thead>
-    <tr><th colspan="2">Final Result</th></tr>
-    <tr>
-      <th>value</th>
-      <th>repetition level</th>
-    </tr>
-  </thead>
+  <caption>Final Result</caption>
   <tbody>
     <tr>
+      <th>Value</th>
       <td>1</td>
+      <td>2</td>
+      <td>3</td>
+      <td>4</td>
+      <td>5</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <th>Repetition Level</th>
       <td>0</td>
-    </tr>
-    <tr>
       <td>2</td>
       <td>2</td>
-    </tr>
-    <tr>
-      <td>3</td>
-      <td>2</td>
-    </tr>
-    <tr>
-      <td>4</td>
       <td>1</td>
-    </tr>
-    <tr>
-      <td>5</td>
       <td>2</td>
-    </tr>
-    <tr>
-      <td>6</td>
       <td>2</td>
     </tr>
   </tbody>
 </table>
-<p>By recursively applying the process to all repeated fields the repetition levels can be computed for other records
-as well. This is the final computed repetition levels without the intermediate work shown. You are free to verify
-its correctness by trying to apply the rules and trying to compute the values by yourself.</p>
+<p>This is the final computed repetition levels for all three examples. You are free to check the results yourself.</p>
 <table>
-  <thead>
-    <tr>
-      <th></th>
-      <th colspan="3">Repetition Levels</th>
-    </tr>
+  <caption>Repetition Levels</caption>
+  <tbody>
     <tr>
       <th>values</th>
-      <th>Record 1</th>
-      <th>Record 2</th>
-      <th>Record 3</th>
-      <th>definition levels</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
       <td>1</td>
-      <td>0</td>
-      <td>0</td>
-      <td>0</td>
       <td>2</td>
-    </tr>
-    <tr>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-    </tr>
-    <tr>
       <td>3</td>
-      <td>2</td>
-      <td>1</td>
-      <td>1</td>
-      <td>2</td>
-    </tr>
-    <tr>
       <td>4</td>
-      <td>1</td>
-      <td>2</td>
-      <td>2</td>
-      <td>2</td>
-    </tr>
-    <tr>
       <td>5</td>
+      <td>6</td>
+    </tr>
+    <tr>
+      <th>Record 1</th>
+      <td>0</td>
+      <td>2</td>
       <td>2</td>
       <td>1</td>
       <td>2</td>
       <td>2</td>
     </tr>
     <tr>
-      <td>6</td>
+      <th>Record 2</th>
+      <td>0</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <th>Record 3</th>
+      <td>0</td>
+      <td>2</td>
+      <td>1</td>
+      <td>2</td>
+      <td>2</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <th>definition levels</th>
+      <td>2</td>
+      <td>2</td>
       <td>2</td>
       <td>2</td>
       <td>2</td>
@@ -578,4 +589,214 @@ its correctness by trying to apply the rules and trying to compute the values by
     </tr>
   </tbody>
 </table>
+<p>The definition levels is identical for all three records and not useful for learning about the structure of the
+records. However, the repetition levels vary for each record. We can distinctly identify the start of a new record
+with by zero repetition level. The start of new list within a record is identifiable by the change in repetition level.</p>
+<h2 id="when-a-repeated-field-is-empty" tabindex="-1">When a repeated field is empty <a class="direct-link" href="#when-a-repeated-field-is-empty" aria-hidden="true">#</a></h2>
+<p>This record shredding walk through will show how both definition and repetition levels are interpreted together to
+identify empty repeated fields.</p>
+<p><em>Record 1</em>: [ [1, 2], [], [3] ]</p>
+<p><em>Record 2</em>: [ [], [4, 5, 6], []]</p>
+<p>Let us begin with <em>Record 1</em> and like earlier substitute the inner lists with variable names: <em>x</em>, <em>y</em> and <em>z</em>.</p>
+<table>
+<thead>
+<tr>
+<th>Variable Name</th>
+<th>Value</th>
+<th>Def</th>
+<th>Rep</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>x</td>
+<td>[1, 2]</td>
+<td>1</td>
+<td>0</td>
+<td>Def=1, first repeated field (outer list). <br/>Rep=0, beginning of a new record</td>
+</tr>
+<tr>
+<td>y</td>
+<td>[]</td>
+<td>1</td>
+<td>1</td>
+<td>Rep=1, same as repetition level of repeated field (outer list)</td>
+</tr>
+<tr>
+<td>z</td>
+<td>[3]</td>
+<td>1</td>
+<td>1</td>
+<td>Same as above.</td>
+</tr>
+</tbody>
+</table>
+<p>Let us now continue with <em>Record 2</em>. Like earlier let us substitute the inner lists with variable names: <em>p</em>, <em>q</em>
+and <em>r</em>.</p>
+<table>
+<thead>
+<tr>
+<th>Variable Name</th>
+<th>Value</th>
+<th>Def</th>
+<th>Rep</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>p</td>
+<td>[]</td>
+<td>1</td>
+<td>0</td>
+<td>Def=1, first repeated field (outer list). <br/>Rep=0, beginning of a new record</td>
+</tr>
+<tr>
+<td>q</td>
+<td>[4,5,6]</td>
+<td>1</td>
+<td>1</td>
+<td>Rep=1, same as repetition level of repeated field (outer list)</td>
+</tr>
+<tr>
+<td>r</td>
+<td>[]</td>
+<td>1</td>
+<td>1</td>
+<td>Same as above.</td>
+</tr>
+</tbody>
+</table>
+<p>Next let us process all the inner list elements in both records.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Def</th>
+<th>Rep</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2</td>
+<td>0</td>
+<td>Def=2, second repeated field.<br/> Rep=0, Inherited from parent (outer list) because this is the first element (see x).</td>
+</tr>
+<tr>
+<td>2</td>
+<td>2</td>
+<td>2</td>
+<td>Rep=2, same as repetition level of repeated field (inner list)</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>1</td>
+<td>1</td>
+<td>Def=1, as inner list is empty (see y). Rep=1, Same as final non-empty repeated field (outer list)</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>1</td>
+<td>0</td>
+<td>Def=1, inner list is empty (see p). Rep=0, Inherited from parent (outer list) because this is the first element (see p).</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2</td>
+<td>2</td>
+<td>Def=2, second repeated field. <br/> Rep=2, same as repetition level of repeated field (inner list)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2</td>
+<td>2</td>
+<td>Same as above.</td>
+</tr>
+<tr>
+<td>6</td>
+<td>2</td>
+<td>2</td>
+<td>Same as above.</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>1</td>
+<td>1</td>
+<td>Def=1, inner list is empty (see r). Rep=1, same as final non-empty repeated field (outer list)</td>
+</tr>
+</tbody>
+</table>
+<p>In the physical representation the NULL values do not have to be stored.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+<th style="text-align:center"></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Value</strong></td>
+<td style="text-align:center">1</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">4</td>
+<td style="text-align:center">5</td>
+<td style="text-align:center">6</td>
+<td style="text-align:center"></td>
+<td style="text-align:center"></td>
+<td style="text-align:center"></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Def</strong></td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">1</td>
+<td style="text-align:center">1</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">1</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Rep</strong></td>
+<td style="text-align:center">0</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">1</td>
+<td style="text-align:center">0</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">2</td>
+<td style="text-align:center">1</td>
+</tr>
+</tbody>
+</table>
+<p>During record assembly the NULL value or empty repeated field can be inferred by interpreting the definition levels
+together with the repetition levels.</p>
+<p>In this example the definition level is 1 after the value 2. The repetition level is not zero. This tells us that we
+are still within the outer list of the first record, but this is an empty list. So even without physically storing
+the NULL value we can infer its presence and recreate the empty list inside <em>Record 1</em>.</p>
+<p>The next definition level is again 1, but the repetition level has now changed to zero. This tell us that a new
+record has started, but the first inner list element is empty. This matches the original structure of <em>Record 2</em>.</p>
 <h1 id="conclusion" tabindex="-1">Conclusion <a class="direct-link" href="#conclusion" aria-hidden="true">#</a></h1>
+
+<hr>
+<ul><li>Previous: <a href="/posts/dremel-column-striping/">An Efficient Representation for Nested Data Structures</a></li>
+</ul>
+
+    </main>
+
+    <footer></footer>
+
+    <!-- Current page: /posts/2025-06-06-record-shredding-part-1/ -->
+  </body>
+</html>
