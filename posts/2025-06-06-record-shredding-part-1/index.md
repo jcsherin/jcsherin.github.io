@@ -2,6 +2,7 @@
 title: "Record Shredding: Part 1"
 date: 2025-06-06
 published: false
+layout: layouts/post.njk
 ---
 
 <style>
@@ -705,5 +706,62 @@ This is the final computed repetition levels for all three examples. You are fre
 The definition levels is identical for all three records and not useful for learning about the structure of the
 records. However, the repetition levels vary for each record. We can distinctly identify the start of a new record
 with by zero repetition level. The start of new list within a record is identifiable by the change in repetition level.
+
+## When a repeated field is empty
+
+This record shredding walk through will show how both definition and repetition levels are interpreted together to
+identify empty repeated fields.
+
+_Record 1_: [ [1, 2], [], [3] ]
+
+_Record 2_: [ [], [4, 5, 6], []]
+
+Let us begin with _Record 1_ and like earlier substitute the inner lists with variable names: _x_, _y_ and _z_.
+
+| Variable Name | Value  | Def | Rep | Reason                                                                          |
+|---------------|--------|-----|-----|---------------------------------------------------------------------------------|
+| x             | [1, 2] | 1   | 0   | Def=1, first repeated field (outer list). <br/>Rep=0, beginning of a new record |
+| y             | []     | 1   | 1   | Rep=1, same as repetition level of repeated field (outer list)                  |
+| z             | [3]    | 1   | 1   | Same as above.                                                                  |
+
+Let us now continue with _Record 2_. Like earlier let us substitute the inner lists with variable names: _p_, _q_
+and _r_.
+
+| Variable Name | Value   | Def | Rep | Reason                                                                          |
+|---------------|---------|-----|-----|---------------------------------------------------------------------------------|
+| p             | []      | 1   | 0   | Def=1, first repeated field (outer list). <br/>Rep=0, beginning of a new record |
+| q             | [4,5,6] | 1   | 1   | Rep=1, same as repetition level of repeated field (outer list)                  |
+| r             | []      | 1   | 1   | Same as above.                                                                  |
+
+Next let us process all the inner list elements in both records.
+
+| Value | Def | Rep | Reason                                                                                                                   |
+|-------|-----|-----|--------------------------------------------------------------------------------------------------------------------------|
+| 1     | 2   | 0   | Def=2, second repeated field.<br/> Rep=0, Inherited from parent (outer list) because this is the first element (see x).  |
+| 2     | 2   | 2   | Rep=2, same as repetition level of repeated field (inner list)                                                           |
+| NULL  | 1   | 1   | Def=1, as inner list is empty (see y). Rep=1, Same as final non-empty repeated field (outer list)                        |
+| NULL  | 1   | 0   | Def=1, inner list is empty (see p). Rep=0, Inherited from parent (outer list) because this is the first element (see p). |
+| 4     | 2   | 2   | Def=2, second repeated field. <br/> Rep=2, same as repetition level of repeated field (inner list)                       |
+| 5     | 2   | 2   | Same as above.                                                                                                           |
+| 6     | 2   | 2   | Same as above.                                                                                                           |
+| NULL  | 1   | 1   | Def=1, inner list is empty (see r). Rep=1, same as final non-empty repeated field (outer list)                           |
+
+In the physical representation the NULL values do not have to be stored.
+
+|           |   |   |   |   |   |   |   |   |
+|:----------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
+| **Value** | 1 | 2 | 4 | 5 | 6 |   |   |   |
+| **Def**   | 2 | 2 | 1 | 1 | 2 | 2 | 2 | 1 |
+| **Rep**   | 0 | 2 | 1 | 0 | 2 | 2 | 2 | 1 |
+
+During record assembly the NULL value or empty repeated field can be inferred by interpreting the definition levels
+together with the repetition levels.
+
+In this example the definition level is 1 after the value 2. The repetition level is not zero. This tells us that we
+are still within the outer list of the first record, but this is an empty list. So even without physically storing
+the NULL value we can infer its presence and recreate the empty list inside _Record 1_.
+
+The next definition level is again 1, but the repetition level has now changed to zero. This tell us that a new
+record has started, but the first inner list element is empty. This matches the original structure of _Record 2_.
 
 # Conclusion
