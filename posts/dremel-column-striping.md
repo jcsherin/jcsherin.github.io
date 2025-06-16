@@ -7,6 +7,7 @@ tags:
   - column striping
   - nested data
 layout: layouts/post.njk
+draft: true
 ---
 
 # Outline/TOC

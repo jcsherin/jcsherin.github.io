@@ -51,6 +51,18 @@ module.exports = function (eleventyConfig) {
     return Math.min.apply(null, numbers);
   });
 
+  // Create a collection of posts, excluding drafts in production
+  eleventyConfig.addCollection("posts", function(collectionApi) {
+    const isProduction = process.env.ELEVENTY_ENV === 'production';
+    const posts = collectionApi.getFilteredByTag("posts");
+
+    if (isProduction) {
+      return posts.filter(item => !item.data.draft);
+    }
+
+    return posts;
+  })
+
   function filterTagList(tags) {
     return (tags || []).filter(
       (tag) => ["all", "nav", "post", "posts"].indexOf(tag) === -1

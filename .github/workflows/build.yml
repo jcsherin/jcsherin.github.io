@@ -21,6 +21,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies & build
+        env:
+          ELEVENTY_ENV: production
         run: |
           npm ci
           npm run build
