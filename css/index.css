@@ -265,3 +265,34 @@ a[href].direct-link:focus:visited,
   font-size: 1.1em;
   margin-bottom: 0.5em;
 }
+
+/* New styles for the post list with summaries */
+.post-list {
+  display: grid;
+  gap: 3rem; /* Creates space between post entries */
+}
+
+.post-list-item {
+  /* You can add borders or other styles here if you like */
+}
+
+.post-list-title {
+  font-size: 1.5em; /* 24px / 16px */
+  margin-top: 0;
+  margin-bottom: 0.25em;
+}
+
+.post-list-title a {
+  text-decoration: none;
+}
+
+.post-list-meta {
+  font-size: 0.875em; /* 14px / 16px */
+  color: #555; /* A slightly lighter gray for the date */
+  margin-bottom: 0.75em;
+}
+
+.post-list-summary {
+  margin-top: 0;
+  line-height: 1.6;
+}

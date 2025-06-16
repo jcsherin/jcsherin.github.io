@@ -1,7 +1,10 @@
 ---
 title: "Record Shredding: Part 1"
 date: 2025-06-06
-published: false
+summary: >
+  A first-principles exploration of the record shredding algorithm that powers Apache Parquet's efficient handling of
+  nested data. This post unpacks the concepts from Google's Dremel paper, explaining how definition and repetition
+  levels allow complex, hierarchical data to be stored in a flat, columnar format.
 layout: layouts/post.njk
 draft: true
 ---
