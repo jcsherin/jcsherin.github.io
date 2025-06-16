@@ -1,10 +1,9 @@
 ---
 layout: layouts/home.njk
 eleventyNavigation:
-  key: Home
+  key: Writings
   order: 1
 ---
-<h1>All Posts</h1>
 
 {% set postslist = collections.posts | reverse %}
 {% include "postslist.njk" %}
