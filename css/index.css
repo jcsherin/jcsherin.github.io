@@ -26,10 +26,9 @@ p:last-child {
   margin-bottom: 0;
 }
 
-p,
-.tmpl-post li,
 img {
-  max-width: 37.5em; /* 600px /16 */
+  max-width: 100%;
+  height: auto;
 }
 
 p,
@@ -266,6 +265,23 @@ a[href].direct-link:focus:visited,
   margin-bottom: 0.5em;
 }
 
+.tmpl-home > .post-list,
+.tmpl-post {
+  max-width: 37.5em; /* 600px */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --- Content Image Styling --- */
+/* This targets images specifically inside your main post content */
+.tmpl-post img {
+  display: block; /* Fixes the text-flow problem */
+  width: 100%; /* Fixes the stretching problem */
+  max-width: 100%; /* Good practice for responsiveness */
+  height: auto; /* Prevents image distortion */
+  margin-bottom: 0.5em; /* Adds space between the image and caption */
+}
+
 /* New styles for the post list with summaries */
 .post-list {
   display: grid;
@@ -295,4 +311,19 @@ a[href].direct-link:focus:visited,
 .post-list-summary {
   margin-top: 0;
   line-height: 1.6;
+}
+
+/* Style for the subtle draft label in the post list */
+.draft-label {
+  margin-left: 0.75em;
+  padding: 0.1em 0.6em;
+  font-size: 0.75em; /* Make it smaller than the date text */
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8d6a00; /* A brownish-yellow text color */
+  background-color: #fffbe6; /* The same light yellow as the big banner */
+  border: 1px solid #fff3c4;
+  border-radius: 9999px; /* This creates the pill shape */
+  vertical-align: middle;
 }
