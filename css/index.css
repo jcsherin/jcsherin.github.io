@@ -13,6 +13,11 @@
   box-sizing: border-box;
 }
 
+/* To prevent header jumping when navigating between home and post page because of vertical scrollbar */
+html {
+  overflow-y: scroll;
+}
+
 html,
 body {
   padding: 0;
