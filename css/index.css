@@ -105,7 +105,7 @@ code {
 
 /* Header */
 .home {
-  padding: 0 1rem;
+  padding: 0;
   float: left;
   margin: 1rem 0; /* 16px /16 */
   font-size: 1em; /* 16px /16 */
@@ -119,7 +119,7 @@ code {
 .nav {
   padding: 0;
   list-style: none;
-  float: left;
+  float: right;
   margin-left: 1em;
 }
 
