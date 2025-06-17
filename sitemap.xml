@@ -2,36 +2,6 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://jacobsherin.com/posts/firstpost/</loc>
-    <lastmod>2018-05-01</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/secondpost/</loc>
-    <lastmod>2018-07-04</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/thirdpost/</loc>
-    <lastmod>2018-08-24</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/fourthpost/</loc>
-    <lastmod>2018-09-30</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/papers/2025-02-16-dremel-column-striping-nested-records/</loc>
-    <lastmod>2025-02-16</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/dremel-column-striping/</loc>
-    <lastmod>2025-04-21</lastmod>
-  </url>
-  
-  <url>
     <loc>https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/</loc>
     <lastmod>2025-06-06</lastmod>
   </url>
