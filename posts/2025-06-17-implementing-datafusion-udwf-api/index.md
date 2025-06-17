@@ -20,97 +20,68 @@ functions like `LEAD` and `LAG`.
 
 ### The Starting Point: A Clean but Simple Abstraction
 
-The DataFusion community had a clear goal: unify the two separate function interfaces (`BuiltInWindowFunction` and
-`WindowUDF`) into a single, trait-based API. Building on the success of a similar refactor for scalar functions, the
-initial `WindowUDFImpl` trait was designed for clarity and simplicity.
+The DataFusion community had a clear strategic goal: unify the two separate function interfaces (`BuiltInWindowFunction`
+and `WindowUDF`) into a single, trait-based API. Building on the success of a similar refactor for scalar functions, the
+initial `WindowUDFImpl` trait was designed for clarity and simplicity, and it served as a solid architectural blueprint.
 
-Its early form looked something like this, with separate methods for determining the return type and nullability:
+*(Here, you can show the initial, simpler version of the `WindowUDFImpl` trait, highlighting methods like `return_type`
+and `nullable`.)*
 
-```rust
-// Simplified for illustration
-pub trait WindowUDFImpl {
-  fn name(&self) -> &str;
-  fn signature(&self) -> &Signature;
+### The Challenge: Applying the Blueprint to a New Domain
 
-  // How the return type was determined
-  fn return_type(&self, arg_types: &[DataType]) -> Result<DataType>;
+With a proven pattern from the scalar function refactor, the next challenge was to adapt and apply this blueprint to the
+more complex domain of window functions. My work began here: taking the core ideas and being the first to prove them out
+on the windowing engine, which had its own unique requirements for stateful evaluation and optimizer integration.
 
-  // How nullability was determined
-  fn nullable(&self) -> bool { true }
+### The First Test: A Successful `row_number` Conversion
 
-  // How the stateful logic was created
-  fn partition_evaluator(&self) -> Result<Box<dyn PartitionEvaluator>>;
-}
-```
+The first candidate for this new approach was `row_number`. As a simple function with no arguments and a fixed return
+type, it was the perfect vehicle to validate that the core pattern was sound. The conversion was a success and
+demonstrated the viability of the unification effort.
 
-This was a great starting point, and it worked perfectly for the first test case.
+*(Here, you can briefly show the clean implementation of `WindowUDFImpl` for `row_number` and how it mapped well to the
+initial trait design.)*
 
-# The First Test: A Successful row_number Conversion
+### Hitting the Limits: The Challenge of `LEAD` and `LAG`
 
-The first function to be converted was row_number. As a simple function with no arguments and a fixed return type, it
-was a perfect fit for the initial API. The conversion from the built-in enum to the new trait was straightforward and
-validated that the core abstraction was sound for simple cases.
+The real test came when we moved on to more complex functions. The simple API immediately presented several difficult
+questions that it was not yet equipped to answer:
 
-(Here, you can briefly show the clean implementation of WindowUDFImpl for row_number, highlighting how easily it mapped
-to the simple trait.)
+1. **How can the query optimizer know that `LEAD` is the semantic inverse of `LAG`?** This is crucial for performance.
+2. **How can a function's return type be determined when it depends on multiple, potentially `NULL`, arguments?**
+3. **How can the stateful `PartitionEvaluator` access the literal values of its arguments to configure its behavior?**
 
-# Hitting the Limits: The Challenge of LEAD and LAG
+It became clear that to implement these functions correctly, the API itself had to evolve.
 
-The real test came when we moved on to more complex functions like LEAD and LAG. The simple API immediately presented
-several difficult questions:
+### Reforging the API: The Introduction of `field`, `reverse_expr`, and `PartitionEvaluatorArgs`
 
-How can the query optimizer know that LEAD is the semantic inverse of LAG? Without this knowledge, DataFusion couldn't
-apply critical optimizations, like reusing a single sort operation for queries containing both functions.
-How can the function correctly determine its return type when it depends on multiple arguments? For LEAD(col, offset,
-default_value), the return type should be the type of col, but what if col is NULL? The type should then be inferred
-from default_value. The simple return_type method didn't have enough context.
-How can the stateful PartitionEvaluator get access to the literal values of arguments like offset and default_value? It
-needed these to configure its behavior, but the initial API didn't provide them.
-It became clear that to implement these functions correctly and elegantly, the API itself had to evolve.
+This led to a series of patches that fundamentally improved the `WindowUDFImpl` trait, driven directly by the problems
+we discovered during implementation.
 
-# Reforging the API: Forging a More Powerful Trait
+*(This is your core technical section. Use your patches to show the "before" and "after" for each of these API
+additions, explaining what problem each one solved.)*
 
-This led to a series of patches that fundamentally improved the WindowUDFImpl trait, driven directly by the problems we
-discovered.
+* **The `field` Method:** Show how this replaced `return_type` and `nullable`, giving the implementer more context.
+* **The `reverse_expr` Method:** Explain how this provided a formal hook for the query optimizer.
+* **The `PartitionEvaluatorArgs` struct:** Detail how this gave the stateful evaluator crucial information from the
+  physical plan.
 
-Solution 1: The field Method
-To solve the context problem for return types, we replaced return_type() and nullable() with a single, more powerful
-field() method.
+### The Payoff: An Elegant Implementation
 
-(Here, you can show the diff from 0001-Add-field-trait-method-to-WindowUDFImpl-remove-retur.patch and explain that
-passing the WindowUDFFieldArgs struct gives the implementer all the context needed to determine the final Field—name,
-type, and nullability—in one go.)
+With the new, more expressive API in place, the implementation of `LEAD` and `LAG` became straightforward and robust,
+proving the value of the iterative design process.
 
-Solution 2: The reverse_expr Method
-To inform the optimizer about function inverses, we added the reverse_expr() method.
+*(Here, you can show snippets from the final `lead_lag.rs` implementation, highlighting how it elegantly uses the new
+API methods.)*
 
-(Show the reverse_expr method from 0001-Adds-WindowUDFImpl-reverse_expr-trait-method-Support.patch. Explain how
-returning ReversedUDWF::Reversed(lag_udwf()) from within lead creates a formal, machine-readable link between the two
-functions.)
+### Lessons Learned on API Design and Community
 
-Solution 3: The PartitionEvaluatorArgs
-Finally, to give the stateful evaluator access to its arguments, we enhanced the partition_evaluator method signature.
+This journey offers several valuable lessons that extend beyond just DataFusion:
 
-(Show the change from 0001-Add-PartitionEvaluatorArgs-to-WindowUDFImpl-partitio.patch. Explain that passing
-PartitionEvaluatorArgs allows the evaluator to inspect the physical expressions and configure itself accordingly.)
-
-# The Payoff: An Elegant Implementation
-
-With this new, more expressive API in place, the implementation of LEAD and LAG became straightforward and robust.
-
-(Here, you can show snippets from the final lead_lag.rs implementation from
-0001-Convert-BuiltInWindowFunction-Lead-Lag-to-a-user-def.patch. Contrast how clean it is using the new API, compared to
-how hacked-together it would have been with the old one.)
-
-# Lessons Learned on API Design
-
-This journey through DataFusion's window function refactor offers several valuable lessons on API design:
-
-- Design for real use cases. A simple API is a good start, but it must be validated against the most complex
-  problems you
-  intend to solve.
-- The implementation is the ultimate stress test. Theoretical API design is no substitute for the feedback you get from
-  actually building with it.
-- Don't be afraid to evolve your core abstractions. When implementation reveals a weakness in your API, it's a sign of
-  progress. Improving the trait is often better than building hacks on top of it.
-- The result of this feedback loop is a more resilient, expressive, and ergonomic system for all future developers.
+* **Start with a simple abstraction, but stress-test it immediately** with your most complex use cases.
+* **Treat implementation feedback as a core part of the design process.** When an abstraction feels clumsy or limiting,
+  it's an opportunity to improve it.
+* **Good architecture enables community.** A well-designed, repeatable pattern doesn't just make the original author's
+  life easier; it creates a "paved path" for new contributors. The clarity of the final `WindowUDF` trait made it
+  possible to file well-defined "good first issues," broadening the base of community involvement and turning a large
+  solo effort into a parallelizable community one.
