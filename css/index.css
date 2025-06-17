@@ -44,16 +44,13 @@ a[href]:visited {
   color: var(--navy);
 }
 
-main {
-  padding: 1rem;
-}
-
 main :first-child {
   margin-top: 0;
 }
 
 header {
   border-bottom: 1px dashed var(--lightgray);
+  margin-bottom: 1rem;
 }
 
 header:after {
@@ -267,7 +264,7 @@ a[href].direct-link:focus:visited,
 
 .tmpl-home > .post-list,
 .tmpl-post {
-  max-width: 37.5em; /* 600px */
+  max-width: 42em;
   margin-left: auto;
   margin-right: auto;
 }
@@ -326,4 +323,13 @@ a[href].direct-link:focus:visited,
   border: 1px solid #fff3c4;
   border-radius: 9999px; /* This creates the pill shape */
   vertical-align: middle;
+}
+
+/* --- Main Content Centering --- */
+/* This new rule targets the global page wrapper */
+.page-wrapper {
+  max-width: 42em; /* You can adjust this value */
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1rem; /* Add padding here instead of on <main> */
 }

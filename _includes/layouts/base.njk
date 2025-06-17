@@ -14,23 +14,25 @@
     <link rel="alternate" href="{{ metadata.jsonfeed.path | url }}" type="application/json" title="{{ metadata.title }}">
   </head>
   <body>
-    <header>
-      <h1 class="home"><a href="{{ '/' | url }}">{{ metadata.title }}</a></h1>
+    <div class="page-wrapper">
+      <header>
+        <h1 class="home"><a href="{{ '/' | url }}">{{ metadata.title }}</a></h1>
 
-      {#- Read more about `eleventy-navigation` at https://www.11ty.dev/docs/plugins/navigation/ #}
-      <ul class="nav">
-      {%- for entry in collections.all | eleventyNavigation %}
-        <li class="nav-item{% if entry.url == page.url %} nav-item-active{% endif %}"><a href="{{ entry.url | url }}">{{ entry.title }}</a></li>
-      {%- endfor %}
-      </ul>
-    </header>
+        {#- Read more about `eleventy-navigation` at https://www.11ty.dev/docs/plugins/navigation/ #}
+        <ul class="nav">
+        {%- for entry in collections.all | eleventyNavigation %}
+          <li class="nav-item{% if entry.url == page.url %} nav-item-active{% endif %}"><a href="{{ entry.url | url }}">{{ entry.title }}</a></li>
+        {%- endfor %}
+        </ul>
+      </header>
 
-    <main{% if templateClass %} class="{{ templateClass }}"{% endif %}>
-      {{ content | safe }}
-    </main>
+      <main{% if templateClass %} class="{{ templateClass }}"{% endif %}>
+        {{ content | safe }}
+      </main>
 
-    <footer></footer>
+      <footer></footer>
 
-    <!-- Current page: {{ page.url | url }} -->
-  </body>
+      <!-- Current page: {{ page.url | url }} -->
+    </body>
+  </div>
 </html>
