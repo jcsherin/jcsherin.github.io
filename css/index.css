@@ -26,10 +26,9 @@ p:last-child {
   margin-bottom: 0;
 }
 
-p,
-.tmpl-post li,
 img {
-  max-width: 37.5em; /* 600px /16 */
+  max-width: 100%;
+  height: auto;
 }
 
 p,
@@ -264,6 +263,23 @@ a[href].direct-link:focus:visited,
 .draft-indicator p:first-child {
   font-size: 1.1em;
   margin-bottom: 0.5em;
+}
+
+.tmpl-home > .post-list,
+.tmpl-post {
+  max-width: 37.5em; /* 600px */
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* --- Content Image Styling --- */
+/* This targets images specifically inside your main post content */
+.tmpl-post img {
+  display: block; /* Fixes the text-flow problem */
+  width: 100%; /* Fixes the stretching problem */
+  max-width: 100%; /* Good practice for responsiveness */
+  height: auto; /* Prevents image distortion */
+  margin-bottom: 0.5em; /* Adds space between the image and caption */
 }
 
 /* New styles for the post list with summaries */
