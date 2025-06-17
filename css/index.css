@@ -338,3 +338,9 @@ a[href].direct-link:focus:visited,
   margin-right: auto;
   padding: 1rem; /* Add padding here instead of on <main> */
 }
+
+.page-subtitle {
+  color: var(--darkgray);
+  font-weight: normal;
+  margin-bottom: 2rem;
+}
