@@ -296,3 +296,18 @@ a[href].direct-link:focus:visited,
   margin-top: 0;
   line-height: 1.6;
 }
+
+/* Style for the subtle draft label in the post list */
+.draft-label {
+  margin-left: 0.75em;
+  padding: 0.1em 0.6em;
+  font-size: 0.75em; /* Make it smaller than the date text */
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8d6a00; /* A brownish-yellow text color */
+  background-color: #fffbe6; /* The same light yellow as the big banner */
+  border: 1px solid #fff3c4;
+  border-radius: 9999px; /* This creates the pill shape */
+  vertical-align: middle;
+}
