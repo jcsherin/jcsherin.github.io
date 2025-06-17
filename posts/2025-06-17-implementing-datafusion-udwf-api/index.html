@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forged in Practice: How Implementing Window Functions Refined DataFusion&#39;s API</title>
+    <meta name="description" content="jcsherin writes about programming">
+    <meta name="generator" content="Eleventy v1.0.1">
+
+    <link rel="stylesheet" href="/css/index.css">
+    <link rel="stylesheet" href="/css/prism-base16-monokai.dark.css">
+    <link rel="stylesheet" href="/css/prism-diff.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="jcsherin">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="jcsherin">
+  </head>
+  <body>
+    <header>
+      <h1 class="home"><a href="/">jcsherin</a></h1>
+      <ul class="nav">
+        <li class="nav-item"><a href="/">Writings</a></li>
+        <li class="nav-item"><a href="/about/">About</a></li>
+      </ul>
+    </header>
+
+    <main class="tmpl-post">
+      <h1>Forged in Practice: How Implementing Window Functions Refined DataFusion&#39;s API</h1>
+
+<time datetime="2025-06-17">17 Jun 2025</time>
+
+
+  <div class="draft-indicator">
+    <p><strong>DRAFT</strong></p>
+    <p>This is a draft preview. To publish, remove draft: true from the front matter.</p>
+  </div>
+
+
+<p>Designing a library's core abstractions is one of the most challenging parts of software engineering. It's a balancing
+act between simplicity, power, and future-proofing. But as we found during a major refactor in Apache DataFusion, the
+best APIs aren't just designed—they're forged and refined in the fire of real-world implementation.</p>
+<p>This post is a case study of that process. We'll trace the evolution of the <code>WindowUDFImpl</code> trait, showing how its
+initial design was stress-tested and ultimately improved by the practical requirements of converting complex window
+functions like <code>LEAD</code> and <code>LAG</code>.</p>
+<h3 id="the-starting-point:-a-clean-but-simple-abstraction" tabindex="-1">The Starting Point: A Clean but Simple Abstraction <a class="direct-link" href="#the-starting-point:-a-clean-but-simple-abstraction" aria-hidden="true">#</a></h3>
+<p>The DataFusion community had a clear goal: unify the two separate function interfaces (<code>BuiltInWindowFunction</code> and
+<code>WindowUDF</code>) into a single, trait-based API. Building on the success of a similar refactor for scalar functions, the
+initial <code>WindowUDFImpl</code> trait was designed for clarity and simplicity.</p>
+<p>Its early form looked something like this, with separate methods for determining the return type and nullability:</p>
+<pre class="language-rust"><code class="language-rust"><span class="token comment">// Simplified for illustration</span><br><span class="token keyword">pub</span> <span class="token keyword">trait</span> <span class="token type-definition class-name">WindowUDFImpl</span> <span class="token punctuation">{</span><br>  <span class="token keyword">fn</span> <span class="token function-definition function">name</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token operator">&amp;</span><span class="token keyword">str</span><span class="token punctuation">;</span><br>  <span class="token keyword">fn</span> <span class="token function-definition function">signature</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token operator">&amp;</span><span class="token class-name">Signature</span><span class="token punctuation">;</span><br><br>  <span class="token comment">// How the return type was determined</span><br>  <span class="token keyword">fn</span> <span class="token function-definition function">return_type</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">,</span> arg_types<span class="token punctuation">:</span> <span class="token operator">&amp;</span><span class="token punctuation">[</span><span class="token class-name">DataType</span><span class="token punctuation">]</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">DataType</span><span class="token operator">></span><span class="token punctuation">;</span><br><br>  <span class="token comment">// How nullability was determined</span><br>  <span class="token keyword">fn</span> <span class="token function-definition function">nullable</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token keyword">bool</span> <span class="token punctuation">{</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><br><br>  <span class="token comment">// How the stateful logic was created</span><br>  <span class="token keyword">fn</span> <span class="token function-definition function">partition_evaluator</span><span class="token punctuation">(</span><span class="token operator">&amp;</span><span class="token keyword">self</span><span class="token punctuation">)</span> <span class="token punctuation">-></span> <span class="token class-name">Result</span><span class="token operator">&lt;</span><span class="token class-name">Box</span><span class="token operator">&lt;</span><span class="token keyword">dyn</span> <span class="token class-name">PartitionEvaluator</span><span class="token operator">>></span><span class="token punctuation">;</span><br><span class="token punctuation">}</span></code></pre>
+<p>This was a great starting point, and it worked perfectly for the first test case.</p>
+<h1 id="the-first-test:-a-successful-row_number-conversion" tabindex="-1">The First Test: A Successful row_number Conversion <a class="direct-link" href="#the-first-test:-a-successful-row_number-conversion" aria-hidden="true">#</a></h1>
+<p>The first function to be converted was row_number. As a simple function with no arguments and a fixed return type, it
+was a perfect fit for the initial API. The conversion from the built-in enum to the new trait was straightforward and
+validated that the core abstraction was sound for simple cases.</p>
+<p>(Here, you can briefly show the clean implementation of WindowUDFImpl for row_number, highlighting how easily it mapped
+to the simple trait.)</p>
+<h1 id="hitting-the-limits:-the-challenge-of-lead-and-lag" tabindex="-1">Hitting the Limits: The Challenge of LEAD and LAG <a class="direct-link" href="#hitting-the-limits:-the-challenge-of-lead-and-lag" aria-hidden="true">#</a></h1>
+<p>The real test came when we moved on to more complex functions like LEAD and LAG. The simple API immediately presented
+several difficult questions:</p>
+<p>How can the query optimizer know that LEAD is the semantic inverse of LAG? Without this knowledge, DataFusion couldn't
+apply critical optimizations, like reusing a single sort operation for queries containing both functions.
+How can the function correctly determine its return type when it depends on multiple arguments? For LEAD(col, offset,
+default_value), the return type should be the type of col, but what if col is NULL? The type should then be inferred
+from default_value. The simple return_type method didn't have enough context.
+How can the stateful PartitionEvaluator get access to the literal values of arguments like offset and default_value? It
+needed these to configure its behavior, but the initial API didn't provide them.
+It became clear that to implement these functions correctly and elegantly, the API itself had to evolve.</p>
+<h1 id="reforging-the-api:-forging-a-more-powerful-trait" tabindex="-1">Reforging the API: Forging a More Powerful Trait <a class="direct-link" href="#reforging-the-api:-forging-a-more-powerful-trait" aria-hidden="true">#</a></h1>
+<p>This led to a series of patches that fundamentally improved the WindowUDFImpl trait, driven directly by the problems we
+discovered.</p>
+<p>Solution 1: The field Method
+To solve the context problem for return types, we replaced return_type() and nullable() with a single, more powerful
+field() method.</p>
+<p>(Here, you can show the diff from 0001-Add-field-trait-method-to-WindowUDFImpl-remove-retur.patch and explain that
+passing the WindowUDFFieldArgs struct gives the implementer all the context needed to determine the final Field—name,
+type, and nullability—in one go.)</p>
+<p>Solution 2: The reverse_expr Method
+To inform the optimizer about function inverses, we added the reverse_expr() method.</p>
+<p>(Show the reverse_expr method from 0001-Adds-WindowUDFImpl-reverse_expr-trait-method-Support.patch. Explain how
+returning ReversedUDWF::Reversed(lag_udwf()) from within lead creates a formal, machine-readable link between the two
+functions.)</p>
+<p>Solution 3: The PartitionEvaluatorArgs
+Finally, to give the stateful evaluator access to its arguments, we enhanced the partition_evaluator method signature.</p>
+<p>(Show the change from 0001-Add-PartitionEvaluatorArgs-to-WindowUDFImpl-partitio.patch. Explain that passing
+PartitionEvaluatorArgs allows the evaluator to inspect the physical expressions and configure itself accordingly.)</p>
+<h1 id="the-payoff:-an-elegant-implementation" tabindex="-1">The Payoff: An Elegant Implementation <a class="direct-link" href="#the-payoff:-an-elegant-implementation" aria-hidden="true">#</a></h1>
+<p>With this new, more expressive API in place, the implementation of LEAD and LAG became straightforward and robust.</p>
+<p>(Here, you can show snippets from the final lead_lag.rs implementation from
+0001-Convert-BuiltInWindowFunction-Lead-Lag-to-a-user-def.patch. Contrast how clean it is using the new API, compared to
+how hacked-together it would have been with the old one.)</p>
+<h1 id="lessons-learned-on-api-design" tabindex="-1">Lessons Learned on API Design <a class="direct-link" href="#lessons-learned-on-api-design" aria-hidden="true">#</a></h1>
+<p>This journey through DataFusion's window function refactor offers several valuable lessons on API design:</p>
+<ul>
+<li>Design for real use cases. A simple API is a good start, but it must be validated against the most complex
+problems you
+intend to solve.</li>
+<li>The implementation is the ultimate stress test. Theoretical API design is no substitute for the feedback you get from
+actually building with it.</li>
+<li>Don't be afraid to evolve your core abstractions. When implementation reveals a weakness in your API, it's a sign of
+progress. Improving the trait is often better than building hacks on top of it.</li>
+<li>The result of this feedback loop is a more resilient, expressive, and ergonomic system for all future developers.</li>
+</ul>
+
+
+    </main>
+
+    <footer></footer>
+
+    <!-- Current page: /posts/2025-06-17-implementing-datafusion-udwf-api/ -->
+  </body>
+</html>
