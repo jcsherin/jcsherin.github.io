@@ -1,5 +1,5 @@
 ---
-title: "Record Shredding: Inside denester's Rust Iterator and State Machine for Nested Data"
+title: "Rust's State Machine & Iterators: Conquering Nested Data's Missing Pieces"
 date: 2025-06-18
 summary: >
   Building on the foundational concepts of Dremel's record shredding, this deep dive into denester's Rust
