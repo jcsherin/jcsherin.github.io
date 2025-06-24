@@ -25,7 +25,9 @@ The inner workings of the Dremel representation is complicated, but mechanical. 
 written about it. A curated set of links is available at the end of this blog post. So I am going to leave out the
 how to compute the Dremel encoding for nested data structures out of this post.
 
-Instead, the main thrust of this post is why the Dremel representation works?
+Instead, the main thrust of this post is explore the inherent challenges with nested data structures that makes it
+so hard to store them efficiently and improving query performance. This will help us better understand the ingenious
+design choices in the Dremel representation.
 
 - [ ] The last para has to directly connect to the title of the post.
 
