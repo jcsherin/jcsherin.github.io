@@ -9,3 +9,11 @@ summary: >
 layout: layouts/post.njk
 draft: true
 ---
+
+Modern state of the art OLAP query execution engines can execute medium-high selectivity queries in under a second
+on petabyte-scale(trillion rows) data. The foundation of this high-performance is columnar storage. Here is a
+surprising truth: the performance is virtually identical whether you are querying nested data structures in Apache
+Parquet or flat, relational tables. Many, mistakenly believe that nested data structures inherently leads to slower
+query performance. This belief probably stems from a comparison with OLTP systems.
+
+
