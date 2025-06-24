@@ -29,7 +29,7 @@ Instead, the main thrust of this post is explore the inherent challenges with ne
 so hard to store them efficiently and improving query performance. This will help us better understand the ingenious
 design choices in the Dremel representation.
 
-## It starts with the Schema
+## What is a Schema?
 
 We are storing bytes of ones and zeroes to disk. Now you want to read it back. But values of different types can end
 up with the same byte representation on disk. So reading back the data depends on how you interpret the bytes. To
@@ -45,4 +45,22 @@ In database storage at a minimum three metadata values are required to describe 
 A relation (or table) is a collection of fields (or columns).
 
 A schema describes a relation.
+
+## Schema for Nested Data Structures
+
+## Problem 1: One Schema, Many Possible Structures
+
+## Problem 2: Missing Values
+
+## Problem 3: Different Lists, Identical Representation
+
+## Problem 4: Empty Lists
+
+## Problem 5: Sparse Values, Storage inefficiency
+
+## Problem 6: Partial access (read a single path)
+
+## Problem 7: Predicate Pruning/Skipping
+
+## Shifting burden of normalization in storage, join in querying to storage layer
 
