@@ -21,7 +21,11 @@ the performance gap was Google BigQuery powered by the Dremel engine. Parquet ad
 nested data structures in its own file format. This was not done as an afterthought. So Parquet came with ground up
 support for storing and querying both nested data structures and relational, flat data.
 
-The inner workings of the Dremel representation is complicated. A simple search will surface many posts which
-explains the mechanical aspects of Dremel encoding in much detail. I am thankful to those authors because it was
-extremely helpful when I wanted to write my own implementation from scratch. So I am not going to spend much time
-repeating what has already been written better elsewhere. (Links below)
+The inner workings of the Dremel representation is complicated, but mechanical. There are many high quality posts
+written about it. A curated set of links is available at the end of this blog post. So I am going to leave out the
+how to compute the Dremel encoding for nested data structures out of this post.
+
+Instead, the main thrust of this post is why the Dremel representation works?
+
+- [ ] The last para has to directly connect to the title of the post.
+
