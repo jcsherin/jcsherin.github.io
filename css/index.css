@@ -343,4 +343,5 @@ a[href].direct-link:focus:visited,
   color: var(--darkgray);
   font-weight: normal;
   margin-bottom: 2rem;
+  line-height: 1.4;
 }

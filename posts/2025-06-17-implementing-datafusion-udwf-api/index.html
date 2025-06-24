@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forged in Practice: How Implementing Window Functions Refined DataFusion&#39;s API</title>
+    <title>The Trait Transformation: Unpacking DataFusion&#39;s Evolved Window Function API</title>
     <meta name="description" content="jcsherin writes about programming">
     <meta name="generator" content="Eleventy v1.0.1">
 
@@ -22,12 +22,12 @@
           <li class="nav-item"><a href="/about/">About</a></li>
         </ul>
       </header>
-      <h3 class="page-subtitle">On the theory and practice of analytical database query engines, column storage formats and Apache DataFusion.</h3>
+      <h4 class="page-subtitle">Bridging Theory and Practice: Exploring Analytical Query Execution with Apache DataFusion, Parquet, and Apache Arrow</h4>
 
       <main class="tmpl-post">
-        <h1>Forged in Practice: How Implementing Window Functions Refined DataFusion&#39;s API</h1>
+        <h1>The Trait Transformation: Unpacking DataFusion&#39;s Evolved Window Function API</h1>
 
-<time datetime="2025-06-17">17 Jun 2025</time>
+<time datetime="2025-06-18">18 Jun 2025</time>
 
 
   <div class="draft-indicator">
@@ -36,63 +36,120 @@
   </div>
 
 
-<p>Designing a library's core abstractions is one of the most challenging parts of software engineering. It's a balancing
-act between simplicity, power, and future-proofing. But as we found during a major refactor in Apache DataFusion, the
-best APIs aren't just designed—they're forged and refined in the fire of real-world implementation.</p>
-<p>This post is a case study of that process. We'll trace the evolution of the <code>WindowUDFImpl</code> trait, showing how its
-initial design was stress-tested and ultimately improved by the practical requirements of converting complex window
-functions like <code>LEAD</code> and <code>LAG</code>.</p>
-<h3 id="the-starting-point:-a-clean-but-simple-abstraction" tabindex="-1">The Starting Point: A Clean but Simple Abstraction <a class="direct-link" href="#the-starting-point:-a-clean-but-simple-abstraction" aria-hidden="true">#</a></h3>
-<p>The DataFusion community had a clear strategic goal: unify the two separate function interfaces (<code>BuiltInWindowFunction</code>
-and <code>WindowUDF</code>) into a single, trait-based API. Building on the success of a similar refactor for scalar functions, the
-initial <code>WindowUDFImpl</code> trait was designed for clarity and simplicity, and it served as a solid architectural blueprint.</p>
-<p><em>(Here, you can show the initial, simpler version of the <code>WindowUDFImpl</code> trait, highlighting methods like <code>return_type</code>
-and <code>nullable</code>.)</em></p>
-<h3 id="the-challenge:-applying-the-blueprint-to-a-new-domain" tabindex="-1">The Challenge: Applying the Blueprint to a New Domain <a class="direct-link" href="#the-challenge:-applying-the-blueprint-to-a-new-domain" aria-hidden="true">#</a></h3>
-<p>With a proven pattern from the scalar function refactor, the next challenge was to adapt and apply this blueprint to the
-more complex domain of window functions. My work began here: taking the core ideas and being the first to prove them out
-on the windowing engine, which had its own unique requirements for stateful evaluation and optimizer integration.</p>
-<h3 id="the-first-test:-a-successful-row_number-conversion" tabindex="-1">The First Test: A Successful <code>row_number</code> Conversion <a class="direct-link" href="#the-first-test:-a-successful-row_number-conversion" aria-hidden="true">#</a></h3>
-<p>The first candidate for this new approach was <code>row_number</code>. As a simple function with no arguments and a fixed return
-type, it was the perfect vehicle to validate that the core pattern was sound. The conversion was a success and
-demonstrated the viability of the unification effort.</p>
-<p><em>(Here, you can briefly show the clean implementation of <code>WindowUDFImpl</code> for <code>row_number</code> and how it mapped well to the
-initial trait design.)</em></p>
-<h3 id="hitting-the-limits:-the-challenge-of-lead-and-lag" tabindex="-1">Hitting the Limits: The Challenge of <code>LEAD</code> and <code>LAG</code> <a class="direct-link" href="#hitting-the-limits:-the-challenge-of-lead-and-lag" aria-hidden="true">#</a></h3>
-<p>The real test came when we moved on to more complex functions. The simple API immediately presented several difficult
-questions that it was not yet equipped to answer:</p>
-<ol>
-<li><strong>How can the query optimizer know that <code>LEAD</code> is the semantic inverse of <code>LAG</code>?</strong> This is crucial for performance.</li>
-<li><strong>How can a function's return type be determined when it depends on multiple, potentially <code>NULL</code>, arguments?</strong></li>
-<li><strong>How can the stateful <code>PartitionEvaluator</code> access the literal values of its arguments to configure its behavior?</strong></li>
-</ol>
-<p>It became clear that to implement these functions correctly, the API itself had to evolve.</p>
-<h3 id="reforging-the-api:-the-introduction-of-field-reverse_expr-and-partitionevaluatorargs" tabindex="-1">Reforging the API: The Introduction of <code>field</code>, <code>reverse_expr</code>, and <code>PartitionEvaluatorArgs</code> <a class="direct-link" href="#reforging-the-api:-the-introduction-of-field-reverse_expr-and-partitionevaluatorargs" aria-hidden="true">#</a></h3>
-<p>This led to a series of patches that fundamentally improved the <code>WindowUDFImpl</code> trait, driven directly by the problems
-we discovered during implementation.</p>
-<p><em>(This is your core technical section. Use your patches to show the &quot;before&quot; and &quot;after&quot; for each of these API
-additions, explaining what problem each one solved.)</em></p>
+<p>APIs aren't just designed in a vacuum; they're forged and refined through real-world implementation. This post will be a
+deep dive into how the practical challenges of unifying DataFusion's window function interface and implementing complex
+functions like <code>LEAD</code> and <code>LAG</code> drove the evolution of the <code>WindowUDFImpl</code> trait, resulting in a more modular,
+extensible, and developer-friendly query engine.</p>
+<p>DataFusion is an extensible query engine, and its <code>WindowUDF</code> API has undergone a significant evolution. Let's set the
+stage for a case study on this transformation.</p>
+<hr>
+<h3 id="the-strategic-imperative:-why-unify-functions-in-datafusion" tabindex="-1">The Strategic Imperative: Why Unify Functions in DataFusion? <a class="direct-link" href="#the-strategic-imperative:-why-unify-functions-in-datafusion" aria-hidden="true">#</a></h3>
+<p>This refactor wasn't an isolated event; it was part of a larger strategic effort across DataFusion to unify all function
+interfaces (scalar, aggregate, and now window).</p>
+<p>Here were the core motivations, addressing previous pain points and incorporating new details:</p>
 <ul>
-<li><strong>The <code>field</code> Method:</strong> Show how this replaced <code>return_type</code> and <code>nullable</code>, giving the implementer more context.</li>
-<li><strong>The <code>reverse_expr</code> Method:</strong> Explain how this provided a formal hook for the query optimizer.</li>
-<li><strong>The <code>PartitionEvaluatorArgs</code> struct:</strong> Detail how this gave the stateful evaluator crucial information from the
-physical plan.</li>
+<li><strong>Modular Packages &amp; Reduced Footprint:</strong> Previously, a growing number of built-in functions increased the core binary
+size. The vision was to split functions into optional packages, allowing users to pull in only what they needed.</li>
+<li><strong>From Awkward Imperative to Idiomatic Rust Traits:</strong> The old way of defining user-defined functions (like <code>ScalarUDF</code>
+and <code>WindowUDF</code> using complex <code>Arc&lt;dyn Fn(...)&gt;</code> function pointers) was awkward, cumbersome, and hard to extend in
+backwards-compatible ways. The goal was to shift to a more declarative, trait-based model (e.g., <code>WindowUDFImpl</code>),
+which is an idiomatic Rust pattern for extensibility and cleaner API design.</li>
+<li><strong>Unified Code Paths &amp; Consistent Experience:</strong> We highlighted the inefficiency and inconsistency of having separate &quot;
+built-in&quot; and &quot;user-defined&quot; function implementations. Unifying them under a single <code>WindowUDFImpl</code> trait ensures all
+functions (internal or external) use the same code paths, leading to simpler maintenance, better consistency, and
+future optimization opportunities.</li>
+<li><strong>Enhanced Extensibility &amp; Contribution:</strong> The enum-based approach for built-ins required modifying massive central
+functions with pattern matching for every new function. A trait-based model inherently promotes extensibility, making
+it easier for new contributors to add or extend functionality without touching core logic.</li>
 </ul>
-<h3 id="the-payoff:-an-elegant-implementation" tabindex="-1">The Payoff: An Elegant Implementation <a class="direct-link" href="#the-payoff:-an-elegant-implementation" aria-hidden="true">#</a></h3>
-<p>With the new, more expressive API in place, the implementation of <code>LEAD</code> and <code>LAG</code> became straightforward and robust,
-proving the value of the iterative design process.</p>
-<p><em>(Here, you can show snippets from the final <code>lead_lag.rs</code> implementation, highlighting how it elegantly uses the new
-API methods.)</em></p>
-<h3 id="lessons-learned-on-api-design-and-community" tabindex="-1">Lessons Learned on API Design and Community <a class="direct-link" href="#lessons-learned-on-api-design-and-community" aria-hidden="true">#</a></h3>
-<p>This journey offers several valuable lessons that extend beyond just DataFusion:</p>
+<p>The initial, simpler version of the <code>WindowUDFImpl</code> trait had basic methods like <code>return_type</code> and <code>nullable</code>.</p>
+<hr>
+<h3 id="proving-the-pattern:-the-row_number-pathfinder" tabindex="-1">Proving the Pattern: The <code>row_number</code> Pathfinder <a class="direct-link" href="#proving-the-pattern:-the-row_number-pathfinder" aria-hidden="true">#</a></h3>
+<p><code>row_number</code> was chosen as the initial candidate for conversion to the new <code>WindowUDFImpl</code> trait because it's a simple
+function (no arguments, fixed return type) perfect for validating the core pattern. The initial success with
+<code>row_number</code> under the new trait demonstrated that the basic unification strategy was sound.</p>
+<hr>
+<h3 id="the-crucible:-when-lead-and-lag-stress-tested-the-api" tabindex="-1">The Crucible: When <code>LEAD</code> and <code>LAG</code> Stress-Tested the API <a class="direct-link" href="#the-crucible:-when-lead-and-lag-stress-tested-the-api" aria-hidden="true">#</a></h3>
+<p>The real challenge emerged with <code>LEAD</code> and <code>LAG</code>, complex functions that exposed the limitations of the initial, simple
+<code>WindowUDFImpl</code> design.</p>
+<p>Here are the specific problems uncovered, along with explanations of &quot;why&quot;:</p>
 <ul>
-<li><strong>Start with a simple abstraction, but stress-test it immediately</strong> with your most complex use cases.</li>
-<li><strong>Treat implementation feedback as a core part of the design process.</strong> When an abstraction feels clumsy or limiting,
-it's an opportunity to improve it.</li>
-<li><strong>Good architecture enables community.</strong> A well-designed, repeatable pattern doesn't just make the original author's
-life easier; it creates a &quot;paved path&quot; for new contributors. The clarity of the final <code>WindowUDF</code> trait made it
-possible to file well-defined &quot;good first issues,&quot; broadening the base of community involvement and turning a large
-solo effort into a parallelizable community one.</li>
+<li><strong>Optimizer's Dilemma (Reversal):</strong> &quot;How can the query optimizer know that <code>LEAD</code> is the semantic inverse of <code>LAG</code>?&quot;
+This relationship is vital for performance optimizations when evaluating window frames in reverse (e.g.,
+<code>UNBOUNDED PRECEDING</code>). The initial API had no formal way to declare this.</li>
+<li><strong>Context-Dependent Return Types &amp; Nullability:</strong> &quot;How can a function's return type be determined when it depends on
+multiple, potentially <code>NULL</code>, arguments?&quot; <code>LEAD</code>/<code>LAG</code> can have optional offset and default values. The result's type
+and nullability might depend on the type of the default argument, even if the primary argument is <code>NULL</code>. The basic
+<code>return_type</code> and <code>nullable</code> methods lacked the necessary context.</li>
+<li><strong>Runtime Argument Access for Evaluators:</strong> &quot;How can the stateful <code>PartitionEvaluator</code> access the literal values of
+its arguments (like offset and default) to configure its behavior?&quot; The runtime evaluation logic needs to know the
+actual offset and default values, not just their types, to perform the shift. The initial <code>partition_evaluator</code>
+signature provided no direct way to pass these runtime-evaluated arguments.</li>
+</ul>
+<hr>
+<h3 id="forging-the-api:-iterative-refinement-through-implementation" tabindex="-1">Forging the API: Iterative Refinement Through Implementation <a class="direct-link" href="#forging-the-api:-iterative-refinement-through-implementation" aria-hidden="true">#</a></h3>
+<p>The challenges posed by <code>LEAD</code> and <code>LAG</code> directly led to specific, crucial additions and modifications to the
+<code>WindowUDFImpl</code> trait. This was a true problem-driven evolution.</p>
+<ul>
+<li><strong>The <code>field</code> Method:</strong>
+<ul>
+<li><strong>Problem Solved:</strong> Context-dependent return types and nullability.</li>
+<li><strong>How it Works:</strong> It replaced <code>return_type</code> and <code>nullable</code>. <code>WindowUDFFieldArgs</code> provides the needed context (
+function name, input types) to precisely define the output <code>Field</code> (type + nullability).</li>
+</ul>
+</li>
+<li><strong>The <code>reverse_expr</code> Method:</strong>
+<ul>
+<li><strong>Problem Solved:</strong> Informing the optimizer about semantic inverses for performance.</li>
+<li><strong>How it Works:</strong> It allows a UDWF to declare if it's <code>Identical</code>, <code>NotSupported</code> for reversal, or <code>Reversed</code> (
+mapping to another UDWF), enabling powerful optimizer transformations.</li>
+</ul>
+</li>
+<li><strong>The <code>PartitionEvaluatorArgs</code> Struct:</strong>
+<ul>
+<li><strong>Problem Solved:</strong> Providing runtime context to the <code>PartitionEvaluator</code>.</li>
+<li><strong>How it Works:</strong> This new struct delivers essential runtime information (<code>input_exprs</code>, <code>input_types</code>,
+<code>is_reversed</code>, <code>ignore_nulls</code>) to the <code>PartitionEvaluator</code>, allowing it to dynamically configure its logic (e.g.,
+fetching actual offset and default values for <code>LEAD</code>/<code>LAG</code>).</li>
+</ul>
+</li>
+<li><strong>The <code>simplify()</code> Method for Optimizer Rules:</strong>
+<ul>
+<li><strong>Problem Solved:</strong> Enabling UDWFs to provide their own optimizer simplification rules.</li>
+<li><strong>Background:</strong> This pattern was first established for <code>ScalarUDFImpl</code> (e.g., <code>arrow_cast</code> simplifying to
+<code>Expr::Cast</code>), allowing functions to &quot;inline&quot; their definitions or provide specialized rewrites. This capability was
+then adopted for <code>WindowUDFImpl</code>.</li>
+<li><strong>How it Works:</strong> <code>simplify()</code> allows UDWFs to return a <code>Rewritten</code> expression or <code>Original</code> arguments, influencing
+query planning.</li>
+</ul>
+</li>
+</ul>
+<p>The role of macros in developer experience is also important. While the core trait evolved, the macro patterns (
+<code>get_or_init_udwf!</code>, <code>define_udwf_and_expr!</code>) were adopted from previous function unification epics (scalar and
+aggregate functions). This ensures a consistent and declarative developer experience across DataFusion's function types,
+making new UDWF creation intuitive, less verbose, and significantly less prone to common errors associated with manual
+struct construction.</p>
+<hr>
+<h3 id="the-payoff:-robustness-performance-and-a-paved-path" tabindex="-1">The Payoff: Robustness, Performance, and a Paved Path <a class="direct-link" href="#the-payoff:-robustness-performance-and-a-paved-path" aria-hidden="true">#</a></h3>
+<p>The refined API allowed for robust and elegant implementations of complex functions like <code>LEAD</code> and <code>LAG</code>. Features like
+<code>reverse_expr</code> and <code>simplify</code> directly enable query optimizer gains, and the unified interface means both internal and
+external functions now benefit from the same robust framework.</p>
+<hr>
+<h3 id="lessons-learned:-designing-for-extensibility-and-community" tabindex="-1">Lessons Learned: Designing for Extensibility and Community <a class="direct-link" href="#lessons-learned:-designing-for-extensibility-and-community" aria-hidden="true">#</a></h3>
+<ul>
+<li><strong>Iterative API Design is Key:</strong> Start with a simple abstraction, but don't be afraid to rigorously stress-test it
+with your most complex, real-world use cases. Treat implementation challenges not as roadblocks, but as direct,
+invaluable feedback loops for API improvement. The most elegant and powerful APIs are often those that have been
+forged and refined through this iterative process.</li>
+<li><strong>Embrace Trait-Based Extensibility:</strong> DataFusion's experience powerfully demonstrates how adopting Rust's trait
+pattern allows a project to move beyond rigid, enum-based systems. This shift creates a flexible, modular, and
+inherently future-proof architecture that can easily incorporate new functionality without disrupting existing code.
+It's a prime example of building for the unknown.</li>
+<li><strong>A Paved Path for Community:</strong> A well-designed, consistent, and declarative API, supported by intuitive tools like
+the shared macro patterns, significantly lowers the barrier to entry for new contributors. What might otherwise be a
+daunting, monolithic refactor becomes a series of well-defined, &quot;good first issues&quot; that can be parallelized across a
+community. This not only accelerates development but also fosters a vibrant, engaged open-source ecosystem, turning
+complex solo efforts into collaborative community achievements.</li>
 </ul>
 
 

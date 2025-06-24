@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Shredding: Part 2 - Step-by-Step Dremel Algorithm in Action</title>
+    <meta name="description" content="jcsherin writes about programming">
+    <meta name="generator" content="Eleventy v1.0.1">
+
+    <link rel="stylesheet" href="/css/index.css">
+    <link rel="stylesheet" href="/css/prism-base16-monokai.dark.css">
+    <link rel="stylesheet" href="/css/prism-diff.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="jcsherin">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="jcsherin">
+  </head>
+  <body>
+    <div class="page-wrapper">
+      <header>
+        <h1 class="home"><a href="/">jcsherin</a></h1>
+        <ul class="nav">
+          <li class="nav-item"><a href="/">Writings</a></li>
+          <li class="nav-item"><a href="/about/">About</a></li>
+        </ul>
+      </header>
+      <h4 class="page-subtitle">Bridging Theory and Practice: Exploring Analytical Query Execution with Apache DataFusion, Parquet, and Apache Arrow</h4>
+
+      <main class="tmpl-post">
+        <h1>Record Shredding: Part 2 - Step-by-Step Dremel Algorithm in Action</h1>
+
+<time datetime="2025-06-09">09 Jun 2025</time>
+
+
+  <div class="draft-indicator">
+    <p><strong>DRAFT</strong></p>
+    <p>This is a draft preview. To publish, remove draft: true from the front matter.</p>
+  </div>
+
+
+<h1 id="record-shredding:-part-2-step-by-step-dremel-algorithm-in-action" tabindex="-1">Record Shredding: Part 2 - Step-by-Step Dremel Algorithm in Action <a class="direct-link" href="#record-shredding:-part-2-step-by-step-dremel-algorithm-in-action" aria-hidden="true">#</a></h1>
+<h2 id="introduction:-from-concepts-to-code" tabindex="-1">Introduction: From Concepts to Code <a class="direct-link" href="#introduction:-from-concepts-to-code" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Recap Part 1:</strong> Briefly re-state the challenge of nested data, the columnar advantage, and the <em>conceptual</em> role of
+definition and repetition levels as structural metadata introduced in Part 1.</li>
+<li><strong>Goal of Part 2:</strong> Emphasize that this part will make it concrete through detailed examples.</li>
+</ul>
+<h2 id="the-schema-and-example-data-for-our-journey" tabindex="-1">The Schema and Example Data for Our Journey <a class="direct-link" href="#the-schema-and-example-data-for-our-journey" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Present Schema:</strong> Re-present the <code>UserProfile</code> schema (Figure 2, maybe link to Part 1 for full details).</li>
+<li><strong>The Records:</strong> Introduce the <em>specific, complex nested JSON records</em> you will use for the full walkthrough.
+<ul>
+<li>Example 1: <code>[ [1, 2], [], [3] ]</code> type structure (from current draft's R-level section).</li>
+<li>Example 2: <code>[ [], [4, 5, 6], []]</code> type structure (from current draft's R-level section).</li>
+<li>Maybe one more complex <code>UserProfile</code> example that showcases all types of fields (optional, repeated, structs,
+missing values).</li>
+</ul>
+</li>
+</ul>
+<h2 id="step-by-step-record-shredding:-calculating-the-levels" tabindex="-1">Step-by-Step Record Shredding: Calculating the Levels <a class="direct-link" href="#step-by-step-record-shredding:-calculating-the-levels" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Process Overview:</strong> Briefly state that for each leaf value, we'll calculate its Definition and Repetition Level
+based on its path and the schema.</li>
+<li><strong>Detailed Calculation for Each Example Record:</strong>
+<ul>
+<li><strong>For Record 1 (e.g., <code>[ [1, 2], [], [3] ]</code>):</strong>
+<ul>
+<li>Walk through each value (<code>1</code>, <code>2</code>, then the implied <code>NULL</code> for <code>[]</code>, then <code>3</code>).</li>
+<li>For each value, show <em>how</em> its Definition Level is computed by traversing its path and counting present
+optional/repeated fields.</li>
+<li>For each value, show <em>how</em> its Repetition Level is computed by considering parent lists and new list/record
+boundaries (the &quot;0 for new record&quot;, &quot;inherit parent&quot;, &quot;same list&quot; rules).</li>
+<li>Present the final shredded columns for this record (Value, Definition Level, Repetition Level) clearly, perhaps in
+a simple Markdown table.</li>
+</ul>
+</li>
+<li><strong>For Record 2 (e.g., <code>[ [], [4, 5, 6], []]</code>):</strong>
+<ul>
+<li>Repeat the same detailed walkthrough for calculating D-levels and R-levels.</li>
+<li>Crucially, highlight how empty lists are represented by just the D- and R-levels without a stored value (e.g., the
+<code>NULL</code> cases from your current draft).</li>
+<li>Present the final shredded columns for this record.</li>
+</ul>
+</li>
+<li><strong>(Optional) For a full <code>UserProfile</code> example:</strong> Show how the D- and R-levels are calculated for <code>uid</code>,
+<code>displayName</code>, <code>tags[0]</code>, <code>tags[1]</code>, <code>preferences.theme</code>, <code>preferences.notifications</code> etc., demonstrating how
+non-repeated fields still get levels, and how missing optional fields impact D-levels.</li>
+</ul>
+</li>
+</ul>
+<h2 id="step-by-step-record-assembly:-reconstructing-the-hierarchy" tabindex="-1">Step-by-Step Record Assembly: Reconstructing the Hierarchy <a class="direct-link" href="#step-by-step-record-assembly:-reconstructing-the-hierarchy" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>The Assembly Algorithm:</strong> Explain the high-level logic: read values and levels sequentially, <code>R=0</code> means new record,
+D-levels indicate path presence/termination.</li>
+<li><strong>Reconstructing Example Records:</strong>
+<ul>
+<li><strong>For Record 1 (using its shredded levels):</strong> Walk through the <code>(value, def, rep)</code> tuples. Show how the algorithm
+starts a new record on <code>R=0</code>, creates nested lists, and infers the empty list (<code>[]</code>) based on <code>Def=1, Rep=1</code>. Show
+the reconstructed JSON.</li>
+<li><strong>For Record 2 (using its shredded levels):</strong> Repeat the assembly, clearly demonstrating how the initial
+<code>Def=1, Rep=0</code> signifies a new record with an empty first list. Show the reconstructed JSON.</li>
+<li><strong>(Optional) For the <code>UserProfile</code> example:</strong> Show how the full <code>UserProfile</code> object is reconstructed.</li>
+</ul>
+</li>
+<li><strong>Demonstrating Partial Projection:</strong> Take the assembled <code>UserProfile</code> data and show how if you only request <code>uid</code> and
+<code>preferences.notifications</code>, the algorithm reconstructs just that partial structure.</li>
+</ul>
+<h2 id="the-genius-unveiled:-why-it's-so-efficient" tabindex="-1">The Genius Unveiled: Why It's So Efficient <a class="direct-link" href="#the-genius-unveiled:-why-it's-so-efficient" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Consolidation:</strong> Summarize how Dremel's approach (D-levels + R-levels + columnar storage) perfectly solves the
+complex problems of nested data.</li>
+<li><strong>Key Benefits (Reiterate and Deepen):</strong>
+<ul>
+<li><strong>Space Efficiency:</strong> Dense storage, no <code>NULL</code> value overhead.</li>
+<li><strong>Query Performance:</strong> Projection pushdown on columns, optimized for analytical scans.</li>
+<li><strong>Flexibility:</strong> Reconstruct full or partial objects.</li>
+</ul>
+</li>
+<li><strong>Impact:</strong> Briefly touch on Parquet's ubiquitous success as a testament to this design.</li>
+</ul>
+<h2 id="conclusion:-taming-complexity-one-level-at-a-time" tabindex="-1">Conclusion: Taming Complexity, One Level at a Time <a class="direct-link" href="#conclusion:-taming-complexity-one-level-at-a-time" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Final Summary:</strong> Reiterate the core message: Dremel's record shredding, through the ingenious use of definition and
+repetition levels, transforms unwieldy nested data into a highly efficient, query-optimized columnar format.</li>
+<li><strong>Closing thought:</strong> Emphasize the elegance and enduring impact of this foundational algorithm in modern data systems.</li>
+</ul>
+
+
+      </main>
+
+      <footer></footer>
+
+      <!-- Current page: /posts/2025-06-09-dremel-record-shredding-2/ -->
+    </body>
+  </div>
+</html>

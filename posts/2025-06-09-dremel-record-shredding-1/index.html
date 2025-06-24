@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Record Shredding: Part 1 - The Brilliant Levels of Dremel&#39;s Design</title>
+    <meta name="description" content="jcsherin writes about programming">
+    <meta name="generator" content="Eleventy v1.0.1">
+
+    <link rel="stylesheet" href="/css/index.css">
+    <link rel="stylesheet" href="/css/prism-base16-monokai.dark.css">
+    <link rel="stylesheet" href="/css/prism-diff.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="jcsherin">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="jcsherin">
+  </head>
+  <body>
+    <div class="page-wrapper">
+      <header>
+        <h1 class="home"><a href="/">jcsherin</a></h1>
+        <ul class="nav">
+          <li class="nav-item"><a href="/">Writings</a></li>
+          <li class="nav-item"><a href="/about/">About</a></li>
+        </ul>
+      </header>
+      <h4 class="page-subtitle">Bridging Theory and Practice: Exploring Analytical Query Execution with Apache DataFusion, Parquet, and Apache Arrow</h4>
+
+      <main class="tmpl-post">
+        <h1>Record Shredding: Part 1 - The Brilliant Levels of Dremel&#39;s Design</h1>
+
+<time datetime="2025-06-09">09 Jun 2025</time>
+
+
+  <div class="draft-indicator">
+    <p><strong>DRAFT</strong></p>
+    <p>This is a draft preview. To publish, remove draft: true from the front matter.</p>
+  </div>
+
+
+<h2 id="introduction:-the-trillion-row-challenge" tabindex="-1">Introduction: The Trillion-Row Challenge <a class="direct-link" href="#introduction:-the-trillion-row-challenge" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Hook:</strong> Start with the &quot;trillion-row table in seconds&quot; claim.</li>
+<li><strong>Problem Statement:</strong> Explain the challenge of nested data in large-scale analytics (hours to seconds, 87TB to 0.5TB
+scan).</li>
+<li><strong>Dremel's Impact:</strong> Briefly mention Dremel's breakthrough and its adoption by Apache Parquet.</li>
+<li><strong>Personal Journey/Motivation:</strong> Your &quot;aha!&quot; moment, emphasizing the goal is to explain <em>why</em> it works and its &quot;magic
+and elegance.&quot;</li>
+</ul>
+<h2 id="record-shredding-and-assembly:-flattening-the-hierarchy" tabindex="-1">Record Shredding and Assembly: Flattening the Hierarchy <a class="direct-link" href="#record-shredding-and-assembly:-flattening-the-hierarchy" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Core Concepts:</strong> Define record shredding (flattening) and record assembly (reconstructing).</li>
+<li><strong>Visualization:</strong> Use <code>UserProfile</code> example (Figure 1).</li>
+<li><strong>Conceptual Shredding:</strong> Show the <em>idea</em> of flattening to logical rows (no detailed tables yet, just an illustrative
+list of columns and values).</li>
+<li><strong>The Power of Partial Assembly:</strong> Explain how only a subset of columns can be reassembled, directly relating to query
+needs.</li>
+</ul>
+<h2 id="the-columnar-advantage" tabindex="-1">The Columnar Advantage <a class="direct-link" href="#the-columnar-advantage" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Row vs. Columnar Storage:</strong> Briefly explain the differences and their typical use cases (transactional vs.
+analytical).</li>
+<li><strong>Projection Pushdown:</strong> Highlight how columnar storage enables this optimization.</li>
+<li><strong>Connection to Shredding:</strong> Explain how Dremel's shredding <em>enables</em> nested data to leverage columnar storage
+benefits.</li>
+</ul>
+<h2 id="the-blueprint:-your-schema" tabindex="-1">The Blueprint: Your Schema <a class="direct-link" href="#the-blueprint:-your-schema" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Schema's Role:</strong> Emphasize the schema as the &quot;single source of truth.&quot;</li>
+<li><strong>Field Properties:</strong> Define fields, optional/required, repeated, and struct types.</li>
+<li><strong>Schema Visualization:</strong> Use <code>UserProfile</code> schema (Figure 2).</li>
+<li><strong>Structural Variability:</strong> Explain how optional and repeated fields introduce &quot;holes&quot; and variations, and why the
+schema is needed to understand this. Provide the three JSON examples of <code>UserProfile</code> to illustrate this variability.</li>
+</ul>
+<h2 id="dremel's-ingenious-encoding:-capturing-structure-as-data" tabindex="-1">Dremel's Ingenious Encoding: Capturing Structure as Data <a class="direct-link" href="#dremel's-ingenious-encoding:-capturing-structure-as-data" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>The Problem with Naive Flattening:</strong> Briefly revisit how simple flattening leads to redundancy and ambiguity (e.g.,
+repeating <code>uid</code> for each <code>tag</code>).</li>
+<li><strong>The Ambiguity:</strong> Show the <em>simplified conceptual columnar view</em> after shredding (values for <code>uid</code>, <code>displayName</code>,
+<code>tags</code>, <code>preferences.theme</code>, <code>preferences.notifications</code> as separate lists). Point out the reader's likely
+confusion: &quot;How do we know where records begin/end or handle missing fields?&quot; – setting up the need for metadata.</li>
+<li><strong>The Revelation: Structure is Metadata:</strong>
+<ul>
+<li>Introduce <strong>Definition Levels</strong> and <strong>Repetition Levels</strong> as the two crucial numeric metadata values.</li>
+<li>Explain the <em>big idea</em>: how these numbers encode all structural variability, allowing perfect reconstruction from
+flat data. Emphasize the &quot;magic and elegance.&quot;</li>
+</ul>
+</li>
+</ul>
+<h3 id="how-definition-levels-work-(conceptual-overview)" tabindex="-1">How Definition Levels Work (Conceptual Overview) <a class="direct-link" href="#how-definition-levels-work-(conceptual-overview)" aria-hidden="true">#</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Explain D-levels conceptually – they capture &quot;presence&quot; or &quot;nullability&quot; along a path.</li>
+<li><strong>Simple Illustration (No detailed tables/calculations):</strong> Use a very simple path example (e.g., <code>a.b.c</code> where <code>b</code> is
+optional). Show <code>a</code> (Def=1), <code>a.b</code> (Def=2 if <code>b</code> present), <code>NULL</code> for <code>a.b</code> (Def=1 if <code>b</code> missing). The goal is to
+convey <em>what</em> they represent, not <em>how to calculate everything</em>.</li>
+<li><strong>Zero Definition Level:</strong> Explain its significance (path not present).</li>
+</ul>
+<h3 id="how-repetition-levels-work-(conceptual-overview)" tabindex="-1">How Repetition Levels Work (Conceptual Overview) <a class="direct-link" href="#how-repetition-levels-work-(conceptual-overview)" aria-hidden="true">#</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Explain R-levels conceptually – they capture &quot;record boundaries&quot; and &quot;list boundaries&quot; within a record.</li>
+<li><strong>Simple Illustration (No detailed tables/calculations):</strong> Explain the &quot;0 for new record&quot; rule. Briefly mention how
+non-zero levels indicate continuation within a list or a new sub-list. The goal is the <em>concept</em>, not the step-by-step
+example.</li>
+</ul>
+<h2 id="conclusion:-unlocking-nested-data's-potential-(for-part-1)" tabindex="-1">Conclusion: Unlocking Nested Data's Potential (for Part 1) <a class="direct-link" href="#conclusion:-unlocking-nested-data's-potential-(for-part-1)" aria-hidden="true">#</a></h2>
+<ul>
+<li><strong>Recap Part 1's Core Idea:</strong> Summarize the problem of nested data and how Dremel's core concept (Definition &amp;
+Repetition Levels as metadata) is the elegant solution.</li>
+<li><strong>Reinforce the &quot;Magic&quot;:</strong> Reiterate the brilliance of encoding complex structure into two simple numbers.</li>
+<li><strong>Tease Part 2:</strong> Clearly state that Part 2 will dive into the <em>mechanics</em> with a complete, step-by-step example of
+shredding and assembly. &quot;In Part 2, we'll roll up our sleeves and walk through the step-by-step process of shredding
+and assembling complex records, revealing how Dremel's ingenious algorithm actually works in practice.&quot;</li>
+</ul>
+
+
+      </main>
+
+      <footer></footer>
+
+      <!-- Current page: /posts/2025-06-09-dremel-record-shredding-1/ -->
+    </body>
+  </div>
+</html>
