@@ -29,5 +29,20 @@ Instead, the main thrust of this post is explore the inherent challenges with ne
 so hard to store them efficiently and improving query performance. This will help us better understand the ingenious
 design choices in the Dremel representation.
 
-- [ ] The last para has to directly connect to the title of the post.
+## It starts with the Schema
+
+We are storing bytes of ones and zeroes to disk. Now you want to read it back. But values of different types can end
+up with the same byte representation on disk. So reading back the data depends on how you interpret the bytes. To
+read the data that you wrote to disk, and read it back in its original form you need metadata which describes the
+logical type of the value in physical storage. Without this metadata context bytes are ambiguous.
+
+In database storage at a minimum three metadata values are required to describe any value.
+
+1. The field (or column) name
+2. The data type
+3. Is this value nullable?
+
+A relation (or table) is a collection of fields (or columns).
+
+A schema describes a relation.
 
