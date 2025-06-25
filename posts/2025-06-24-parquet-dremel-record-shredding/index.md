@@ -29,6 +29,20 @@ Instead, the main thrust of this post is explore the inherent challenges with ne
 so hard to store them efficiently and improving query performance. This will help us better understand the ingenious
 design choices in the Dremel representation.
 
+## Extract values from leaf node, now can't go back
+
+The naive approach to storing nested data structure is a direct serialization, like JSON.stringify. It will preserve the
+entire structural information (the objects, keys, and their nesting) along with the values. Reconstructing the original
+value from it is as easy as reading the data and casting it in memory to its original type.
+
+However, to store nested data for efficient OLAP querying, we want to save only the most essential parts of the data.
+Which means -- just the values. We want to elide all structural information as well as the names of individual object
+keys.
+
+The genius of Dreml is that it found a way serialize deeply nested data structures by pulling in their values alone, and
+storing them as a linear array. It intelligently encodes the structural information in this linear array, letting it
+recreate the original data structure without losing fidelity.
+
 ## What is a Schema?
 
 We are storing bytes of ones and zeroes to disk. Now you want to read it back. But values of different types can end
@@ -172,18 +186,114 @@ vec![
 ];
 ```
 
-The problem compounds fast for real-world nested data structures with many optional and list
-fields.
+The number of valid structures compounds fast for real-world nested data structures which contain many more
+optional and list fields.
 
 ## Problem 2: Missing Values
 
+In a nested data structures the primitive value is always found at the leaf nodes. Take `phones.number` where `phones`
+is a list field and `number` is a optional field. The primitive value will be found in the `number` field.
+
+There are many possible states for missing values:
+
+1. The `phones` field is not present.
+2. The `phones` field is empty.
+3. The `number` field is not present.
+
+The more levels of nesting and longer the path, the possible states explode. We have to explicitly track at which
+nested level a path terminated.
+
+Say I took the example from earlier where only `phone.phone_type` is present and serialized it to JSON.
+
+```rust
+// @formatter:off
+Contact {
+  name: None,
+  phones: Some(vec![
+    Phone {
+      number: None,
+      phone_type: Some(PhoneType::Home),
+    },
+  ]),
+},
+// @formatter:on
+```
+
+To keep the JSON compact for transmission I decide to remove all the fields which contains null values. The compact
+serialized representation looks like this.
+
+```json
+{
+  "phones": [
+    {
+      "phone_type": "Home"
+    }
+  ]
+}
+```
+
+Here `name` field and `phones.number` fields are missing. Without a shared `Contact` schema it now becomes impossible to
+identify which fields or paths are missing in this value instance. The schema is the single source of truth.
+
 ## Problem 3: Different Lists, Identical Representation
+
+We are going to look at an example of nested lists. There is an outer list and an inner list, so there are two
+levels of nesting in these values. The examples are deliberate. They all have the same sequence of numbers
+appearing in the same order. The only difference between these examples is in the organization of numbers in the
+innermost list.
+
+```json
+// @formatter:off
+[[1, 2], [3], [4, 5, 6]]        // 3 inner lists
+
+[[1, 2, 3, 4, 5, 6]]            // 1 inner lists
+
+[[1], [2], [3], [4], [5], [6]]  // 6 inner lists
+
+[[1, 2, 3], [4, 5, 6]]          // 2 inner lists
+
+[[1], [2, 3], [4], [5, 6]]      // 4 inner lists
+// @formatter:on
+```
+
+The schema definition for the above values looks like this.
+
+```rust
+let number_item_field = Field::new("item", DataType::Int32, true);
+
+// @formatter:off
+let nested_numbers_field = Field::new(
+    "nested_numbers",
+    DataType::List(Arc::new(number_item_field)),
+    true
+);
+// @formatter:on
+
+let schema = Schema::new(vec![nested_numbers_field]);
+```
+
+If we recursively unnest the above examples we get an identical sequence from 1 to 6. Without additional metadata it
+now impossible to reconstruct the original values. You can take a step back for a moment and consider how will you
+design a metadata to encode the list structure.
+
+Here again like earlier we are dealing with small examples. A schema may have more than 2 nested list fields in a
+path. There is no restriction that they should appear next to each other. The nested lists can be separated by one
+or more levels of nested struct fields. Any combination is possible. If you came up with a scheme for the earlier
+simple example maybe now you can consider how well it accommodates arbitrary depth and these conditions.
 
 ## Problem 4: Empty Lists
 
-A list instance where the outer list field is nullable can be in three states: `[1, 2, 3]`, `[]` and `NULL`. A
-non-nullable list on the other hand has two valid states: `[1, 2, 3]` and `[]`. The list can contain null values but
-that depends on the nullability of the list elements datatype defined within the list.
+A list instance has these valid states.
+
+1. It can have 1 or more items.
+2. It can be empty.
+3. It is not present and is `NULL` (assuming the outer list field is defined as nullable)
+
+```json
+[[1, 2], [3], [4, 5, 6]]        // 3 inner lists
+
+[[1, 2], [], ,[3], [4, 5, 6]]        // 3 inner lists
+```
 
 ## Problem 5: Sparse Values, Storage inefficiency
 
