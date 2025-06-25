@@ -301,7 +301,27 @@ paths will have terminated at the level where the list is empty.
 
 ## Problem 5: Sparse Values, Storage inefficiency
 
+When an optional field is not present, we use a `NULL` value in its place. When a list field is empty, we use a
+`NULL` value in its place. For a large schema with many optional and repeated fields it is common for the value to
+be sparse with a few populated fields. It is highly likely that there maybe more holes in the value than there are
+actual primitive values to extract from the leaf nodes.
 
+Let us look at a previous example again to illustrate how sparsity leads to more NULLs than actual values.
+
+```rust
+// @formatter:off
+Contact {
+  name: Some("Bob".to_string()),
+  phones: None,
+},
+// @formatter:on
+```
+
+There is one string value in this `Contact`. Here `phones` is not present which is a list of `phone` which contains
+two fields. So there are two `NULL` values. This example is 67% sparse.
+
+Fortunately the Dremel representation handles this perfectly. The null values are not physically stored. But it can
+be inferred when you decode the Dremel representation and try to hydrate the nested data structure from disk to memory.
 
 ## Problem 6: Partial access (read a single path)
 
