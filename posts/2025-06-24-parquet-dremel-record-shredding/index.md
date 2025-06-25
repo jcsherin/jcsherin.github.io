@@ -63,7 +63,7 @@ This is easier to comprehend with a concrete example.
 ```rust
 struct Contact {
   name: option<string>,
-  phones: option<vec<phone>>,  // <-- this field introduces a nesting level
+  phones: option<vec<Phone>>,  // <-- this field introduces a nesting level
 }
 
 struct Phone {
@@ -115,7 +115,7 @@ We now have all the pieces in places to compose the schema for `Contact`.
 ```rust
 // struct Contact {
 //   name: option<string>,
-//   phones: option<vec<phone>>,
+//   phones: option<vec<Phone>>,
 // }
 
 let name_field = Field::new("name", Datatype::Utf8, true);
@@ -129,7 +129,50 @@ let schema = Schema::new(vec![name_field, phones_list_field]);
 Even with a straightforward schema like `Contact`, the combination of optional fields and nested collections leads
 to rich variety of valid data states. These instances can exhibit significant structural variations based on the
 presence or absence of data in their fields. This makes most values potentially unique in structure despite adhering
-to the same base schema. The problem compounds fast for real-world nested data structures with many optional and list
+to the same base schema.
+
+These examples demonstrate the different structural variations that are all valid instances of the `Contact` schema.
+
+```rust
+vec![
+  // 0: Has a name and 2 phones
+  Contact {
+    name: Some("Alice".to_string()),
+    phones: Some(vec![
+      Phone {
+        number: Some("555-1234".to_string()),
+        phone_type: Some(PhoneType::Home),
+      },
+      Phone {
+        number: Some("555-5678".to_string()),
+        phone_type: Some(PhoneType::Work),
+      },
+    ]),
+  },
+  // 1: phones is not present
+  Contact {
+    name: Some("Bob".to_string()),
+    phones: None,
+  },
+  // 2: phones is present, but list is empty
+  Contact {
+    name: Some("Charlie".to_string()),
+    phones: Some(Vec::<Phone>::new()),
+  },
+  // 3: No name, 1 phone but number is not present
+  Contact {
+    name: None,
+    phones: Some(vec![
+      Phone {
+        number: None,
+        phone_type: Some(PhoneType::Home),
+      },
+    ]),
+  },
+];
+```
+
+The problem compounds fast for real-world nested data structures with many optional and list
 fields.
 
 ## Problem 2: Missing Values
