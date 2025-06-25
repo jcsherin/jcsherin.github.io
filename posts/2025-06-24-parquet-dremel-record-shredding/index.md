@@ -72,14 +72,14 @@ struct Phone {
 }
 
 enum PhoneType {
-  Home, // "home"
-  Work, // "work"
+  Home, // "Home"
+  Work, // "Work"
 }
 ```
 
 ### Example (continued): Schema Definition
 
-We will now define the schema using Apache Arrow. Let us build the schema bottom-up so that we can compose the `contact`
+We will now define the schema using Apache Arrow. Let us build the schema bottom-up so that we can compose the `Contact`
 struct from its member fields.
 
 ```rust
@@ -100,7 +100,14 @@ With `phone_struct` data type we can now define the field for list items.
 // phones: option<vec<Phone>>
 
 let phone_list_item = Field::new("item", phone_struct, true);
-let phones_list_field = Field::new("phones", Datatype::list(Arc::new(phone_list_item)), true);
+
+// @formatter:off
+let phones_list_field = Field::new(
+    "phones",
+    Datatype::list(Arc::new(phone_list_item)),
+    true
+);
+// @formatter:on
 ```
 
 We now have all the pieces in places to compose the schema for `Contact`.
@@ -118,6 +125,12 @@ let schema = Schema::new(vec![name_field, phones_list_field]);
 ```
 
 ## Problem 1: One Schema, Many Possible Structures
+
+Even with a straightforward schema like `Contact`, the combination of optional fields and nested collections leads
+to rich variety of valid data states. These instances can exhibit significant structural variations based on the
+presence or absence of data in their fields. This makes most values potentially unique in structure despite adhering
+to the same base schema. The problem compounds fast for real-world nested data structures with many optional and list
+fields.
 
 ## Problem 2: Missing Values
 
