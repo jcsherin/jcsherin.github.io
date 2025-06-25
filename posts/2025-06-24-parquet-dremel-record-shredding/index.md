@@ -46,7 +46,76 @@ A relation (or table) is a collection of fields (or columns).
 
 A schema describes a relation.
 
-## Schema for Nested Data Structures
+## How to define a Nested Schema?
+
+The nesting levels are primarily described with two data types - a struct and a list.
+
+The struct data type is a collection of fields. To have nesting it should contain at least one field which is a
+struct or a list.
+
+A list data type is a container which also has an inner field to describe the elements of the list. If the inner
+field happens to be a struct or a list data type then another level of nesting is created.
+
+This is easier to comprehend with a concrete example.
+
+### Example: data structure with a single level of nesting
+
+```rust
+struct Contact {
+  name: option<string>,
+  phones: option<vec<phone>>,  // <-- this field introduces a nesting level
+}
+
+struct Phone {
+  number: option<string>,
+  phone_type: option<PhoneType>,
+}
+
+enum PhoneType {
+  Home, // "home"
+  Work, // "work"
+}
+```
+
+### Example (continued): Schema Definition
+
+We will now define the schema using Apache Arrow. Let us build the schema bottom-up so that we can compose the `contact`
+struct from its member fields.
+
+```rust
+// struct Phone {
+//   number: option<string>,
+//   phone_type: option<Phone>,
+// }
+
+let phone_type_field = Field::new("phone_type", Datatype::Utf8, true);
+let phone_number_field = Field::new("number", Datatype::Utf8, true);
+
+let phone_struct = Datatype::Struct (vec![phone_type_field, phone_number_field]);
+```
+
+With `phone_struct` data type we can now define the field for list items.
+
+```rust
+// phones: option<vec<Phone>>
+
+let phone_list_item = Field::new("item", phone_struct, true);
+let phones_list_field = Field::new("phones", Datatype::list(Arc::new(phone_list_item)), true);
+```
+
+We now have all the pieces in places to compose the schema for `Contact`.
+
+```rust
+// struct Contact {
+//   name: option<string>,
+//   phones: option<vec<phone>>,
+// }
+
+let name_field = Field::new("name", Datatype::Utf8, true);
+// phones_list_field (see previous code block)
+
+let schema = Schema::new(vec![name_field, phones_list_field]);
+```
 
 ## Problem 1: One Schema, Many Possible Structures
 
@@ -55,6 +124,10 @@ A schema describes a relation.
 ## Problem 3: Different Lists, Identical Representation
 
 ## Problem 4: Empty Lists
+
+A list instance where the outer list field is nullable can be in three states: `[1, 2, 3]`, `[]` and `NULL`. A
+non-nullable list on the other hand has two valid states: `[1, 2, 3]` and `[]`. The list can contain null values but
+that depends on the nullability of the list elements datatype defined within the list.
 
 ## Problem 5: Sparse Values, Storage inefficiency
 
