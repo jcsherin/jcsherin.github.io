@@ -283,19 +283,25 @@ simple example maybe now you can consider how well it accommodates arbitrary dep
 
 ## Problem 4: Empty Lists
 
-A list instance has these valid states.
-
-1. It can have 1 or more items.
-2. It can be empty.
-3. It is not present and is `NULL` (assuming the outer list field is defined as nullable)
+A list instance has either 1 or more elements, or it is empty.
 
 ```json
-[[1, 2], [3], [4, 5, 6]]        // 3 inner lists
+// @formatter:off
+[[1, 2], [3], [], [4, 5, 6]]      // 1, 2, 3, NULL, 4, 5, 6
 
-[[1, 2], [], ,[3], [4, 5, 6]]        // 3 inner lists
+[[1, 2], [], [] ,[3],[4, 5, 6]]   // 1, 2, NULL, NULL, 3, 4, 5, 6
+// @formatter:on
 ```
 
+The above lists do not yield identical elements. The empty lists are extracted as a `NULL` value. The path
+terminates at this point, and contains no values. So this is why we use a `NULL` value to represent the empty list.
+
+Here the list data type is a primitive `DataType::Int32`. But what if it was a `DataType::Struct(_)`. Then multiple
+paths will have terminated at the level where the list is empty.
+
 ## Problem 5: Sparse Values, Storage inefficiency
+
+
 
 ## Problem 6: Partial access (read a single path)
 
