@@ -29,6 +29,38 @@ Instead, the main thrust of this post is explore the inherent challenges with ne
 so hard to store them efficiently and improving query performance. This will help us better understand the ingenious
 design choices in the Dremel representation.
 
+## The Naive Approach
+
+The nested data structure is serialized into a JSON format. Each serialized value is self-describing as it preserves
+the nested structure, keys and values. The original value is easily retrieved by parsing the string JSON value. This
+is a convenient way for transporting nested data structures across APIs in multiple languages. However, this
+approach does not scale well for storage systems. The keys or fields in the nested data structure are stored
+together with the value. The redundancy across many stored instances scales linearly with the number of instances.
+
+A columnar file format Parquet solves this problem. The schema of a nested data structure is stored once, and the
+values extracted from the nested data structure is stored separately. This uses storage space efficiently. The
+values of the same data type or field are stored contiguously. This column-oriented storage is why it is known as a
+columnar storage format.
+
+The columnar storage model is amenable to all kinds of light-weight compression schemes. This is possible because
+the column is guaranteed to contain values of a single data type. These light-weight compression schemes sometimes
+can achieve compression ratios which far exceeds generalized compression like snappy, zstd. Let me demonstrate with
+an example.
+
+A common light-weight compression scheme is dictionary encoding. Consider the example of a `city` column which has
+the only two distinct values: `Two Rivers`, `Far Madding`. This can be encoded as integers like `0` -> `Two Rivers`
+and `1` -> `Far Madding`. The integer keys are stored instead of the string values.
+
+If the `city` values are sorted and stored in descending order we can also apply run-length encoding. Assume there are
+100 values of `Two Rivers` followed by another 100 values of `Far Madding` stored in an array. This can now be
+reduced to the following representation: `[ (0, 100), (1, 100) ]`. Assuming 32-bit integers, this is a total of 16
+bytes of compressed storage. This is a massive compression ratio compared to storing the original strings, which
+will occupy 10 bytes for `Two Rivers` and 11 bytes for `Far Madding`. The total uncompressed size is 2100 bytes.
+
+This storage efficiency makes columnar file formats the de-facto choice for analytical queries. Queries execute
+faster because there is less I/O overhead, and the work shifts to decoding the compressed data which is CPU-bound
+and therefore will execute faster. This scales well when size of the dataset increases.
+
 ## Extract values from leaf node, now can't go back
 
 The naive approach to storing nested data structure is a direct serialization, like JSON.stringify. It will preserve the
