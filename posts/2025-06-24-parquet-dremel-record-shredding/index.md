@@ -61,19 +61,108 @@ This storage efficiency makes columnar file formats the de-facto choice for anal
 faster because there is less I/O overhead, and the work shifts to decoding the compressed data which is CPU-bound
 and therefore will execute faster. This scales well when size of the dataset increases.
 
-## Extract values from leaf node, now can't go back
+## The Dremel Way
 
-The naive approach to storing nested data structure is a direct serialization, like JSON.stringify. It will preserve the
-entire structural information (the objects, keys, and their nesting) along with the values. Reconstructing the original
-value from it is as easy as reading the data and casting it in memory to its original type.
+In the Dremel encoding the values are extracted from the nested record and then stored in linear arrays. The schema
+is stored separately once. The structure of each nested record is encoded as __definition levels__ and __repetition
+levels__ and stored together with the values.
 
-However, to store nested data for efficient OLAP querying, we want to save only the most essential parts of the data.
-Which means -- just the values. We want to elide all structural information as well as the names of individual object
-keys.
+The convenience of the JSON encoding is that no additional work is required to reassemble the nested data structure.
+But in the Dremel encoding the nested data structure is flattened into a linear array representation. Now there has
+to be a process which can do the reverse which is scanning the linear array and reassemble the nested record same as
+the original. The __definition levels__ and __repetition levels__ metadata plays a crucial role in this reassembly.
 
-The genius of Dreml is that it found a way serialize deeply nested data structures by pulling in their values alone, and
-storing them as a linear array. It intelligently encodes the structural information in this linear array, letting it
-recreate the original data structure without losing fidelity.
+Let us understand this better with the help of a concrete example.
+
+```json
+[
+  {
+    "name": "Alice",
+    "phones": [
+      {
+        "number": "555-1234",
+        "phone_type": "Home"
+      },
+      {
+        "number": "555-5678",
+        "phone_type": "Work"
+      }
+    ]
+  },
+  {
+    "name": "Bob",
+    "phones": null
+  },
+  {
+    "name": "Charlie",
+    "phones": []
+  },
+  {
+    "name": null,
+    "phones": [
+      {
+        "number": null,
+        "phone_type": "Home"
+      }
+    ]
+  }
+]
+```
+
+For __name__:
+
+```text
+name: ["Alice", "Alice", "Bob", "Charlie", NULL]
+
+def: [1, 1, 1, 1, 0]
+rep: [0, 0, 0, 0, 0]
+```
+
+For __phones.number__:
+
+```text
+phones.number: ["555-1234", "555-5678", NULL, NULL, NULL]
+
+def: [2, 2, 0, 0, 1]
+rep: [0, 1, 0, 0, 0]
+```
+
+For __phones.phone_type__:
+
+```text
+phones.phone_type: ["Home", "Work", NULL, NULL, "Home"]
+def: [2, 2, 0, 0, 2]
+rep: [0, 1, 0, 0, 0]
+```
+
+The NULL values are included for demonstration only. It is not necessary to store NULL values in the Dremel encoding
+as it can be inferred from the definition and repetition level metadata. Further since the metadata consists of
+small integer values they can be compressed further using bit-packing techniques when storing to disk. So the
+storage overhead of metadata is insignificant.
+
+The original nested records can be reassembled on the fly to their original structure by interpreting the metadata
+together with the values when read back from storage.
+
+Another benefit which falls directly out of this columnar representation of nested structure is that you can access
+individual fields without touching or reading the other columns from disk. This is not possible with a direct serialized
+representation like JSON where the entire nested record has to be parsed to extract the fields you need.
+
+With file formats like Parquet this goes further with optimizations which allows you to push filters down to the
+data and identify the page data units which contains the filtered values, further reducing the amount of data read
+from storage and the reducing work required to decode the data in CPU.
+
+If you use the `LIMIT` clause to restrict the output rows, then this too can be pushed down to Parquet further
+reducing the amount of work done and improve efficiency in querying.
+
+Parquet's choice of storing nested records using the Dremel encoding into its columnar format accelerates query
+processing. Compared to the alternative of a human involved in the loop to take decisions on how to normalize the
+nested data structure for analytical querying, and then having to come up with a schema. Or if the documents are
+directly serialized then it has to be read back from storage, and some type of map-reduce kind of aggregation
+framework has to be used to summarize results. This increases maintenance complexity, and also significantly
+increases the time taken to execute even trivial queries.
+
+The Dremel encoding pushes the burden from human to a repeatable shredding and assembly algorithm which
+results in a compact representation on disk which can automatically evolve as your schema evolves.
 
 ## What is a Schema?
 
@@ -355,9 +444,6 @@ two fields. So there are two `NULL` values. This example is 67% sparse.
 Fortunately the Dremel representation handles this perfectly. The null values are not physically stored. But it can
 be inferred when you decode the Dremel representation and try to hydrate the nested data structure from disk to memory.
 
-## Problem 6: Partial access (read a single path)
+## Conclusion
 
-## Problem 7: Predicate Pruning/Skipping
-
-## Shifting burden of normalization in storage, join in querying to storage layer
 
