@@ -29,6 +29,9 @@ Instead, the main thrust of this post is explore the inherent challenges with ne
 so hard to store them efficiently and improving query performance. This will help us better understand the ingenious
 design choices in the Dremel representation.
 
+- [ ] Visual JSON vs Parquet (5 records, 100, 1k, 10k, 100k, 1M byte sizes). JSON is estimated. Parquet is computed
+  using the rusty-doodles experiment.
+
 ## The Naive Approach
 
 The nested data structure is serialized into a JSON format. Each serialized value is self-describing as it preserves
