@@ -67,19 +67,175 @@ The JSON path expression is the commonly used syntax for identifying the columns
 
 Shredding solves this problem by transparently representing the nested data in storage as column values. The user can therefore can continue to query the nested data by using the fluent interface which refers to the path structure without considering how its represented internally in columnar format.
 
-### Dremel Shredding
+### Shredding Requires Data Type
 
-When shredding nested data the values of a path are stored together. This is similar to flat relational data where values of a single column are stored together. So a path maps to a column in storage. The distinction comes from the hierarchical structure of nested data. This structure is metadata which needs to be written together with the values, so that the shredded representation is lossless.
+Nested data is a tree data structure. A path in the tree maps to a column in storage. Similar to how column values in flat relational data is stored together, here values which have the same path are stored together.
 
-The first challenge is finding an efficient encoding which perfectly describes the original structure of the nested data.
+In columnar format values of column are stored together because they share the same data type. So for shredding a tree path into column values, the data type of the tree path should be known.
 
-The Dremel technique distills the structure of a nested data into two integer values termed as: __definition levels__ and __repetition levels__.
+The query performance and storage efficiencies in columnar format stems from storing homogeneous values which share a data type together in storage.
 
-The definition level identifies the exact point in a nested path at which it terminates. If a path terminated early without reaching the leaf node then we know that the value for that instance is a `NULL`.
+For shredding nested data into columnar format the schema should be defined. Shredding works only with strongly-typed data. If the types are unknown we can fallback to `BINARY` blob column storage forgoeing performance and storage efficiency.
 
-The repetition level is used for tracking the position of a primitive value or a nested object in an array.
+### Schema & Data Model
 
-For each value or `NULL` value obtained in record shredding a corresponding definition level and repetition level value is derived and stored separately. When reading the column values for a path, all three value are used in tandem to reassemble the original structure.
+The nested data model includes:
+- `OPTIONAL`: This field can appear zero or one time.
+- `REPEATED`: This field represents a list or array which contains zero or more elements.
+- `group`: This is a nested struct field with contains one or more other fields.
+- `REPEATED group`: This is an array of struct elements.
+
+This is the schema definition for a nested `Contact`:
+```text
+message contact {
+  OPTIONAL BINARY name (STRING);
+  OPTIONAL group phones (LIST) {
+    REPEATED group list {
+      OPTIONAL group item {
+        OPTIONAL BINARY number (STRING);
+        OPTIONAL BINARY phone_type (STRING);
+      }
+    }
+  }
+}
+```
 
 
+You can read this: `OPTIONAL BINARY phone_type (STRING)` as a field which has the name `phone_type` with the logical data type being a UTF-8 string, and the physical representation being binary. The field value may not always be present.
 
+Here are a few valid examples of nested data of the `Contact` schema:
+
+```text
+{name: "Alice", phones: [
+	{number: "555-1234", phone_type: "Home"},
+	{number: "555-5678", phone_type: "Work"}]}
+{name: "Bob"}
+{name: "Charlie"}
+{name: "Diana", phones: [
+	{number: "555-9999", phone_type: "Work"}]}
+{phones: [{number: null, phone_type: "Home"}]}
+```
+
+### The Dremel Encoding
+
+In flat relational data storing the values together in columns suffice. It is not that simple with nested data where the structure of the nested data needs to be preserved.
+
+The structure is metadata and it needs to be encoded and stored together with the shredded values. This is the fundamental principle of Dremel Encoding.
+
+For each value shredded from nested data, the structure can be encoded using only two integer values. These two integers fully describe the structure and helps in reassembling the nested data back from its shredded form.
+
+The two metadata values for describing the structure of nested data are: __definition level__ and __repetition level__.
+
+#### Definition Level
+
+This metadata maintains a count of all the optional and repeated fields which are present in a path. Let us look at a breakdown for the path: `phones.list.item.number`.
+
+| field  | multiplicity | definition level|
+|--------|--------------|-----------------|
+| phones | OPTIONAL     | 1               |
+| list	 | REPEATED     | 2               |
+| item   | OPTIONAL		| 3               |
+| number | OPTIONAL		| 4	 		   	  |
+
+The definition level of a value shredded from this path can have a maximum value of 4.
+
+| state                  | def | description |
+|------------------------|-----|-------------|
+| NULL                   | 0   | `phones` is not defined |
+| []                     | 1   | `list` is empty |
+| [NULL]                 | 2   | `item` is not defined |
+| [{number: NULL}]       | 3   | `number` is not defined|
+| [{number: "555-9999"}] | 4   | all the fields are defined |
+
+> Note: In the SQL or DataFrame frontend the `list` and `item` fields need not be explicitly mentioned. This is a storage level concern. The user can directly use the expression `$.phones[*].number` to get all the phone numbers from the nested data.
+
+#### Repetition Level
+
+This metadata deals with only repeated fields. In the shredded form all we have is all the values of a path stored together in a column. The repetition level is critical for identifying to which nested data, the exact list and index of the shredded value. It is the final piece in being able reassemble complex nested data which often contains multiple repeated fields in a path.
+
+In the `Contact` schema there is only a single repeated field. The repetition level is computed only for paths which contains at least one repeated field. So it applies to these paths in `Contact`:
+- `phones.list.item.number` and,
+- `phones.list.item.phone_type`
+
+The max possible repetition level for both paths is 1.
+
+
+### Putting it all Together
+
+This is a partial projection of `Contact` values shown earlier:
+
+```text
+[0] { phones: [
+		{number: "555-1234", phone_type: "Home"},
+		{number: "555-5678", phone_type: "Work"}]}
+	]}
+[1] {}
+[2] {}
+[3] { phones: [
+		{number: "555-9999", phone_type: "Work"}
+	]}
+[4] { phones: [
+		{number: null, phone_type: "Home"}
+	]}
+```
+
+Let us now take a look at the shredded form for the `number` column.
+
+| `phones.list.item.number` | rep | def | description |
+|---------------------------|-----|-----|-------------|
+| "555-1234" | 0 | 4 | first phone number in first value |
+| "555-5678" | 1 | 4 | next phone number in first value  |
+| NULL       | 0 | 0 | `phones` field is not defined  |
+| NULL       | 0 | 0 | `phones` field is not defined  |
+| "555-9999" | 0 | 4 | first phone number in 4th value   |
+| NULL       | 0 | 3 | first phone number is not defined in 5th value |
+
+The first `Contact` contains two `number` items. The first item is identified by a repetition level of 0, and the remaining items have a repetition level of 1. The definition level is 4 which means all the fields are present for both values. This can be reassembled as following:
+
+```text
+{ phones: [
+	{ number: "555-1234"},  // rep=0; def=4;
+	{ number: "555-5678"},  // rep=0; def=4;
+]}
+```
+
+The next two values are `NULL`, but this is never really physically stored. This is an optimisation which has a high impact when dealing with sparse nested data. Even though there is no actual `NULL` stored physically, it can be inferred from the definition level not being equal to 4. The definition level value tells us exactly where the path terminated, so we know how to recreate it. Since the definition level is zero in both cases, we can infer that `phones` field itself is not present in the nested data.
+
+The next contact contains only a single item. We know this because there is no successor item with a repetition level of 1. The definition level is 4, so we know all the fields in the path are present. This is reassembled into:
+
+```text
+{ phones: [{number: "555-999"}] }
+```
+
+The final shredded value is also a `NULL`, but the definition level is 3. So we know that `phones.list.item` is present, but the final `number` field is not. So this is reassemble into:
+
+```text
+{ phones: [{number: null}] }
+```
+
+### UNNEST queries
+
+- [ ] TODO
+
+```text
+> select * from contacts;
++---------+------------------------------------------------------------------------------+
+| name    | phones                                                                       |
++---------+------------------------------------------------------------------------------+
+| Alice   | [{number: 555-1234, phone_type: Home}, {number: 555-5678, phone_type: Work}] |
+| Bob     | NULL                                                                         |
+| Charlie | []                                                                           |
+| Diana   | [{number: 555-9999, phone_type: Work}]                                       |
+| NULL    | [{number: NULL, phone_type: Home}]                                           |
++---------+------------------------------------------------------------------------------+
+```
+
+### Conclusion
+
+Nested data has structure which needs to be preserved during shredding. The structural metadata is critical to being able to reassemble the full nested value or a partial projection.
+
+Shredding requires knowing the column data type. So it works only if a schema definition is provided for the nested data. The data model contains optional, repeated and group fields which makes it expressive enough to model any real-world nested data.
+
+Even though a single schema can lead to many variations in tree shapes of nested data instances, they can all be encoded with precision and fidelity during shredding by adding the structural metadata - definition & repetition levels. By interpreting the definition levels & repetition levels it is possible to reassemble the full or partial projection as required by the query.
+
+It is space efficient because if our nested dataset is extremely sparse, the missing data encoded as `NULL` values does not really exist in storage. It is a logical representation. Storing `NULL` values can be avoided because it can be inferred from the defintion and repetition levels.
