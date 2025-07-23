@@ -62,13 +62,179 @@
 <p>The direct method is to stored the nested data (probably JSON format) values in a column as a binary blob. Since the physical storage type is <code>BINARY</code> (a byte array) we cannot apply any light-weight compression schemes on this column.</p>
 <p>The JSON path expression is the commonly used syntax for identifying the columns (paths) in the nested data structure that we want to query. This expression <code>$.user.posts[:3].tags[0:]</code> returns all the tags from the first three posts of a user object. The binary blob has to be deserialized to access the underlying JSON data. Even though we are only interested in the <code>tags</code> array, all the data must be deserialized to get to it.</p>
 <p>Shredding solves this problem by transparently representing the nested data in storage as column values. The user can therefore can continue to query the nested data by using the fluent interface which refers to the path structure without considering how its represented internally in columnar format.</p>
-<h3 id="dremel-shredding" tabindex="-1">Dremel Shredding <a class="direct-link" href="#dremel-shredding" aria-hidden="true">#</a></h3>
-<p>When shredding nested data the values of a path are stored together. This is similar to flat relational data where values of a single column are stored together. So a path maps to a column in storage. The distinction comes from the hierarchical structure of nested data. This structure is metadata which needs to be written together with the values, so that the shredded representation is lossless.</p>
-<p>The first challenge is finding an efficient encoding which perfectly describes the original structure of the nested data.</p>
-<p>The Dremel technique distills the structure of a nested data into two integer values termed as: <strong>definition levels</strong> and <strong>repetition levels</strong>.</p>
-<p>The definition level identifies the exact point in a nested path at which it terminates. If a path terminated early without reaching the leaf node then we know that the value for that instance is a <code>NULL</code>.</p>
-<p>The repetition level is used for tracking the position of a primitive value or a nested object in an array.</p>
-<p>For each value or <code>NULL</code> value obtained in record shredding a corresponding definition level and repetition level value is derived and stored separately. When reading the column values for a path, all three value are used in tandem to reassemble the original structure.</p>
+<h3 id="shredding-requires-data-type" tabindex="-1">Shredding Requires Data Type <a class="direct-link" href="#shredding-requires-data-type" aria-hidden="true">#</a></h3>
+<p>Nested data is a tree data structure. A path in the tree maps to a column in storage. Similar to how column values in flat relational data is stored together, here values which have the same path are stored together.</p>
+<p>In columnar format values of column are stored together because they share the same data type. So for shredding a tree path into column values, the data type of the tree path should be known.</p>
+<p>The query performance and storage efficiencies in columnar format stems from storing homogeneous values which share a data type together in storage.</p>
+<p>For shredding nested data into columnar format the schema should be defined. Shredding works only with strongly-typed data. If the types are unknown we can fallback to <code>BINARY</code> blob column storage forgoeing performance and storage efficiency.</p>
+<h3 id="schema-and-data-model" tabindex="-1">Schema &amp; Data Model <a class="direct-link" href="#schema-and-data-model" aria-hidden="true">#</a></h3>
+<p>The nested data model includes:</p>
+<ul>
+<li><code>OPTIONAL</code>: This field can appear zero or one time.</li>
+<li><code>REPEATED</code>: This field represents a list or array which contains zero or more elements.</li>
+<li><code>group</code>: This is a nested struct field with contains one or more other fields.</li>
+<li><code>REPEATED group</code>: This is an array of struct elements.</li>
+</ul>
+<p>This is the schema definition for a nested <code>Contact</code>:</p>
+<pre class="language-text"><code class="language-text">message contact {<br>  OPTIONAL BINARY name (STRING);<br>  OPTIONAL group phones (LIST) {<br>    REPEATED group list {<br>      OPTIONAL group item {<br>        OPTIONAL BINARY number (STRING);<br>        OPTIONAL BINARY phone_type (STRING);<br>      }<br>    }<br>  }<br>}</code></pre>
+<p>You can read this: <code>OPTIONAL BINARY phone_type (STRING)</code> as a field which has the name <code>phone_type</code> with the logical data type being a UTF-8 string, and the physical representation being binary. The field value may not always be present.</p>
+<p>Here are a few valid examples of nested data of the <code>Contact</code> schema:</p>
+<pre class="language-text"><code class="language-text">{name: "Alice", phones: [<br>	{number: "555-1234", phone_type: "Home"},<br>	{number: "555-5678", phone_type: "Work"}]}<br>{name: "Bob"}<br>{name: "Charlie"}<br>{name: "Diana", phones: [<br>	{number: "555-9999", phone_type: "Work"}]}<br>{phones: [{number: null, phone_type: "Home"}]}</code></pre>
+<h3 id="the-dremel-encoding" tabindex="-1">The Dremel Encoding <a class="direct-link" href="#the-dremel-encoding" aria-hidden="true">#</a></h3>
+<p>In flat relational data storing the values together in columns suffice. It is not that simple with nested data where the structure of the nested data needs to be preserved.</p>
+<p>The structure is metadata and it needs to be encoded and stored together with the shredded values. This is the fundamental principle of Dremel Encoding.</p>
+<p>For each value shredded from nested data, the structure can be encoded using only two integer values. These two integers fully describe the structure and helps in reassembling the nested data back from its shredded form.</p>
+<p>The two metadata values for describing the structure of nested data are: <strong>definition level</strong> and <strong>repetition level</strong>.</p>
+<h4 id="definition-level" tabindex="-1">Definition Level <a class="direct-link" href="#definition-level" aria-hidden="true">#</a></h4>
+<p>This metadata maintains a count of all the optional and repeated fields which are present in a path. Let us look at a breakdown for the path: <code>phones.list.item.number</code>.</p>
+<table>
+<thead>
+<tr>
+<th>field</th>
+<th>multiplicity</th>
+<th>definition level</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>phones</td>
+<td>OPTIONAL</td>
+<td>1</td>
+</tr>
+<tr>
+<td>list</td>
+<td>REPEATED</td>
+<td>2</td>
+</tr>
+<tr>
+<td>item</td>
+<td>OPTIONAL</td>
+<td>3</td>
+</tr>
+<tr>
+<td>number</td>
+<td>OPTIONAL</td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<p>The definition level of a value shredded from this path can have a maximum value of 4.</p>
+<table>
+<thead>
+<tr>
+<th>state</th>
+<th>def</th>
+<th>description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NULL</td>
+<td>0</td>
+<td><code>phones</code> is not defined</td>
+</tr>
+<tr>
+<td>[]</td>
+<td>1</td>
+<td><code>list</code> is empty</td>
+</tr>
+<tr>
+<td>[NULL]</td>
+<td>2</td>
+<td><code>item</code> is not defined</td>
+</tr>
+<tr>
+<td>[{number: NULL}]</td>
+<td>3</td>
+<td><code>number</code> is not defined</td>
+</tr>
+<tr>
+<td>[{number: &quot;555-9999&quot;}]</td>
+<td>4</td>
+<td>all the fields are defined</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>Note: In the SQL or DataFrame frontend the <code>list</code> and <code>item</code> fields need not be explicitly mentioned. This is a storage level concern. The user can directly use the expression <code>$.phones[*].number</code> to get all the phone numbers from the nested data.</p>
+</blockquote>
+<h4 id="repetition-level" tabindex="-1">Repetition Level <a class="direct-link" href="#repetition-level" aria-hidden="true">#</a></h4>
+<p>This metadata deals with only repeated fields. In the shredded form all we have is all the values of a path stored together in a column. The repetition level is critical for identifying to which nested data, the exact list and index of the shredded value. It is the final piece in being able reassemble complex nested data which often contains multiple repeated fields in a path.</p>
+<p>In the <code>Contact</code> schema there is only a single repeated field. The repetition level is computed only for paths which contains at least one repeated field. So it applies to these paths in <code>Contact</code>:</p>
+<ul>
+<li><code>phones.list.item.number</code> and,</li>
+<li><code>phones.list.item.phone_type</code></li>
+</ul>
+<p>The max possible repetition level for both paths is 1.</p>
+<h3 id="putting-it-all-together" tabindex="-1">Putting it all Together <a class="direct-link" href="#putting-it-all-together" aria-hidden="true">#</a></h3>
+<p>This is a partial projection of <code>Contact</code> values shown earlier:</p>
+<pre class="language-text"><code class="language-text">[0] { phones: [<br>		{number: "555-1234", phone_type: "Home"},<br>		{number: "555-5678", phone_type: "Work"}]}<br>	]}<br>[1] {}<br>[2] {}<br>[3] { phones: [<br>		{number: "555-9999", phone_type: "Work"}<br>	]}<br>[4] { phones: [<br>		{number: null, phone_type: "Home"}<br>	]}</code></pre>
+<p>Let us now take a look at the shredded form for the <code>number</code> column.</p>
+<table>
+<thead>
+<tr>
+<th><code>phones.list.item.number</code></th>
+<th>rep</th>
+<th>def</th>
+<th>description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&quot;555-1234&quot;</td>
+<td>0</td>
+<td>4</td>
+<td>first phone number in first value</td>
+</tr>
+<tr>
+<td>&quot;555-5678&quot;</td>
+<td>1</td>
+<td>4</td>
+<td>next phone number in first value</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>0</td>
+<td>0</td>
+<td><code>phones</code> field is not defined</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>0</td>
+<td>0</td>
+<td><code>phones</code> field is not defined</td>
+</tr>
+<tr>
+<td>&quot;555-9999&quot;</td>
+<td>0</td>
+<td>4</td>
+<td>first phone number in 4th value</td>
+</tr>
+<tr>
+<td>NULL</td>
+<td>0</td>
+<td>3</td>
+<td>first phone number is not defined in 5th value</td>
+</tr>
+</tbody>
+</table>
+<p>The first <code>Contact</code> contains two <code>number</code> items. The first item is identified by a repetition level of 0, and the remaining items have a repetition level of 1. The definition level is 4 which means all the fields are present for both values. This can be reassembled as following:</p>
+<pre class="language-text"><code class="language-text">{ phones: [<br>	{ number: "555-1234"},  // rep=0; def=4;<br>	{ number: "555-5678"},  // rep=0; def=4;<br>]}</code></pre>
+<p>The next two values are <code>NULL</code>, but this is never really physically stored. This is an optimisation which has a high impact when dealing with sparse nested data. Even though there is no actual <code>NULL</code> stored physically, it can be inferred from the definition level not being equal to 4. The definition level value tells us exactly where the path terminated, so we know how to recreate it. Since the definition level is zero in both cases, we can infer that <code>phones</code> field itself is not present in the nested data.</p>
+<p>The next contact contains only a single item. We know this because there is no successor item with a repetition level of 1. The definition level is 4, so we know all the fields in the path are present. This is reassembled into:</p>
+<pre class="language-text"><code class="language-text">{ phones: [{number: "555-999"}] }</code></pre>
+<p>The final shredded value is also a <code>NULL</code>, but the definition level is 3. So we know that <code>phones.list.item</code> is present, but the final <code>number</code> field is not. So this is reassemble into:</p>
+<pre class="language-text"><code class="language-text">{ phones: [{number: null}] }</code></pre>
+<h3 id="unnest-queries" tabindex="-1">UNNEST queries <a class="direct-link" href="#unnest-queries" aria-hidden="true">#</a></h3>
+<ul>
+<li>[ ] TODO</li>
+</ul>
+<pre class="language-text"><code class="language-text">> select * from contacts;<br>+---------+------------------------------------------------------------------------------+<br>| name    | phones                                                                       |<br>+---------+------------------------------------------------------------------------------+<br>| Alice   | [{number: 555-1234, phone_type: Home}, {number: 555-5678, phone_type: Work}] |<br>| Bob     | NULL                                                                         |<br>| Charlie | []                                                                           |<br>| Diana   | [{number: 555-9999, phone_type: Work}]                                       |<br>| NULL    | [{number: NULL, phone_type: Home}]                                           |<br>+---------+------------------------------------------------------------------------------+</code></pre>
+<h3 id="conclusion" tabindex="-1">Conclusion <a class="direct-link" href="#conclusion" aria-hidden="true">#</a></h3>
+<p>Nested data has structure which needs to be preserved during shredding. The structural metadata is critical to being able to reassemble the full nested value or a partial projection.</p>
+<p>Shredding requires knowing the column data type. So it works only if a schema definition is provided for the nested data. The data model contains optional, repeated and group fields which makes it expressive enough to model any real-world nested data.</p>
+<p>Even though a single schema can lead to many variations in tree shapes of nested data instances, they can all be encoded with precision and fidelity during shredding by adding the structural metadata - definition &amp; repetition levels. By interpreting the definition levels &amp; repetition levels it is possible to reassemble the full or partial projection as required by the query.</p>
+<p>It is space efficient because if our nested dataset is extremely sparse, the missing data encoded as <code>NULL</code> values does not really exist in storage. It is a logical representation. Storing <code>NULL</code> values can be avoided because it can be inferred from the defintion and repetition levels.</p>
 
 
       </main>
