@@ -213,22 +213,123 @@ The final shredded value is also a `NULL`, but the definition level is 3. So we 
 { phones: [{number: null}] }
 ```
 
-### UNNEST queries
+### Storage Optimizations
 
-- [ ] TODO
+If the nested dataset is extremely sparse, there are going to be a lot `NULL` values present in the values array. But this is not an issue because `NULL` values are never stored in physical storage. When reading back the data this can be inferred from the definition level values. If the definition level is less than the max definition level for that path, then it can only mean that the path terminated early and therefore the value can only be `NULL`. This works out really well for sparse datasets as we incur no additional costs in storage.
+
+You would have noticed by now that the definition level and repetition level values are dependent on the depth of the tree for any given path. If the nested data has a max depth of 7, then the level values will not exceed 7. In binary 7 is `0b111` which requires only 3-bits to encode. So both the definition and repetition level values can be bit-packed instead of representing them as 32-bit or 64-bit integers which will take up 4 to 8 bytes of storage per metdata value.
+
+If a list contains a large number of elements, the first item will have a repetition level which identifies the beginning of the list. And the remaining elements will have the same repetition level. So if there are 1001 elements in the list, we can use run-length encoding to compress it further: `(M, 1), (N, 1000)`, where `M` and `N` represents the repetition level values and their corresponding run lengths.
+
+If a path does not contain any repeated fields, we do not have to store the repetition levels for that column. Similarly if a top-level field is a required field (meaning it cannot be `NULL`) then the definition and repetitionl levels is going to be zero for all values. Here too we do not need to store both repetition levels or definition levels. This is because the top-level required field does not have any nesting.
+
+The optimizations are significant in improving storage efficiency and reducing the amount of I/O required to read the shredded columns back from storage. We can have good things like shredding without trading off too much in storage space because of definition and repetition levels metadata.
+
+### Querying Nested Data
+
+So now we have the nested data in shredded form, let us see how to query it.
 
 ```text
-> select * from contacts;
-+---------+------------------------------------------------------------------------------+
-| name    | phones                                                                       |
-+---------+------------------------------------------------------------------------------+
-| Alice   | [{number: 555-1234, phone_type: Home}, {number: 555-5678, phone_type: Work}] |
-| Bob     | NULL                                                                         |
-| Charlie | []                                                                           |
-| Diana   | [{number: 555-9999, phone_type: Work}]                                       |
-| NULL    | [{number: NULL, phone_type: Home}]                                           |
-+---------+------------------------------------------------------------------------------+
+SELECT *
+  FROM read_parquet("contacts.parquet");
+┌─────────┬──────────────────────────────────────────────────────────────────────────────────────┐
+│  name   │                                        phones                                        │
+│ varchar │                     struct(number varchar, phone_type varchar)[]                     │
+├─────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+│ Alice   │ [{'number': 555-1234, 'phone_type': Home}, {'number': 555-5678, 'phone_type': Work}] │
+│ Bob     │ NULL                                                                                 │
+│ Charlie │ []                                                                                   │
+│ Diana   │ [{'number': 555-9999, 'phone_type': Work}]                                           │
+│ NULL    │ [{'number': NULL, 'phone_type': Home}]                                               │
+└─────────┴──────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+#### Flattening Nested `phones` list
+
+The `UNNEST` function is useful here to unnest the `phones` list into one item per row. This yields a struct row item: `{'number': 555-1234, 'phone_type': Home}` which can be further unnested into its individual fields: `number` and `phone_type`.
+
+The DuckDB SQL dialect supports [recursive unnesting](https://duckdb.org/docs/stable/sql/query_syntax/unnest.html#recursive-unnest).
+
+```text
+SELECT
+    name,
+    unnest(phones, recursive := true)
+FROM
+    read_parquet('contacts.parquet');
+┌─────────┬──────────┬────────────┐
+│  name   │  number  │ phone_type │
+│ varchar │ varchar  │  varchar   │
+├─────────┼──────────┼────────────┤
+│ Alice   │ 555-1234 │ Home       │
+│ Alice   │ 555-5678 │ Work       │
+│ Diana   │ 555-9999 │ Work       │
+│ NULL    │ NULL     │ Home       │
+└─────────┴──────────┴────────────┘
+```
+
+#### Summarizing Phone Types
+
+```text
+SELECT
+  phone.phone_type AS phone_type,
+  COUNT(*) AS total
+FROM
+  read_parquet('contacts.parquet'),
+  UNNEST(phones) AS t(phone)
+GROUP BY
+  phone_type
+ORDER BY
+  total DESC;
+┌────────────┬───────┐
+│ phone_type │ total │
+│  varchar   │ int64 │
+├────────────┼───────┤
+│ Home       │     2 │
+│ Work       │     2 │
+└────────────┴───────┘
+```
+
+#### Summarizing Phones Per User
+
+```text
+SELECT
+  name,
+  len(phones) AS phone_count
+FROM
+  read_parquet('~/Documents/contacts.parquet')
+ORDER BY
+  phone_count DESC NULLS FIRST;
+┌─────────┬─────────────┐
+│  name   │ phone_count │
+│ varchar │    int64    │
+├─────────┼─────────────┤
+│ Bob     │        NULL │
+│ Alice   │           2 │
+│ Diana   │           1 │
+│ NULL    │           1 │
+│ Charlie │           0 │
+└─────────┴─────────────┘
+```
+
+### Point Lookups Involve Scanning and Decoding
+
+An example is if we want to find the 1000th `phone_number`. The shredding flattens the `phone_number` into contiguous block of all phone numbers from all contacts. We cannot directly jump to the offset 1000 because `NULL` values are omitted from physical storage. Therefore the logical offset will not match the physical position in the stored column values.
+
+The definition levels will have to be decoded and scanned from the beginning to map the logical offset 1000 to the physical offset in storage.
+
+Consider a variation of this simple point lookup query but we also make it dependent on the `name` column where we want to find the 3rd non-null number for `Troy`.
+
+Here we have to first scan the repetition levels to identify the beginning of `phone_numbers` for `Troy`. Then use the definition levels in tandem to skip any null values to find the target. Here the lookup process involves scanning and decoding both definition and repetition levels because of the dependency.
+
+We are forced into sequential scans and full decoding of levels metadata to compute the result.
+
+### All or Nothing: Selective Shredding
+
+The alternatives are to store nested data as a binary blob and forgoe any of the native optimizations available in columnar formats. The other is to completely shred the nested data with a strongly-typed schema.
+
+There is no in-between. You cannot choose to selectively shred only a fraction of the nested data and then store the rest as a binary blob. This is useful for semi-structured data like JSON where sometimes the same key may have different data types in the value.
+
+This case is not supported in traditional shredding of nested data.
 
 ### Conclusion
 
@@ -237,5 +338,3 @@ Nested data has structure which needs to be preserved during shredding. The stru
 Shredding requires knowing the column data type. So it works only if a schema definition is provided for the nested data. The data model contains optional, repeated and group fields which makes it expressive enough to model any real-world nested data.
 
 Even though a single schema can lead to many variations in tree shapes of nested data instances, they can all be encoded with precision and fidelity during shredding by adding the structural metadata - definition & repetition levels. By interpreting the definition levels & repetition levels it is possible to reassemble the full or partial projection as required by the query.
-
-It is space efficient because if our nested dataset is extremely sparse, the missing data encoded as `NULL` values does not really exist in storage. It is a logical representation. Storing `NULL` values can be avoided because it can be inferred from the defintion and repetition levels.
