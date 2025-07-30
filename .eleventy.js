@@ -17,6 +17,7 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("css");
 
   eleventyConfig.addPassthroughCopy("posts/2025-06-06-record-shredding-part-1/img");
+  eleventyConfig.addPassthroughCopy("posts/2025-07-23-shredding-nested-data-in-parquet/img");
 
   // Add plugins
   eleventyConfig.addPlugin(pluginRss);
@@ -52,7 +53,7 @@ module.exports = function (eleventyConfig) {
   });
 
   // Create a collection of posts, excluding drafts in production
-  eleventyConfig.addCollection("posts", function(collectionApi) {
+  eleventyConfig.addCollection("posts", function (collectionApi) {
     const isProduction = process.env.ELEVENTY_ENV === 'production';
     const posts = collectionApi.getFilteredByTag("posts");
 
