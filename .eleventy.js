@@ -16,7 +16,6 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy("img");
   eleventyConfig.addPassthroughCopy("css");
 
-  eleventyConfig.addPassthroughCopy("posts/2025-06-06-record-shredding-part-1/img");
   eleventyConfig.addPassthroughCopy("posts/2025-07-23-shredding-nested-data-in-parquet/img");
 
   // Add plugins
