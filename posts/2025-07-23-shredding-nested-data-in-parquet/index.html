@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shredding Nested Data In Parquet</title>
+    <title>The Layman&#39;s Guide to Nested Record Shredding</title>
     <meta name="description" content="jcsherin writes about programming">
     <meta name="generator" content="Eleventy v1.0.1">
 
@@ -25,9 +25,9 @@
       <h4 class="page-subtitle">Bridging Theory and Practice: Exploring Analytical Query Execution with Apache DataFusion, Parquet, and Apache Arrow</h4>
 
       <main class="tmpl-post">
-        <h1>Shredding Nested Data In Parquet</h1>
+        <h1>The Layman&#39;s Guide to Nested Record Shredding</h1>
 
-<time datetime="2025-07-23">23 Jul 2025</time>
+<time datetime="2025-07-30">30 Jul 2025</time>
 
 
   <div class="draft-indicator">
@@ -36,147 +36,231 @@
   </div>
 
 
-<h2 id="shredding-nested-data-in-parquet" tabindex="-1">Shredding Nested Data in Parquet <a class="direct-link" href="#shredding-nested-data-in-parquet" aria-hidden="true">#</a></h2>
-<p>OLAP database engines are able to execute aggregations, sorting and grouping over millions or billions of rows of data blazingly fast. The foundation for this extreme performance is a columnar storage format. Parquet is a columnar file format designed for efficient storage and fast retrieveal.</p>
-<p>This performance is <strong>not</strong> limited to flat relational data which is trivial to map into a columnar format. It also works for nested data structures. But it requires some clever encoding techniques to store nested data structures in a columnar format and be able to reconstruct them back.</p>
-<p>The performance of querying flat relational data is generally significantly better than querying nested data structures in OLTP database engines for transactional workloads.</p>
-<p>It may feel counter-intuitive that in OLAP engines the difference between querying flat and nested data is often minimal.</p>
-<p>The magic lies in the Dremel shredding technique adopted by Parquet for storing nested data. Dremel is the query execution engine in Google BigQuery. This novel techinque for improving analytical query performance over nested data was introduced by Dremel to the rest of the world.</p>
-<p>Shredding is the term now commonly used in the context of the Parquet format and proprietary columnar formats of OLAP databases for the process of converting nested data into columnar representation.</p>
-<p>The shredded data can be reassembled back to its original form. By design it is also possible to partially reconstruct the nested data which is generally applicable for analytical workloads. So during analysis you can write queries which only target a handful of paths in the nested data.</p>
-<p>This post will cover the various challenges inherent in mapping nested data structures to a columnar storage format. We will try to uncover the ingenious design decisions which makes shredding work perfectly in every case.</p>
-<p>Before we see how shredding nested data leads to efficient storage and retrieval, we need to first understand how columnar format affects query execution performance. But if you are already familiar with columnar formats, you can safely skip the next section.</p>
-<h3 id="columnar-format" tabindex="-1">Columnar Format <a class="direct-link" href="#columnar-format" aria-hidden="true">#</a></h3>
-<p>In a columnar format the values of a single column are stored together. The values are homogenous. They have the same datatype. So data-aware light-weight compression schemes like run-length encoding, dictionary encoding, delta encoding etc. can be applied to compact the data.</p>
-<h4 id="data-aware-compression" tabindex="-1">Data-aware compression <a class="direct-link" href="#data-aware-compression" aria-hidden="true">#</a></h4>
-<p>Consider a <code>timestamp</code> column which is in sorted order. It is stored as 64-bit integer in Parquet. Storing a million timestamp values alone will occupy 64 million bits or 8 million bytes (8 MB) of storage.</p>
-<p>We can apply delta-encoding. The first timestamp (64-bits) is stored as reference. Then we store only the difference. Let us assume that the difference between timestamp values is small enough that it can be represented in 16-bits. If the unit of timestamp is milliseconds (ms), then 16-bits represents 65,536ms ~ 1 minute. So this will work if all the adjacent values are separated by less than a minute from each other.</p>
-<p>With delta-encoding now it occupies only 16 million bits or 2 million bytes (2 MB) of storage. That is a 4x improvement in storage size over the uncompressed data.</p>
-<h4 id="efficient-read-io" tabindex="-1">Efficient Read I/O <a class="direct-link" href="#efficient-read-io" aria-hidden="true">#</a></h4>
-<p>In the SQL query if you specify the columns you want to read like: <code>SELECT column1, column2 * from t</code> because of columnar layout by design you only need to do disk I/O for reading exactly those columns: <code>column1</code> and <code>column2</code>. The other columns do not have to be scanned if they do not appear in the query. This improves I/O efficiency of queries and less data is read during query execution. This is another contributor to query execution speed.</p>
-<h4 id="data-parallelism" tabindex="-1">Data Parallelism <a class="direct-link" href="#data-parallelism" aria-hidden="true">#</a></h4>
-<p>If you execute an aggregation query: <code>SELECT SUM(column1) from t</code> it will scan all the values in <code>column1</code> from the Parquet file on disk. The implementation of sum will be looping over the values and accumulating the sum by adding one number after another until all the <code>column1</code> values are added up. The accumulated sum is returned as the query result.</p>
-<p>Normally, the addition of two numbers in the CPU is a scalar instruction. But here the compiler can optimize this hot loop and convert the scalar sum into a vectorized sum instruction. In a vectorized sum instruction you can add more than two numbers in a single instruction.</p>
-<p>If the CPU supports a 256-bit width register and we are adding together 32-bit integers. This register can hold eight 32-bit integers. The CPU can do 8 additions in parallel. To find the sum of 16 numbers you need 16 <code>ADD</code> operations. For large numbers vectorization will be dramatically more efficient in terms of the number of instructions executed.</p>
-<h3 id="direct-storage-as-binary-blob" tabindex="-1">Direct Storage As Binary Blob <a class="direct-link" href="#direct-storage-as-binary-blob" aria-hidden="true">#</a></h3>
-<p>The direct method is to stored the nested data (probably JSON format) values in a column as a binary blob. Since the physical storage type is <code>BINARY</code> (a byte array) we cannot apply any light-weight compression schemes on this column.</p>
-<p>The JSON path expression is the commonly used syntax for identifying the columns (paths) in the nested data structure that we want to query. This expression <code>$.user.posts[:3].tags[0:]</code> returns all the tags from the first three posts of a user object. The binary blob has to be deserialized to access the underlying JSON data. Even though we are only interested in the <code>tags</code> array, all the data must be deserialized to get to it.</p>
-<p>Shredding solves this problem by transparently representing the nested data in storage as column values. The user can therefore can continue to query the nested data by using the fluent interface which refers to the path structure without considering how its represented internally in columnar format.</p>
-<h3 id="shredding-requires-data-type" tabindex="-1">Shredding Requires Data Type <a class="direct-link" href="#shredding-requires-data-type" aria-hidden="true">#</a></h3>
-<p>Nested data is a tree data structure. A path in the tree maps to a column in storage. Similar to how column values in flat relational data is stored together, here values which have the same path are stored together.</p>
-<p>In columnar format values of column are stored together because they share the same data type. So for shredding a tree path into column values, the data type of the tree path should be known.</p>
-<p>The query performance and storage efficiencies in columnar format stems from storing homogeneous values which share a data type together in storage.</p>
-<p>For shredding nested data into columnar format the schema should be defined. Shredding works only with strongly-typed data. If the types are unknown we can fallback to <code>BINARY</code> blob column storage forgoeing performance and storage efficiency.</p>
-<h3 id="schema-and-data-model" tabindex="-1">Schema &amp; Data Model <a class="direct-link" href="#schema-and-data-model" aria-hidden="true">#</a></h3>
-<p>The nested data model includes:</p>
+<h3 id="intro-1" tabindex="-1">Intro 1 <a class="direct-link" href="#intro-1" aria-hidden="true">#</a></h3>
+<p>In modern analytical query engines can compute complex aggregates by scanning billions of nested data structures in an instant.</p>
+<p>This is the performance available on a single node (your laptop).</p>
+<p>This works for SQL queries which contains many aggregates, groups and sort orders.</p>
+<p>The performance gap between querying nested data and flat relational data is often negligible.</p>
+<h3 id="intro-2" tabindex="-1">Intro 2 <a class="direct-link" href="#intro-2" aria-hidden="true">#</a></h3>
+<p>The magic lies in a process known as &quot;shredding&quot;.</p>
+<p>At its core shredding is a process for breaking up nested data structures into a flat, columnar format.</p>
 <ul>
-<li><code>OPTIONAL</code>: This field can appear zero or one time.</li>
-<li><code>REPEATED</code>: This field represents a list or array which contains zero or more elements.</li>
-<li><code>group</code>: This is a nested struct field with contains one or more other fields.</li>
-<li><code>REPEATED group</code>: This is an array of struct elements.</li>
+<li>[x] <s>Insert diagram of a nested schema showing shredded column values collected at the leaf nodes. The user should be able to visualize that a path in the schema maps to a shredded column.</s></li>
 </ul>
-<p>This is the schema definition for a nested <code>Contact</code>:</p>
+<figure>
+  <img src="img/figure-1.svg" alt="Visualization of shredded column values of a nested
+Contact schema">
+  <figcaption>Figure 1: A high-level view of <code>Contact</code> nested data instances shredded into columnar format. Each shredded column corresponds to a unique path in the <code>Contact</code> schema: <code>name</code>, <code>phones.number</code> and <code>phones.phone_type</code>.</figcaption>
+</figure>
+<p>The development of &quot;shredding&quot; was driven by the need for interactive analytics on very large (&gt; 1 trillion rows) datasets containing nested data structures in the Dremel query engine at Google in the late 2000s.</p>
+<p>The massive map-reduce jobs used to take multiple hours to complete even after running compute over thousands of servers in parallel.</p>
+<p>The same computation now finished in under 10s when the nested data structure was encoded using the Dremel shredding technique.</p>
+<p>It is an understatement to state that the performance impact was significant.</p>
+<h3 id="intro-3" tabindex="-1">Intro 3 <a class="direct-link" href="#intro-3" aria-hidden="true">#</a></h3>
+<p>The novelty of Dremel record shredding lay in directly representing nested data structures in a flat, columnar format.</p>
+<p>This is achieved by introducing two key concepts: <strong>definition levels</strong> and <strong>repetition levels</strong>.</p>
+<p>This is an ingenious representation which manages to encode the original heirarchical structure of the nested data as two integer values.</p>
+<ul>
+<li>[ ] Show a shredded column, def, rep values and the values they map to. I am thinking it can show the encoding at the top and the values in a sequence below. An example which will fit this type of illustration well is a nested list which contains a list of numbers. They encoding representation is also terse and we can show the mapping from encoding to each inner list in the diagram.</li>
+</ul>
+<h3 id="intro-4" tabindex="-1">Intro 4 <a class="direct-link" href="#intro-4" aria-hidden="true">#</a></h3>
+<p>The Dremel encoding technique influenced the design of the next generation of file formats and proprietary storage engines of analytical systems which were being built in the early 2010s.</p>
+<p>Apache Parquet is the most well known and open source implementation to directly adopt the principles of definition levels and repetition levels to represent nested data structure in its file format.</p>
+<p>In Apache Arrow in-memory columnar format the validity bitmap and offset buffers are conceputally similar to the definition and repetition levels in Dremel encoding.</p>
+<p>The widespread adoption of the principles from the Dremel encoding for nested data structures proves its effectiveness for analytical workloads.</p>
+<h3 id="intro-exit" tabindex="-1">Intro Exit <a class="direct-link" href="#intro-exit" aria-hidden="true">#</a></h3>
+<p>Before we dive into shredding let us first see the problems which come up when we try to store and retrieve nested data without shredding.</p>
+<h3 id="the-opaque-binary-blob-strawman" tabindex="-1">The Opaque Binary Blob Strawman <a class="direct-link" href="#the-opaque-binary-blob-strawman" aria-hidden="true">#</a></h3>
+<p>The direct method is to serialize a nested data structure and then store it as a sequence of bytes.</p>
+<p>But now, every time you want to read it back you first load the entire bytes back into memory and deserialize it.</p>
+<p>The cost of deserialization alone will dominate query execution time.</p>
+<p>This is a query to find the top ten most popular tags.</p>
+<p>Each row value is a nested data structure, and the absolute path to a list of tags is <code>user.post.tags</code>.</p>
+<ul>
+<li><s>[x] Show the example values of this schema, instead of describing it to the reader.</s></li>
+</ul>
+<pre class="language-text"><code class="language-text">WITH all_tags(tag) AS (<br>	-- Defines a CTE (common-table expression) which runs exactly once<br>	-- and returns the unnested tags from every `user` nested data.<br>	SELECT UNNEST(user.post.tags) from users<br>)<br>SELECT tag, COUNT(*) as tag_count<br>  FROM all_tags<br>  GROUP BY tag<br>  ORDER BY tag_count DESC<br>  LIMIT 10<br>;<br>┌────────────────────┬───────────┐<br>│        tag         │ tag_count │<br>│      varchar       │   int64   │<br>├────────────────────┼───────────┤<br>│ javascript         │    120000 │<br>│ python             │     60000 │<br>│ sql                │     40000 │<br>│ java               │     30000 │<br>│ css                │     24000 │<br>│ aws                │     20000 │<br>│ docker             │     17142 │<br>│ data-science       │     15000 │<br>│ machine-learning   │     13333 │<br>│ kubernetes         │     12000 │<br>└────────────────────┴───────────┘</code></pre>
+<p>This a full table scan which has to deserialize every nested data structure just to access the <code>tags</code> list for computing the result.</p>
+<p>There is no direct way to access the <code>tags</code> field and slice only the required list values from the byte array.</p>
+<p>The binary blob column can be compressed using a general purpose compression algorithm like snappy, zstd to reduce the disk storage size.</p>
+<p>The total throughput for decompressing the column values, deserializing it, and computing the count aggregate will not exceed the speed at which a fast NVME SSD can read data from disk.</p>
+<p>The bottleneck here is never going to be disk I/O.</p>
+<p>The size of each nested data structure may fall anywhere between a few kilobytes to a few megabytes.</p>
+<p>When data structures are several megabytes, they exceed the size of the CPU's L3 cache.</p>
+<p>Processing a large value will trigger a cache miss that stalls the processor, forcing it to wait for data from main memory which is orders of magnitude slower, leaving the CPU idle instead of performing actual work.</p>
+<p>There is no option to selectively read only the parts required for computing the results of a query which almost certainly will fit into the lower L1/L2 cpu caches.</p>
+<p>There is a deserialization cost associated with brining each value into memory before being able to begin performing any computation relevant to the query.</p>
+<p>The majority of the work performed is not in service of computing the results of the query, but rather for accessing the values.</p>
+<p>However the nested representation produced by shredding using the Dremel encoding technique manages to successfully avoid the pitfalls of the opaque binary blob representation.</p>
+<h3 id="nested-schema" tabindex="-1">Nested Schema <a class="direct-link" href="#nested-schema" aria-hidden="true">#</a></h3>
+<p>Shredding depends on the schema to encode nested data into column values.</p>
+<p>Here are a few valid instances of a <code>contact</code> nested data structure:</p>
+<pre class="language-protobuf"><code class="language-protobuf"><span class="token comment">// All properties are defined</span><br><span class="token punctuation">{</span> name<span class="token punctuation">:</span> <span class="token string">"Alice"</span><span class="token punctuation">,</span><br>  phones<span class="token punctuation">:</span> <span class="token punctuation">[</span><br>	<span class="token punctuation">{</span> number<span class="token punctuation">:</span> <span class="token string">"555-1234"</span><span class="token punctuation">,</span> phone_type<span class="token punctuation">:</span> <span class="token string">"Home"</span> <span class="token punctuation">}</span><span class="token punctuation">,</span><br>	<span class="token punctuation">{</span> number<span class="token punctuation">:</span> <span class="token string">"555-5678"</span><span class="token punctuation">,</span> phone_type<span class="token punctuation">:</span> <span class="token string">"Work"</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">}</span><br><br><span class="token comment">// The `phones` list is empty.</span><br><span class="token punctuation">{</span> name<span class="token punctuation">:</span> <span class="token string">"Bob"</span><span class="token punctuation">,</span> phones<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><br><br><span class="token comment">// The `phones` property is missing.</span><br><span class="token punctuation">{</span> name<span class="token punctuation">:</span> <span class="token string">"Charlie"</span> <span class="token punctuation">}</span><br><br><span class="token comment">// The `names` property is missing.</span><br><span class="token punctuation">{</span> phones<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span>number<span class="token punctuation">:</span> null<span class="token punctuation">,</span> phone_type<span class="token punctuation">:</span> <span class="token string">"Home"</span><span class="token punctuation">}</span><span class="token punctuation">]</span> <span class="token punctuation">}</span></code></pre>
+<p>This is the schema used for shredding the above values for storage in Parquet format.</p>
 <pre class="language-text"><code class="language-text">message contact {<br>  OPTIONAL BINARY name (STRING);<br>  OPTIONAL group phones (LIST) {<br>    REPEATED group list {<br>      OPTIONAL group item {<br>        OPTIONAL BINARY number (STRING);<br>        OPTIONAL BINARY phone_type (STRING);<br>      }<br>    }<br>  }<br>}</code></pre>
-<p>You can read this: <code>OPTIONAL BINARY phone_type (STRING)</code> as a field which has the name <code>phone_type</code> with the logical data type being a UTF-8 string, and the physical representation being binary. The field value may not always be present.</p>
-<p>Here are a few valid examples of nested data of the <code>Contact</code> schema:</p>
-<pre class="language-text"><code class="language-text">{name: "Alice", phones: [<br>	{number: "555-1234", phone_type: "Home"},<br>	{number: "555-5678", phone_type: "Work"}]}<br>{name: "Bob"}<br>{name: "Charlie"}<br>{name: "Diana", phones: [<br>	{number: "555-9999", phone_type: "Work"}]}<br>{phones: [{number: null, phone_type: "Home"}]}</code></pre>
-<h3 id="the-dremel-encoding" tabindex="-1">The Dremel Encoding <a class="direct-link" href="#the-dremel-encoding" aria-hidden="true">#</a></h3>
-<p>In flat relational data storing the values together in columns suffice. It is not that simple with nested data where the structure of the nested data needs to be preserved.</p>
-<p>The structure is metadata and it needs to be encoded and stored together with the shredded values. This is the fundamental principle of Dremel Encoding.</p>
-<p>For each value shredded from nested data, the structure can be encoded using only two integer values. These two integers fully describe the structure and helps in reassembling the nested data back from its shredded form.</p>
-<p>The two metadata values for describing the structure of nested data are: <strong>definition level</strong> and <strong>repetition level</strong>.</p>
-<h4 id="definition-level" tabindex="-1">Definition Level <a class="direct-link" href="#definition-level" aria-hidden="true">#</a></h4>
-<p>This metadata maintains a count of all the optional and repeated fields which are present in a path. Let us look at a breakdown for the path: <code>phones.list.item.number</code>.</p>
+<blockquote>
+<p>Parquet is a self-describing file format which also stores the schema within the metadata located at the footer of the Parquet file.</p>
+</blockquote>
+<p>An <code>OPTIONAL</code> field can be present or missing.</p>
+<p>A <code>REPEATED</code> field is a list with zero or more elements.</p>
+<p>Nesting is added using a <code>group</code> which contains one or more child fields.</p>
+<p>The <code>LIST</code> is a nested data type which contains a nested field which defines the elements of the list.</p>
+<p>Then there are the primitive data types which represents the valeus at the leaf nodes of the nested data.</p>
+<p>As per the above schema there are three shredded columns in it which are:</p>
+<ul>
+<li><code>name</code></li>
+<li><code>phones.list.item.number</code></li>
+<li><code>phones.list.item.phone_type</code></li>
+</ul>
+<p>This is a direct physical representation of shredded columns stored in the Parquet file.</p>
+<p>The intermediate <code>list.item</code> is encapsulated from the user who queries this Parquet file as an internal implementation detail.</p>
+<blockquote>
+<p>Parquet adds the intermediate fields for list data structures to help remove any ambiguity between physical representation of data states in Dremel encoding like:</p>
+<ul>
+<li>an empty list</li>
+<li>a missing list</li>
+<li>first element of list is <code>NULL</code></li>
+</ul>
+</blockquote>
+<p>The user who writes or reads the <code>contact</code> nested data to Parquet has the following logical view of paths in the <code>contact</code> nested data for data access:</p>
+<ul>
+<li><code>name</code></li>
+<li><code>phones.number</code></li>
+<li><code>phones.phone_type</code></li>
+</ul>
+<blockquote>
+<p>The decoupling of the logical and physical representations is a common technique used in database engineering to reduce code complexity and improve the internal implementation without introducing breaking changes to the public interface.</p>
+</blockquote>
+<h3 id="definition-levels" tabindex="-1">Definition Levels <a class="direct-link" href="#definition-levels" aria-hidden="true">#</a></h3>
+<p>The definition level encodes the path structure of the nested data.</p>
+<p>Let us see this in action for a path in the schema which contains both <code>OPTIONAL</code> and <code>REPEATED</code> fields like <code>phones.list.item.number</code>.</p>
+<pre class="language-text"><code class="language-text">message contact {<br>  OPTIONAL BINARY name (STRING);<br>  OPTIONAL group phones (LIST) {<br>    REPEATED group list {<br>      OPTIONAL group item {<br>        OPTIONAL BINARY number (STRING);<br>        OPTIONAL BINARY phone_type (STRING);<br>      }<br>    }<br>  }<br>}</code></pre>
+<p>The definition level count starts at zero for every path.</p>
+<p>For each <code>OPTIONAL</code> and <code>REPEATED</code> field we encounter in the path from the root, we will increment the count by one.</p>
 <table>
 <thead>
 <tr>
-<th>field</th>
-<th>multiplicity</th>
-<th>definition level</th>
+<th>Multiplicity</th>
+<th>Field Name</th>
+<th>Δ</th>
+<th>Definition Level</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>phones</td>
 <td>OPTIONAL</td>
+<td>phones</td>
+<td>+1</td>
 <td>1</td>
 </tr>
 <tr>
-<td>list</td>
 <td>REPEATED</td>
+<td>list</td>
+<td>+1</td>
 <td>2</td>
 </tr>
 <tr>
-<td>item</td>
 <td>OPTIONAL</td>
+<td>item</td>
+<td>+1</td>
 <td>3</td>
 </tr>
 <tr>
-<td>number</td>
 <td>OPTIONAL</td>
+<td>number</td>
+<td>+1</td>
 <td>4</td>
 </tr>
 </tbody>
 </table>
-<p>The definition level of a value shredded from this path can have a maximum value of 4.</p>
+<p>The maximum definition level value for this path is four.</p>
+<p>Now let us see how this encodes various data states which are possible for this path.</p>
 <table>
 <thead>
 <tr>
-<th>state</th>
-<th>def</th>
-<th>description</th>
+<th>Value</th>
+<th>Definition Level</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>NULL</td>
+<td>{ phones: null }</td>
 <td>0</td>
-<td><code>phones</code> is not defined</td>
+<td><code>phones</code> is missing</td>
 </tr>
 <tr>
-<td>[]</td>
+<td>{ phones: [] }</td>
 <td>1</td>
 <td><code>list</code> is empty</td>
 </tr>
 <tr>
-<td>[NULL]</td>
+<td>{ phones: [null] }</td>
 <td>2</td>
-<td><code>item</code> is not defined</td>
+<td><code>item</code> is missing</td>
 </tr>
 <tr>
-<td>[{number: NULL}]</td>
+<td>{ phones: [{ number: null }] }</td>
 <td>3</td>
-<td><code>number</code> is not defined</td>
+<td><code>number</code> is missing</td>
 </tr>
 <tr>
-<td>[{number: &quot;555-9999&quot;}]</td>
+<td>{ phones: [{ number: &quot;555-1234&quot;}] }</td>
 <td>4</td>
-<td>all the fields are defined</td>
+<td>all fields are present</td>
 </tr>
 </tbody>
 </table>
-<blockquote>
-<p>Note: In the SQL or DataFrame frontend the <code>list</code> and <code>item</code> fields need not be explicitly mentioned. This is a storage level concern. The user can directly use the expression <code>$.phones[*].number</code> to get all the phone numbers from the nested data.</p>
-</blockquote>
-<h4 id="repetition-level" tabindex="-1">Repetition Level <a class="direct-link" href="#repetition-level" aria-hidden="true">#</a></h4>
-<p>This metadata deals with only repeated fields. In the shredded form all we have is all the values of a path stored together in a column. The repetition level is critical for identifying to which nested data, the exact list and index of the shredded value. It is the final piece in being able reassemble complex nested data which often contains multiple repeated fields in a path.</p>
-<p>In the <code>Contact</code> schema there is only a single repeated field. The repetition level is computed only for paths which contains at least one repeated field. So it applies to these paths in <code>Contact</code>:</p>
-<ul>
-<li><code>phones.list.item.number</code> and,</li>
-<li><code>phones.list.item.phone_type</code></li>
-</ul>
-<p>The max possible repetition level for both paths is 1.</p>
-<h3 id="putting-it-all-together" tabindex="-1">Putting it all Together <a class="direct-link" href="#putting-it-all-together" aria-hidden="true">#</a></h3>
-<p>This is a partial projection of <code>Contact</code> values shown earlier:</p>
-<pre class="language-text"><code class="language-text">[0] { phones: [<br>		{number: "555-1234", phone_type: "Home"},<br>		{number: "555-5678", phone_type: "Work"}]}<br>	]}<br>[1] {}<br>[2] {}<br>[3] { phones: [<br>		{number: "555-9999", phone_type: "Work"}<br>	]}<br>[4] { phones: [<br>		{number: null, phone_type: "Home"}<br>	]}</code></pre>
-<p>Let us now take a look at the shredded form for the <code>number</code> column.</p>
+<h3 id="repetition-levels" tabindex="-1">Repetition Levels <a class="direct-link" href="#repetition-levels" aria-hidden="true">#</a></h3>
+<p>The repetition level encodes the list boundaries and the offset of an item in a list.</p>
+<p>The repetition level count starts at zero for every path.</p>
+<p>It is incremented only for <code>REPEATED</code> paths in a field.</p>
 <table>
 <thead>
 <tr>
-<th><code>phones.list.item.number</code></th>
-<th>rep</th>
-<th>def</th>
-<th>description</th>
+<th>Multiplicity</th>
+<th>Field Name</th>
+<th>Δ</th>
+<th>Repetition Level</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OPTIONAL</td>
+<td>phones</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>REPEATED</td>
+<td>list</td>
+<td>+1</td>
+<td>1</td>
+</tr>
+<tr>
+<td>OPTIONAL</td>
+<td>item</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>OPTIONAL</td>
+<td>number</td>
+<td>0</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p>The maximum repetition level for this path is therefore one.</p>
+<pre class="language-text"><code class="language-text">// Record [0]<br>{ phones: [<br>	{ number: "555-1234" },<br>	{ number: "555-5678" }]}<br><br>// Record [1]<br>{ phones: [] }<br><br>// Record [2]<br>{ phones: null }<br><br>// Record [3]<br>{ phones: [ { number: null } ]}</code></pre>
+<p>Let us see how the repetition levels are computed for the following values.</p>
+<table>
+<thead>
+<tr>
+<th>Number (String)</th>
+<th>Repetition Level</th>
+<th>Definition Level</th>
+<th>Description</th>
 </tr>
 </thead>
 <tbody>
@@ -184,78 +268,100 @@
 <td>&quot;555-1234&quot;</td>
 <td>0</td>
 <td>4</td>
-<td>first phone number in first value</td>
+<td>Record 0:<br/> Start a new list</td>
 </tr>
 <tr>
 <td>&quot;555-5678&quot;</td>
 <td>1</td>
 <td>4</td>
-<td>next phone number in first value</td>
+<td>Record 0:<br/> Continuation of previous list</td>
 </tr>
 <tr>
-<td>NULL</td>
+<td>null</td>
 <td>0</td>
-<td>0</td>
-<td><code>phones</code> field is not defined</td>
+<td>2</td>
+<td>Record 1: <br/> Start a new list <br/> Definition level shows the list is empty</td>
 </tr>
 <tr>
-<td>NULL</td>
+<td>null</td>
 <td>0</td>
-<td>0</td>
-<td><code>phones</code> field is not defined</td>
+<td>1</td>
+<td>Record 2: <br/> Start a new list <br/> Definition level shows the <code>phones</code> field is missing</td>
 </tr>
 <tr>
-<td>&quot;555-9999&quot;</td>
-<td>0</td>
-<td>4</td>
-<td>first phone number in 4th value</td>
-</tr>
-<tr>
-<td>NULL</td>
+<td>null</td>
 <td>0</td>
 <td>3</td>
-<td>first phone number is not defined in 5th value</td>
+<td>Record 3: <br/> Start a new list <br/> Definition level shows the <code>number</code> is missing</td>
 </tr>
 </tbody>
 </table>
-<p>The first <code>Contact</code> contains two <code>number</code> items. The first item is identified by a repetition level of 0, and the remaining items have a repetition level of 1. The definition level is 4 which means all the fields are present for both values. This can be reassembled as following:</p>
-<pre class="language-text"><code class="language-text">{ phones: [<br>	{ number: "555-1234"},  // rep=0; def=4;<br>	{ number: "555-5678"},  // rep=0; def=4;<br>]}</code></pre>
-<p>The next two values are <code>NULL</code>, but this is never really physically stored. This is an optimisation which has a high impact when dealing with sparse nested data. Even though there is no actual <code>NULL</code> stored physically, it can be inferred from the definition level not being equal to 4. The definition level value tells us exactly where the path terminated, so we know how to recreate it. Since the definition level is zero in both cases, we can infer that <code>phones</code> field itself is not present in the nested data.</p>
-<p>The next contact contains only a single item. We know this because there is no successor item with a repetition level of 1. The definition level is 4, so we know all the fields in the path are present. This is reassembled into:</p>
-<pre class="language-text"><code class="language-text">{ phones: [{number: "555-999"}] }</code></pre>
-<p>The final shredded value is also a <code>NULL</code>, but the definition level is 3. So we know that <code>phones.list.item</code> is present, but the final <code>number</code> field is not. So this is reassemble into:</p>
-<pre class="language-text"><code class="language-text">{ phones: [{number: null}] }</code></pre>
-<h3 id="storage-optimizations" tabindex="-1">Storage Optimizations <a class="direct-link" href="#storage-optimizations" aria-hidden="true">#</a></h3>
-<p>If the nested dataset is extremely sparse, there are going to be a lot <code>NULL</code> values present in the values array. But this is not an issue because <code>NULL</code> values are never stored in physical storage. When reading back the data this can be inferred from the definition level values. If the definition level is less than the max definition level for that path, then it can only mean that the path terminated early and therefore the value can only be <code>NULL</code>. This works out really well for sparse datasets as we incur no additional costs in storage.</p>
-<p>You would have noticed by now that the definition level and repetition level values are dependent on the depth of the tree for any given path. If the nested data has a max depth of 7, then the level values will not exceed 7. In binary 7 is <code>0b111</code> which requires only 3-bits to encode. So both the definition and repetition level values can be bit-packed instead of representing them as 32-bit or 64-bit integers which will take up 4 to 8 bytes of storage per metdata value.</p>
-<p>If a list contains a large number of elements, the first item will have a repetition level which identifies the beginning of the list. And the remaining elements will have the same repetition level. So if there are 1001 elements in the list, we can use run-length encoding to compress it further: <code>(M, 1), (N, 1000)</code>, where <code>M</code> and <code>N</code> represents the repetition level values and their corresponding run lengths.</p>
-<p>If a path does not contain any repeated fields, we do not have to store the repetition levels for that column. Similarly if a top-level field is a required field (meaning it cannot be <code>NULL</code>) then the definition and repetitionl levels is going to be zero for all values. Here too we do not need to store both repetition levels or definition levels. This is because the top-level required field does not have any nesting.</p>
-<p>The optimizations are significant in improving storage efficiency and reducing the amount of I/O required to read the shredded columns back from storage. We can have good things like shredding without trading off too much in storage space because of definition and repetition levels metadata.</p>
-<h3 id="querying-nested-data" tabindex="-1">Querying Nested Data <a class="direct-link" href="#querying-nested-data" aria-hidden="true">#</a></h3>
-<p>So now we have the nested data in shredded form, let us see how to query it.</p>
-<pre class="language-text"><code class="language-text">SELECT *<br>  FROM read_parquet("contacts.parquet");<br>┌─────────┬──────────────────────────────────────────────────────────────────────────────────────┐<br>│  name   │                                        phones                                        │<br>│ varchar │                     struct(number varchar, phone_type varchar)[]                     │<br>├─────────┼──────────────────────────────────────────────────────────────────────────────────────┤<br>│ Alice   │ [{'number': 555-1234, 'phone_type': Home}, {'number': 555-5678, 'phone_type': Work}] │<br>│ Bob     │ NULL                                                                                 │<br>│ Charlie │ []                                                                                   │<br>│ Diana   │ [{'number': 555-9999, 'phone_type': Work}]                                           │<br>│ NULL    │ [{'number': NULL, 'phone_type': Home}]                                               │<br>└─────────┴──────────────────────────────────────────────────────────────────────────────────────┘</code></pre>
-<h4 id="flattening-nested-phones-list" tabindex="-1">Flattening Nested <code>phones</code> list <a class="direct-link" href="#flattening-nested-phones-list" aria-hidden="true">#</a></h4>
-<p>The <code>UNNEST</code> function is useful here to unnest the <code>phones</code> list into one item per row. This yields a struct row item: <code>{'number': 555-1234, 'phone_type': Home}</code> which can be further unnested into its individual fields: <code>number</code> and <code>phone_type</code>.</p>
-<p>The DuckDB SQL dialect supports <a href="https://duckdb.org/docs/stable/sql/query_syntax/unnest.html#recursive-unnest">recursive unnesting</a>.</p>
-<pre class="language-text"><code class="language-text">SELECT<br>    name,<br>    unnest(phones, recursive := true)<br>FROM<br>    read_parquet('contacts.parquet');<br>┌─────────┬──────────┬────────────┐<br>│  name   │  number  │ phone_type │<br>│ varchar │ varchar  │  varchar   │<br>├─────────┼──────────┼────────────┤<br>│ Alice   │ 555-1234 │ Home       │<br>│ Alice   │ 555-5678 │ Work       │<br>│ Diana   │ 555-9999 │ Work       │<br>│ NULL    │ NULL     │ Home       │<br>└─────────┴──────────┴────────────┘</code></pre>
-<h4 id="summarizing-phone-types" tabindex="-1">Summarizing Phone Types <a class="direct-link" href="#summarizing-phone-types" aria-hidden="true">#</a></h4>
-<pre class="language-text"><code class="language-text">SELECT<br>  phone.phone_type AS phone_type,<br>  COUNT(*) AS total<br>FROM<br>  read_parquet('contacts.parquet'),<br>  UNNEST(phones) AS t(phone)<br>GROUP BY<br>  phone_type<br>ORDER BY<br>  total DESC;<br>┌────────────┬───────┐<br>│ phone_type │ total │<br>│  varchar   │ int64 │<br>├────────────┼───────┤<br>│ Home       │     2 │<br>│ Work       │     2 │<br>└────────────┴───────┘</code></pre>
-<h4 id="summarizing-phones-per-user" tabindex="-1">Summarizing Phones Per User <a class="direct-link" href="#summarizing-phones-per-user" aria-hidden="true">#</a></h4>
-<pre class="language-text"><code class="language-text">SELECT<br>  name,<br>  len(phones) AS phone_count<br>FROM<br>  read_parquet('~/Documents/contacts.parquet')<br>ORDER BY<br>  phone_count DESC NULLS FIRST;<br>┌─────────┬─────────────┐<br>│  name   │ phone_count │<br>│ varchar │    int64    │<br>├─────────┼─────────────┤<br>│ Bob     │        NULL │<br>│ Alice   │           2 │<br>│ Diana   │           1 │<br>│ NULL    │           1 │<br>│ Charlie │           0 │<br>└─────────┴─────────────┘</code></pre>
-<h3 id="point-lookups-involve-scanning-and-decoding" tabindex="-1">Point Lookups Involve Scanning and Decoding <a class="direct-link" href="#point-lookups-involve-scanning-and-decoding" aria-hidden="true">#</a></h3>
-<p>An example is if we want to find the 1000th <code>phone_number</code>. The shredding flattens the <code>phone_number</code> into contiguous block of all phone numbers from all contacts. We cannot directly jump to the offset 1000 because <code>NULL</code> values are omitted from physical storage. Therefore the logical offset will not match the physical position in the stored column values.</p>
-<p>The definition levels will have to be decoded and scanned from the beginning to map the logical offset 1000 to the physical offset in storage.</p>
-<p>Consider a variation of this simple point lookup query but we also make it dependent on the <code>name</code> column where we want to find the 3rd non-null number for <code>Troy</code>.</p>
-<p>Here we have to first scan the repetition levels to identify the beginning of <code>phone_numbers</code> for <code>Troy</code>. Then use the definition levels in tandem to skip any null values to find the target. Here the lookup process involves scanning and decoding both definition and repetition levels because of the dependency.</p>
-<p>We are forced into sequential scans and full decoding of levels metadata to compute the result.</p>
-<h3 id="all-or-nothing:-selective-shredding" tabindex="-1">All or Nothing: Selective Shredding <a class="direct-link" href="#all-or-nothing:-selective-shredding" aria-hidden="true">#</a></h3>
-<p>The alternatives are to store nested data as a binary blob and forgoe any of the native optimizations available in columnar formats. The other is to completely shred the nested data with a strongly-typed schema.</p>
-<p>There is no in-between. You cannot choose to selectively shred only a fraction of the nested data and then store the rest as a binary blob. This is useful for semi-structured data like JSON where sometimes the same key may have different data types in the value.</p>
-<p>This case is not supported in traditional shredding of nested data.</p>
-<h3 id="conclusion" tabindex="-1">Conclusion <a class="direct-link" href="#conclusion" aria-hidden="true">#</a></h3>
-<p>Nested data has structure which needs to be preserved during shredding. The structural metadata is critical to being able to reassemble the full nested value or a partial projection.</p>
-<p>Shredding requires knowing the column data type. So it works only if a schema definition is provided for the nested data. The data model contains optional, repeated and group fields which makes it expressive enough to model any real-world nested data.</p>
-<p>Even though a single schema can lead to many variations in tree shapes of nested data instances, they can all be encoded with precision and fidelity during shredding by adding the structural metadata - definition &amp; repetition levels. By interpreting the definition levels &amp; repetition levels it is possible to reassemble the full or partial projection as required by the query.</p>
+<p>The repetition level zero is a special case which always identifies the first list item and also the start of a new record.</p>
+<p>The remaining items of this list will all have the same repetition level.</p>
+<p>Therefore the repetition level zero also marks the record boundaries.</p>
+<blockquote>
+<p>Note: The start of a new list can have a non-zero repetition level. This occurs in a schema which contains more than one <code>REPEATED</code> field in a path.</p>
+</blockquote>
+<p>The last three values are NULL and all of them have a zero repetition level.</p>
+<p>We know a new record started, nothing more.</p>
+<p>But by inspecting the definition levels we know exactly at which point the path terminated, and what the data state it represents.</p>
+<h3 id="data-layout" tabindex="-1">Data Layout <a class="direct-link" href="#data-layout" aria-hidden="true">#</a></h3>
+<p>After shredding, the <code>NULL</code> values are not stored in physical storage.</p>
+<p>This is primarily done to save space and an optimization for large nested schemas which are sparesely populated.</p>
+<p>Missing values do not take up additional storage space.</p>
+<p>The shredded column <code>phones.number</code> has the following physical layout.</p>
+<pre><code>values: [&quot;555-1234&quot;, &quot;555-5678&quot;]
+def: 	[4, 4, 2, 1, 3]
+rep: 	[0, 1, 0, 0, 0]
+</code></pre>
+<p>The maximum definition level of this path is four.</p>
+<p>Therefore we can infer that the last three values are null because the definition level is a value less than four.</p>
+<h3 id="comparison-with-opaque-binary-blob" tabindex="-1">Comparison with Opaque Binary Blob <a class="direct-link" href="#comparison-with-opaque-binary-blob" aria-hidden="true">#</a></h3>
+<p>Can we selectively read only those columns which are required for the query in the shredded representation?</p>
+<p>Yes.</p>
+<p>Do we have to deserialize column values?</p>
+<p>No, they are directly stored as a primitive type. There is no need to deserialize.</p>
+<p>Will the column values, definition levels and repetition levels fit into the lower level L1/L2/L3 caches of the CPU?</p>
+<p>Yes.</p>
+<p>In the binary blob representation a lot of preprocessing work is required to access the right values before the query processing could even begin.</p>
+<p>The nested representation using Dremel encoding is already in a columnar format, which allows direct access to columns which are used in the query.</p>
+<p>The query execution can begin as soon as the column values are read from disk and materialized into memory.</p>
+<h3 id="limitation:-point-lookup-queries" tabindex="-1">Limitation: Point Lookup Queries <a class="direct-link" href="#limitation:-point-lookup-queries" aria-hidden="true">#</a></h3>
+<p>A point lookup query is a highly-selective query which returns only a small set of rows.</p>
+<p>Say we want to access the 55th non-null value in the nested representation of <code>phones.phone_number</code> which also contains <code>NULL</code> values.</p>
+<p>To find the 55th non-null value we have to sequentially scan the definition levels array to skip the <code>NULL</code> values and map it to the correct physical row offset.</p>
+<p>This sequential scan is inherently unavoidable.</p>
+<p>We cannot jump directly to the value without first counting all the preceding non-null entries.</p>
+<p>Neverthless though slightly inefficient this is not disastrous for query performance.</p>
+<p>Columnar file formats like Parquet are capable of high-level pruning using metadata statistics which reduces the linear scanning to small chunks of the stored nested data.</p>
+<h4 id="limitation:-heterogenous-column-values" tabindex="-1">Limitation: Heterogenous Column Values <a class="direct-link" href="#limitation:-heterogenous-column-values" aria-hidden="true">#</a></h4>
+<p>The data type of the leaf node of a path, and therefore a shredded column is fixed.</p>
+<p>If the value contains a different data type it is runtime error which is schema data type mismatch error.</p>
+<p>This makes the Dremel encoding unsuitable for direct use with semi-structured data like JSON where often the same path can store values as different data types depending on some context.</p>
+<ul>
+<li>[x] <s>Show examples of JSON value where a key has a string type in some cases, and is an integer is few other cases.</s></li>
+</ul>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">[</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Alice"</span><span class="token punctuation">,</span><br>    <span class="token property">"phones"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>      <span class="token punctuation">{</span> <span class="token property">"number"</span><span class="token operator">:</span> <span class="token number">5551234</span><span class="token punctuation">,</span> <span class="token property">"phone_type"</span><span class="token operator">:</span> <span class="token string">"Home"</span> <span class="token punctuation">}</span><br>    <span class="token punctuation">]</span><br>  <span class="token punctuation">}</span><span class="token punctuation">,</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Diana"</span><span class="token punctuation">,</span><br>    <span class="token property">"phones"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>      <span class="token punctuation">{</span> <span class="token property">"number"</span><span class="token operator">:</span> <span class="token string">"555-5678"</span><span class="token punctuation">,</span> <span class="token property">"phone_type"</span><span class="token operator">:</span> <span class="token string">"Work"</span> <span class="token punctuation">}</span><br>    <span class="token punctuation">]</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">]</span></code></pre>
+<p>In this JSON list the first <code>phones.number</code> value is an <code>Integer</code> data type and the second <code>phones.number</code> values is <code>String</code> data type.</p>
+<p>The first value will produce a schema mismatch error and cannot be shredded.</p>
+<p>A core limitation of shredding is that it only works with values which conforms to the defined schema.</p>
+<p>A workaround here is to write custom code which will coerce the <code>Integer</code> value 5551234 into a formatted <code>String</code> value like &quot;555-1234&quot;.</p>
+<h4 id="limitation:-no-selective-shredding-support" tabindex="-1">Limitation: No Selective Shredding Support <a class="direct-link" href="#limitation:-no-selective-shredding-support" aria-hidden="true">#</a></h4>
+<p>There are situations where majority of the input value is strongly-typed but then there is a fragment which contains semi-structured data which is contextual.</p>
+<ul>
+<li>[ ] Show examples of an analytics telemetry data like mixpanel where the user can define JSON tags in the client side to dispatch with the telemetry.</li>
+</ul>
+<p>Unfortunately shredding is an all or nothing process.</p>
+<p>It cannot be skipped for a selected few fields in a value.</p>
+<p>A workaround is to define a field which squashes the semi-structured data into a <code>BINARY</code> blob field which is can then be shredded.</p>
+<h3 id="working-title:-parting-thoughts" tabindex="-1">Working Title: Parting Thoughts <a class="direct-link" href="#working-title:-parting-thoughts" aria-hidden="true">#</a></h3>
+<ul>
+<li>[ ] TODO</li>
+</ul>
+<h3 id="references" tabindex="-1">References <a class="direct-link" href="#references" aria-hidden="true">#</a></h3>
+<ul>
+<li>[ ] TODO</li>
+</ul>
 
 
       </main>
