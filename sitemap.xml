@@ -2,31 +2,6 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://jacobsherin.com/posts/2025-06-06-record-shredding-part-1/</loc>
-    <lastmod>2025-06-06</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/2025-06-09-dremel-record-shredding-1/</loc>
-    <lastmod>2025-06-09</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/2025-06-09-dremel-record-shredding-2/</loc>
-    <lastmod>2025-06-09</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/2025-06-17-implementing-datafusion-udwf-api/</loc>
-    <lastmod>2025-06-18</lastmod>
-  </url>
-  
-  <url>
-    <loc>https://jacobsherin.com/posts/2025-06-18-rust-iterator-state-machine-record-shredding/</loc>
-    <lastmod>2025-06-18</lastmod>
-  </url>
-  
-  <url>
     <loc>https://jacobsherin.com/posts/2025-07-23-shredding-nested-data-in-parquet/</loc>
     <lastmod>2025-07-30</lastmod>
   </url>
