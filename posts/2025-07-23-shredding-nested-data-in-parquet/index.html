@@ -48,9 +48,11 @@
 <li>[x] <s>Insert diagram of a nested schema showing shredded column values collected at the leaf nodes. The user should be able to visualize that a path in the schema maps to a shredded column.</s></li>
 </ul>
 <figure>
-  <img src="img/figure-1.svg" alt="Visualization of shredded column values of a nested
-Contact schema">
-  <figcaption>Figure 1: A high-level view of <code>Contact</code> nested data instances shredded into columnar format. Each shredded column corresponds to a unique path in the <code>Contact</code> schema: <code>name</code>, <code>phones.number</code> and <code>phones.phone_type</code>.</figcaption>
+  <img src="img/figure-1.svg" alt="Visualization of shredded column values of
+a nested Contact schema">
+  <figcaption>
+  	Figure 1: A high-level view of <code>Contact</code> nested data instances shredded into columnar format. Each shredded column corresponds to a unique path in the <code>Contact</code> schema: <code>name</code>, <code>phones.number</code> and <code>phones.phone_type</code>.
+  </figcaption>
 </figure>
 <p>The development of &quot;shredding&quot; was driven by the need for interactive analytics on very large (&gt; 1 trillion rows) datasets containing nested data structures in the Dremel query engine at Google in the late 2000s.</p>
 <p>The massive map-reduce jobs used to take multiple hours to complete even after running compute over thousands of servers in parallel.</p>
@@ -61,8 +63,13 @@ Contact schema">
 <p>This is achieved by introducing two key concepts: <strong>definition levels</strong> and <strong>repetition levels</strong>.</p>
 <p>This is an ingenious representation which manages to encode the original heirarchical structure of the nested data as two integer values.</p>
 <ul>
-<li>[ ] Show a shredded column, def, rep values and the values they map to. I am thinking it can show the encoding at the top and the values in a sequence below. An example which will fit this type of illustration well is a nested list which contains a list of numbers. They encoding representation is also terse and we can show the mapping from encoding to each inner list in the diagram.</li>
+<li>[ ] <s>Show a shredded column, def, rep values and the values they map to. I am thinking it can show the encoding at the top and the values in a sequence below. An example which will fit this type of illustration well is a nested list which contains a list of numbers. They encoding representation is also terse and we can show the mapping from encoding to each inner list in the diagram.</s></li>
 </ul>
+<figure>
+	<img src="img/figure-2.svg" alt="Side by side view of nested data and its
+final shredded representation with complete definition and repetition level values"/>
+	<figcaption>Figure 2: Shows three nested list of integers and its final representation after shredding is completed. The structure of the original nested records are encoded in the definition and repetition levels corresponding to the list item in the value column.</figcaption>
+</figure>
 <h3 id="intro-4" tabindex="-1">Intro 4 <a class="direct-link" href="#intro-4" aria-hidden="true">#</a></h3>
 <p>The Dremel encoding technique influenced the design of the next generation of file formats and proprietary storage engines of analytical systems which were being built in the early 2010s.</p>
 <p>Apache Parquet is the most well known and open source implementation to directly adopt the principles of definition levels and repetition levels to represent nested data structure in its file format.</p>
@@ -279,13 +286,13 @@ Contact schema">
 <tr>
 <td>null</td>
 <td>0</td>
-<td>2</td>
+<td>1</td>
 <td>Record 1: <br/> Start a new list <br/> Definition level shows the list is empty</td>
 </tr>
 <tr>
 <td>null</td>
 <td>0</td>
-<td>1</td>
+<td>0</td>
 <td>Record 2: <br/> Start a new list <br/> Definition level shows the <code>phones</code> field is missing</td>
 </tr>
 <tr>
@@ -311,7 +318,7 @@ Contact schema">
 <p>Missing values do not take up additional storage space.</p>
 <p>The shredded column <code>phones.number</code> has the following physical layout.</p>
 <pre><code>values: [&quot;555-1234&quot;, &quot;555-5678&quot;]
-def: 	[4, 4, 2, 1, 3]
+def: 	[4, 4, 1, 0, 3]
 rep: 	[0, 1, 0, 0, 0]
 </code></pre>
 <p>The maximum definition level of this path is four.</p>
@@ -347,13 +354,15 @@ rep: 	[0, 1, 0, 0, 0]
 <p>A core limitation of shredding is that it only works with values which conforms to the defined schema.</p>
 <p>A workaround here is to write custom code which will coerce the <code>Integer</code> value 5551234 into a formatted <code>String</code> value like &quot;555-1234&quot;.</p>
 <h4 id="limitation:-no-selective-shredding-support" tabindex="-1">Limitation: No Selective Shredding Support <a class="direct-link" href="#limitation:-no-selective-shredding-support" aria-hidden="true">#</a></h4>
-<p>There are situations where majority of the input value is strongly-typed but then there is a fragment which contains semi-structured data which is contextual.</p>
+<p>The clickstream data contains fields which are strongly-typed: <code>event</code>, <code>user_id</code> &amp; <code>timestamp</code> and also a user-generated <code>tags</code> field which is dynamically typed.</p>
+<p>Defining a rigid schema for <code>tags</code> is impractical because it removes the flexibility available to the user to add custom properties to the event log without any code changes.</p>
 <ul>
-<li>[ ] Show examples of an analytics telemetry data like mixpanel where the user can define JSON tags in the client side to dispatch with the telemetry.</li>
+<li>[x] <s>Show examples of an analytics telemetry data like mixpanel where the user can define JSON tags in the client side to dispatch with the telemetry.</s></li>
 </ul>
-<p>Unfortunately shredding is an all or nothing process.</p>
-<p>It cannot be skipped for a selected few fields in a value.</p>
-<p>A workaround is to define a field which squashes the semi-structured data into a <code>BINARY</code> blob field which is can then be shredded.</p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">[</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"event"</span><span class="token operator">:</span> <span class="token string">"Login"</span><span class="token punctuation">,</span><br>    <span class="token property">"user_id"</span><span class="token operator">:</span> <span class="token number">123</span><span class="token punctuation">,</span><br>    <span class="token property">"timestamp"</span><span class="token operator">:</span> <span class="token string">"2025-07-31T17:40:00Z"</span><span class="token punctuation">,</span><br>    <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"method"</span><span class="token operator">:</span> <span class="token string">"password"</span> <span class="token punctuation">}</span><br>  <span class="token punctuation">}</span><span class="token punctuation">,</span><br><br>  <span class="token punctuation">{</span><br>    <span class="token property">"event"</span><span class="token operator">:</span> <span class="token string">"ViewItem"</span><span class="token punctuation">,</span><br>    <span class="token property">"user_id"</span><span class="token operator">:</span> <span class="token number">123</span><span class="token punctuation">,</span><br>    <span class="token property">"timestamp"</span><span class="token operator">:</span> <span class="token string">"2025-07-31T17:41:15Z"</span><span class="token punctuation">,</span><br>    <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"item_id"</span><span class="token operator">:</span> <span class="token string">"abc-987"</span><span class="token punctuation">,</span> <span class="token property">"price"</span><span class="token operator">:</span> <span class="token number">19.95</span> <span class="token punctuation">}</span><br>  <span class="token punctuation">}</span><span class="token punctuation">,</span><br><br>  <span class="token punctuation">{</span><br>    <span class="token property">"event"</span><span class="token operator">:</span> <span class="token string">"Purchase"</span><span class="token punctuation">,</span><br>    <span class="token property">"user_id"</span><span class="token operator">:</span> <span class="token number">123</span><span class="token punctuation">,</span><br>    <span class="token property">"timestamp"</span><span class="token operator">:</span> <span class="token string">"2025-07-31T17:45:30Z"</span><span class="token punctuation">,</span><br>    <span class="token property">"tags"</span><span class="token operator">:</span> <span class="token punctuation">{</span> <span class="token property">"order_id"</span><span class="token operator">:</span> <span class="token string">"550e8400"</span><span class="token punctuation">,</span> <span class="token property">"total"</span><span class="token operator">:</span> <span class="token number">52.85</span> <span class="token punctuation">}</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">]</span></code></pre>
+<p>This makes it a poor fit for shredding which requires a pre-defined schema.</p>
+<p>Therefore it is not possible to apply shredding for the <code>tags</code> field.</p>
+<p>The best option here is to treat <code>tags</code> as an opaque binary blob field in the clickstream data.</p>
 <h3 id="working-title:-parting-thoughts" tabindex="-1">Working Title: Parting Thoughts <a class="direct-link" href="#working-title:-parting-thoughts" aria-hidden="true">#</a></h3>
 <ul>
 <li>[ ] TODO</li>
