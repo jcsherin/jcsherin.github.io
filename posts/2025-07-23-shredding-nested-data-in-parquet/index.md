@@ -32,9 +32,11 @@ At its core shredding is a process for breaking up nested data structures into a
 - [x] ~~Insert diagram of a nested schema showing shredded column values collected at the leaf nodes. The user should be able to visualize that a path in the schema maps to a shredded column.~~
 
 <figure>
-  <img src="img/figure-1.svg" alt="Visualization of shredded column values of a nested
-Contact schema">
-  <figcaption>Figure 1: A high-level view of <code>Contact</code> nested data instances shredded into columnar format. Each shredded column corresponds to a unique path in the <code>Contact</code> schema: <code>name</code>, <code>phones.number</code> and <code>phones.phone_type</code>.</figcaption>
+  <img src="img/figure-1.svg" alt="Visualization of shredded column values of
+a nested Contact schema">
+  <figcaption>
+  	Figure 1: A high-level view of <code>Contact</code> nested data instances shredded into columnar format. Each shredded column corresponds to a unique path in the <code>Contact</code> schema: <code>name</code>, <code>phones.number</code> and <code>phones.phone_type</code>.
+  </figcaption>
 </figure>
 
 The development of "shredding" was driven by the need for interactive analytics on very large (> 1 trillion rows) datasets containing nested data structures in the Dremel query engine at Google in the late 2000s.
@@ -53,7 +55,13 @@ This is achieved by introducing two key concepts: __definition levels__ and __re
 
 This is an ingenious representation which manages to encode the original heirarchical structure of the nested data as two integer values.
 
-- [ ] Show a shredded column, def, rep values and the values they map to. I am thinking it can show the encoding at the top and the values in a sequence below. An example which will fit this type of illustration well is a nested list which contains a list of numbers. They encoding representation is also terse and we can show the mapping from encoding to each inner list in the diagram.
+- [ ] ~~Show a shredded column, def, rep values and the values they map to. I am thinking it can show the encoding at the top and the values in a sequence below. An example which will fit this type of illustration well is a nested list which contains a list of numbers. They encoding representation is also terse and we can show the mapping from encoding to each inner list in the diagram.~~
+
+<figure>
+	<img src="img/figure-2.svg" alt="Side by side view of nested data and its
+final shredded representation with complete definition and repetition level values"/>
+	<figcaption>Figure 2: Shows three nested list of integers and its final representation after shredding is completed. The structure of the original nested records are encoded in the definition and repetition levels corresponding to the list item in the value column.</figcaption>
+</figure>
 
 ### Intro 4
 
@@ -291,8 +299,8 @@ Let us see how the repetition levels are computed for the following values.
 |--|--|--|--|
 | "555-1234" | 0 | 4| Record 0:<br/> Start a new list |
 | "555-5678" | 1 | 4| Record 0:<br/> Continuation of previous list |
-| null | 0 | 2 | Record 1: <br/> Start a new list <br/> Definition level shows the list is empty |
-| null | 0 | 1 | Record 2: <br/> Start a new list <br/> Definition level shows the `phones` field is missing|
+| null | 0 | 1 | Record 1: <br/> Start a new list <br/> Definition level shows the list is empty |
+| null | 0 | 0 | Record 2: <br/> Start a new list <br/> Definition level shows the `phones` field is missing|
 | null | 0 | 3 | Record 3: <br/> Start a new list <br/> Definition level shows the `number` is missing |
 
 The repetition level zero is a special case which always identifies the first list item and also the start of a new record.
@@ -321,7 +329,7 @@ The shredded column `phones.number` has the following physical layout.
 
 ```
 values: ["555-1234", "555-5678"]
-def: 	[4, 4, 2, 1, 3]
+def: 	[4, 4, 1, 0, 3]
 rep: 	[0, 1, 0, 0, 0]
 ```
 
@@ -402,15 +410,42 @@ A workaround here is to write custom code which will coerce the `Integer` value 
 
 #### Limitation: No Selective Shredding Support
 
-There are situations where majority of the input value is strongly-typed but then there is a fragment which contains semi-structured data which is contextual.
+The clickstream data contains fields which are strongly-typed: `event`, `user_id` & `timestamp` and also a user-generated `tags` field which is dynamically typed.
 
-- [ ] Show examples of an analytics telemetry data like mixpanel where the user can define JSON tags in the client side to dispatch with the telemetry.
+Defining a rigid schema for `tags` is impractical because it removes the flexibility available to the user to add custom properties to the event log without any code changes.
 
-Unfortunately shredding is an all or nothing process.
+- [x] ~~Show examples of an analytics telemetry data like mixpanel where the user can define JSON tags in the client side to dispatch with the telemetry.~~
 
-It cannot be skipped for a selected few fields in a value.
+```json
+[
+  {
+    "event": "Login",
+    "user_id": 123,
+    "timestamp": "2025-07-31T17:40:00Z",
+    "tags": { "method": "password" }
+  },
 
-A workaround is to define a field which squashes the semi-structured data into a `BINARY` blob field which is can then be shredded.
+  {
+    "event": "ViewItem",
+    "user_id": 123,
+    "timestamp": "2025-07-31T17:41:15Z",
+    "tags": { "item_id": "abc-987", "price": 19.95 }
+  },
+
+  {
+    "event": "Purchase",
+    "user_id": 123,
+    "timestamp": "2025-07-31T17:45:30Z",
+    "tags": { "order_id": "550e8400", "total": 52.85 }
+  }
+]
+```
+
+This makes it a poor fit for shredding which requires a pre-defined schema.
+
+Therefore it is not possible to apply shredding for the `tags` field.
+
+The best option here is to treat `tags` as an opaque binary blob field in the clickstream data.
 
 ### Working Title: Parting Thoughts
 
