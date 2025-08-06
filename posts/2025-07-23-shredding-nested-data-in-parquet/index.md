@@ -447,10 +447,34 @@ Therefore it is not possible to apply shredding for the `tags` field.
 
 The best option here is to treat `tags` as an opaque binary blob field in the clickstream data.
 
-### Working Title: Parting Thoughts
+### A Practical Implementation
 
-- [ ] TODO
+To see these concepts translated into code, I built [denester](https://github.com/jcsherin/denester), a project that implements the Dremel shredding algorithm.
+
+The core shredding implementation is roughly 300 SLOC and can be directly found in [src/parser.rs](https://github.com/jcsherin/denester/blob/8d1ef7ff62627591e8952ef0b2efbcbd386de9ba/src/parser.rs#L733-L1033).
+
+### A Parallel Shredding Implementation
+
+To find out the upper limits of shredding performance, I built a second parallel implementation: [parquet-parallel-nested](https://github.com/jcsherin/datablok/tree/main/crates/parquet-parallel-nested).
+
+This version is optimized for speed and uses the Rust Arrow (https://docs.rs/arrow/latest/arrow/index.html) library to directly write to Parquet format.
+
+It also includes custom tooling for generating synthetic, skewed nested data for more realistic benchmarking.
+
+On a 16-core AMD Ryzen 7 Pro, it can generate, shred and write 10 million nested documents in approximately 450ms.
+
+### Key Takeaways
+
+The genius of the Dremel encoding lies in its ability to encode the structure of nested data into two integer value arrays.
+
+This eliminates the penalty of deserialization when reading data from storage and also provide an incredibly CPU-friendly cache layout for maximizing query performance.
+
+While there are limitations and trade-offs it remains an integral technique in modern file formats like Apache Parquet for the modern data stack for analyzing nested data at scale.
 
 ### References
 
-- [ ] TODO
+- [Dremel: Interactive Analysis of Web-Scale Datasets](https://research.google/pubs/pub36632/) - The original 2010 paper that introduced the Dremel shredding algorithm.
+
+- [The Parquet Format Specification](https://parquet.apache.org/docs/overview/motivation/) - The Dremel shredding algorithm had support built-in from the ground up from day one.
+
+- [Apache Arrow Columnar Specification](https://arrow.apache.org/docs/format/Columnar.html) - The specification for Arrow's in-memory format, which uses conceptually similar validity bitmaps and offset buffers to represent nested data.
