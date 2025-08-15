@@ -1,0 +1,480 @@
+---
+title: "Working title"
+date: 2025-08-15
+summary: "placeholder"
+layout: layouts/post.njk
+draft: true
+---
+
+<link href="/static/dremel-post.css" rel="stylesheet" type="text/css">
+
+<div class="mt0 max-w-[800px]">
+    <p>
+        In 2010, Google published the <a href="https://google.com">Dremel paper</a> showing how to shred nested
+        data into columnar format, delivering 100x speedups on
+        web-scale analytics. Until then, there was no widely adopted way to
+        efficiently query nested data on large datasets.
+    </p>
+
+    <p>
+        <em>Nested data in the artist's imagination:</em>
+    </p>
+
+    <pre>
+{% highlight typescript %}
+type Contact = {
+  name?: string;
+  phones: Array<{number: string; phone_type?: string}>
+}
+{% endhighlight %}
+</pre>
+
+    <p>
+        Even today, you'll find yourselves waiting for hours if you try running
+        aggregations like SUM and GROUP BY on multi-billion row datasets using
+        Postgres or MySQL. It is a design decision; OLTP databases are meant to run thousands of concurrent transactions
+        per second, and be able to instantly read and create entire rows. But that precludes analytical queries that
+        rely on whole-table column data rather than individual rows.
+    </p>
+
+    <p>
+        For such queries, we turn to OLAP databases like DuckDB, DataFusion, and ClickHouse. They
+        store data in a columnar manner. This exploits the physical reality of how bytes are
+        arranged in the disk, so that we can grab large chunks of useful data in one go, without having to read any
+        irrelevant data.
+    </p>
+
+    <p>The challenge with nested data however is that there is no direct representation for it in a columnar format.
+        This is what the Dremel paper solved for. Before we look at Dremel in detail, let's look at a brief
+        visualization of row and columnar storage. </p>
+
+    <h3>
+        Code for the curious
+    </h3>
+
+    <p>If you are familiar with the Dremel landscape, then you can jump directly into a from-scratch educational
+        implementation of the Dremel shredding algorithm here:<a href="https://github.com/jcsherin/denester">github.com/jcsherin/denester</a>.
+        The core is only around 300 lines - <a
+                href="https://github.com/jcsherin/denester/blob/8d1ef7ff62627591e8952ef0b2efbcbd386de9ba/src/parser.rs#L733-L1033">parser.rs</a>.
+    </p>
+
+    <p>
+        There is also
+        <a href="https://github.com/jcsherin/datablok/tree/main/crates/parquet-parallel-nested">parquet-parallel-nested</a> which I
+        wrote to explore the upper limits of shredding performance. It uses the Rust Arrow project and exploits
+        parallelism to generate, shred, and write 10 million nested documents in approximately 450ms (on a 16-core AMD
+        Ryzen 7 Pro).
+    </p>
+
+
+    <h2>
+        Physical layout of data in row and column storages
+    </h2>
+    <p>
+        Consider the following SQL query:
+    </p>
+    <div class="mb-8">
+        <pre>select SUM(salary) from employees</pre>
+    </div>
+
+    <p>
+        To execute this query, we need access to all the values of the `salary` column, and nothing else.
+        This kind of query that operates on the entirety of specific columns is the standard for most business
+        reporting, analytics, and dashboard queries.
+    </p>
+
+    <p>
+        Let us now look at both row and column oriented storages, and how they lay out the bytes physically on the disk.
+        This arrangement decides which workload it supports best.
+    </p>
+
+    <h3>
+        Row-oriented storage
+    </h3>
+    <p>
+        Here all rows are stored one after the other.
+    </p>
+
+    <div class="visualization-content">
+        <div class="data-layout" id="row-oriented-layout">
+            <div class="disk-page read-page">
+                <div class="page-caption">Page 1</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">1   </span><span class="byte-separator"></span><span
+                            class="data-byte">Alice          </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">90000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span></div>
+                <div class="data-block"><span class="data-byte">2   </span><span class="byte-separator"></span><span
+                            class="data-byte">Bob            </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">65000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Mktg      </span></div>
+                <div class="data-block"><span class="data-byte">3   </span><span class="byte-separator"></span><span
+                            class="data-byte">Charlie        </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">110000  </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span></div>
+            </div>
+            <div class="disk-page read-page">
+                <div class="page-caption">Page 2</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">4   </span><span class="byte-separator"></span><span
+                            class="data-byte">David          </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">80000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Sales     </span></div>
+                <div class="data-block"><span class="data-byte">5   </span><span class="byte-separator"></span><span
+                            class="data-byte">Eve            </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">70000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Mktg      </span></div>
+                <div class="data-block"><span class="data-byte">6   </span><span class="byte-separator"></span><span
+                            class="data-byte">Frank          </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">125000  </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span></div>
+            </div>
+            <div class="disk-page read-page">
+                <div class="page-caption">Page 3</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">7   </span><span class="byte-separator"></span><span
+                            class="data-byte">Grace          </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">85000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Sales     </span></div>
+                <div class="data-block"><span class="data-byte">8   </span><span class="byte-separator"></span><span
+                            class="data-byte">Heidi          </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">60000   </span><span
+                            class="byte-separator"></span><span class="data-byte">HR        </span></div>
+                <div class="data-block"><span class="data-byte">9   </span><span class="byte-separator"></span><span
+                            class="data-byte">Ivan           </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">95000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span></div>
+            </div>
+            <div class="disk-page read-page">
+                <div class="page-caption">Page 4</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">10  </span><span class="byte-separator"></span><span
+                            class="data-byte">Judy           </span><span class="byte-separator"></span><span
+                            class="data-byte useful" data-useful="true">72000   </span><span
+                            class="byte-separator"></span><span class="data-byte">Mktg      </span></div>
+            </div>
+        </div>
+    </div>
+
+
+    <p>
+        You might have noticed that we've split up the rows into different pages. This is because at a hardware level,
+        disk reads happen only in large chunks, typically 4kb or more, of "pages". The byte-wise read APIs are an
+        illusion cast by the operating system. And so to read data from even one row, the database ends up
+        loading the entire page containing that row's data, which will also include other irrelevant data from that
+        page.
+    </p>
+
+    <p>
+        In the above visualization, we have marked every page that is actually read, with an orange border <span
+                class="legend-read" style="border-style: solid"></span>.
+        And useful data - in this case the `salary` value - which we need to execute our query, is marked with a
+        <span class="legend-useful"></span> green background.
+    </p>
+
+    <p>
+        Here <em>all pages</em> have been read, even though we need only a few bytes of the `salary` column from each
+        row in those pages. It is simply a consequence of how the data is laid out in the disk. This layout is optimized
+        for
+        transactional workloads: adding and updating entire rows. But it is deeply inefficient for analytical queries
+        that need to read specific columns across the table.
+    </p>
+
+
+    <h3>
+        Column-oriented storage
+    </h3>
+
+    <p>
+        Column-oriented storage turns the page-based reading of disks into a major advantage.
+
+        Since all values for a single attribute (like `salary`) are stored together, it can read just those pages for
+        the columns it needs, ignoring all the other data in the table.
+    </p>
+
+    <p>
+    In this visualization we can see that only a
+    single page is read (orange border <span
+            class="legend-read" style="border-style: solid"></span>), which contains only useful data (green
+    background
+    <span
+            class="legend-useful"></span>), demonstrating the immense I/O savings.
+    </p>
+
+
+    <div class="visualization-content">
+        <div class="data-layout" id="column-oriented-layout">
+            <div class="disk-page">
+                <div class="page-caption">Page 1</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">1   </span><span class="byte-separator"></span><span
+                            class="data-byte">2   </span><span class="byte-separator"></span><span
+                            class="data-byte">3   </span><span class="byte-separator"></span><span
+                            class="data-byte">4   </span><span class="byte-separator"></span><span
+                            class="data-byte">5   </span><span class="byte-separator"></span><span
+                            class="data-byte">6   </span><span class="byte-separator"></span><span
+                            class="data-byte">7   </span><span class="byte-separator"></span><span
+                            class="data-byte">8   </span><span class="byte-separator"></span><span
+                            class="data-byte">9   </span><span class="byte-separator"></span><span
+                            class="data-byte">10  </span></div>
+            </div>
+            <div class="disk-page">
+                <div class="page-caption">Page 2</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">Alice          </span><span
+                            class="byte-separator"></span><span class="data-byte">Bob            </span><span
+                            class="byte-separator"></span><span class="data-byte">Charlie        </span><span
+                            class="byte-separator"></span><span class="data-byte">David          </span><span
+                            class="byte-separator"></span><span class="data-byte">Eve            </span><span
+                            class="byte-separator"></span><span class="data-byte">Frank          </span><span
+                            class="byte-separator"></span><span class="data-byte">Grace          </span><span
+                            class="byte-separator"></span><span class="data-byte">Heidi          </span></div>
+            </div>
+            <div class="disk-page">
+                <div class="page-caption">Page 3</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">Ivan           </span><span
+                            class="byte-separator"></span><span class="data-byte">Judy           </span></div>
+            </div>
+            <div class="disk-page read-page">
+                <div class="page-caption">Page 4</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte useful" data-useful="true">90000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">65000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">110000  </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">80000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">70000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">125000  </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">85000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">60000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">95000   </span><span
+                            class="byte-separator"></span><span class="data-byte useful"
+                                                                data-useful="true">72000   </span></div>
+            </div>
+            <div class="disk-page">
+                <div class="page-caption">Page 5</div>
+                <div class="read-indicator">
+                    <div class="read-indicator-dot"></div>
+                    <div class="read-indicator-text">Page read</div>
+                </div>
+                <div class="data-block"><span class="data-byte">Eng       </span><span
+                            class="byte-separator"></span><span class="data-byte">Mktg      </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span><span
+                            class="byte-separator"></span><span class="data-byte">Sales     </span><span
+                            class="byte-separator"></span><span class="data-byte">Mktg      </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span><span
+                            class="byte-separator"></span><span class="data-byte">Sales     </span><span
+                            class="byte-separator"></span><span class="data-byte">HR        </span><span
+                            class="byte-separator"></span><span class="data-byte">Eng       </span><span
+                            class="byte-separator"></span><span class="data-byte">Mktg      </span></div>
+            </div>
+        </div>
+    </div>
+
+    <h3>
+        Motivation for Dremel
+    </h3>
+
+    <p>As we can see from the above visualization, there is a fundamentally physical reason why columnar storage is essential for efficient analytical queries. And early 2000s Google was confronting web-scale data
+    that needed it. But their first solution was MapReduce, which was more of a distributed computing framework and didn't exploit columnar storage. There was one good reason for that: we did not have any widely adopted way to store nested data in columnar format.
+        Due to widespread usage of ProtoBuf inside Google, most of their data was non-relational nested values, and so no existing OLAP database were fit to purpose. This is what led to the creation of Dremel.
+    </p>
+
+    <p> But why wouldn't a straight-forward columnar mapping work?
+        One simple approach might be to flatten the nested data by treating every unique path in the tree as a column.
+        For example, let's consider this nested data:
+    </p>
+
+    <pre>
+{% highlight json %}
+[
+  { "name": { "first": "John", "last": "Doe" } },
+  { "name": { "first": "Jane", "last": "Smith" } }
+]
+{% endhighlight %}
+</pre>
+    <p>We can store it in a columnar fashion in directly like this:</p>
+    <table style="white-space: pre;" class="font-mono mb-6">
+    <thead>
+        <tr>
+            <th>name.first</th>
+            <th>name.last</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>John</td>
+            <td>Doe</td>
+
+        </tr>
+        <tr>
+            <td>Jane</td>
+            <td>Smith</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p>But this stops working the moment we have either repeating or optional fields. We will be unable to efficiently and non-ambiguously represent them with this mapping.</p>
+    <p>Consider this:</p>
+
+    <pre>
+        {% highlight json %}
+            {
+  "profile": {
+    "name": "Alice",
+    "age": 30
+  }
+}
+
+// Record 2
+{
+  "profile": null  // Missing profile entirely!
+}
+
+// Record 3
+{
+  "profile": {
+    "name": "Charlie"
+    // Missing age!
+  }
+}
+    {% endhighlight %}
+    </pre>
+
+    <p>Here is its naive columnar representation:</p>
+
+    <table style="white-space: pre;" class="font-mono mb-6">
+        <tbody>
+        <tr>
+            <td>profile.name</td>
+            <td>["Alice", null, "Charlie"]</td>
+        </tr>
+        <tr>
+            <td>profile.age</td>
+            <td>[30, null, null]</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p>
+        So we dealt with empty values by putting `null` where the values are missing.
+        That however is a lossy transformation that destroys information.
+    </p>
+
+    <p>
+        How do we distinguish between the leaf value missing vs the
+        entire node missing? For example, in the second record, It is not that
+        profile.name is null or profile.age is null, but there is no value at all
+        for the `profile` field. That is impossible to know from this representation.
+    </p>
+
+    <p>
+        And for the third record, the `profile` node exists, but the leaf value
+        `age` is missing. However, that information cannot be inferred by
+        looking at just the values of the age column. Since its value is `null`,
+        we could infer that either the `age` leaf value is missing, or its
+        entire parent node is missing. Note that in OLAP we only work with
+        individual columns and we should be able to query based on structural
+        information with just that. We cannot reconstruct row information - that
+        would defeat the very purpose of efficiency with columnar storage.
+    </p>
+
+    <p>
+        It doesn't stop there. The introduction of repeating elements (arrays) makes the ambiguity worse:
+    </p>
+
+    <pre>
+        {% highlight json %}
+{
+  "doc_id": 10,
+  "links": {
+    "forward": ["http://A", "http://B"]
+  }
+}
+
+// Record 2
+{
+  "doc_id": 20,
+  "links": {
+    "forward": ["http://C"]
+  }
+}
+        {% endhighlight %}
+    </pre>
+
+    <p>
+Let's look at only the `forward` column.
+    </p>
+
+    <table style="white-space: pre;" class="font-mono mb-6">
+        <tbody>
+        <tr>
+            <td>links.forward</td>
+            <td>["http://A", "http://B", "http://C"]</td>
+        </tr>
+        </tbody>
+    </table>
+
+
+    <p>
+        But now we've lost the record boundaries. How do we know that "http://A" and "http://B" belong to record 1, and
+        "http://C" belongs to record 2?
+    </p>
+
+    <p>
+        When nested values have both optional and repeated elements, then this
+        naive mapping introduces so much ambiguity that it is impossible to
+        reconstruct the original record. While OLAP doesn't require row wise
+        iteration, it is important that the original value can be reconstructed
+        to ensure the correctness of the mapping.
+    </p>
+
+    <p>
+        The Dremel paper was Google's solution to this exact problem - it lets
+        us accurately and efficiently represent nested data with repeated and
+        optional values in a columnar structure. They were dealing with billions
+        of rows of hierarchical web data that broke traditional columnar
+        assumptions. The introduction of Dremel and OLAP produced dramatic
+        results: a MapReduce job processing 85 billion records that previously
+        took over an hour was now completed in under 10 seconds.
+    </p>
+
+    <p>
+        Although it hasn't captured popular imagination like its peer the MapReduce, it has had a profound impact on all
+        modern analytical SQL databases. It is what enables today's OLAP databases to query billions of rows of nested data with
+        almost the same speed as flat relational data. It has stood the test of time; literally - in 2020 the Dremel paper was given the
+        <a href=https://www.vldb.org/awards_10year.html">VLDB Test of Time award</a>.
+    </p>
+</div>

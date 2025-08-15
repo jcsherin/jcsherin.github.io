@@ -1,0 +1,33 @@
+:root {
+  --pico-font-size: 100%;
+}
+
+.page-wrapper {
+  max-width: 70rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1rem;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+header .nav {
+  display: flex;
+}
+
+header .nav li {
+  list-style-type: none;
+  margin-left: 1em;
+}
+
+/* Style for the active navigation item */
+header .nav .nav-item-active a {
+  font-weight: 600;
+  color: var(--pico-color-azure-650);
+  text-decoration: none;
+}

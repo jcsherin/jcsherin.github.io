@@ -15,6 +15,7 @@ published: false
 ---
 
 ### Intro 1
+
 In modern analytical query engines can compute complex aggregates by scanning billions of nested data structures in an instant.
 
 This is the performance available on a single node (your laptop).
@@ -51,7 +52,7 @@ It is an understatement to state that the performance impact was significant.
 
 The novelty of Dremel record shredding lay in directly representing nested data structures in a flat, columnar format.
 
-This is achieved by introducing two key concepts: __definition levels__ and __repetition levels__.
+This is achieved by introducing two key concepts: **definition levels** and **repetition levels**.
 
 This is an ingenious representation which manages to encode the original heirarchical structure of the nested data as two integer values.
 
@@ -196,6 +197,7 @@ The `LIST` is a nested data type which contains a nested field which defines the
 Then there are the primitive data types which represents the valeus at the leaf nodes of the nested data.
 
 As per the above schema there are three shredded columns in it which are:
+
 - `name`
 - `phones.list.item.number`
 - `phones.list.item.phone_type`
@@ -205,11 +207,13 @@ This is a direct physical representation of shredded columns stored in the Parqu
 The intermediate `list.item` is encapsulated from the user who queries this Parquet file as an internal implementation detail.
 
 > Parquet adds the intermediate fields for list data structures to help remove any ambiguity between physical representation of data states in Dremel encoding like:
+>
 > - an empty list
 > - a missing list
 > - first element of list is `NULL`
 
 The user who writes or reads the `contact` nested data to Parquet has the following logical view of paths in the `contact` nested data for data access:
+
 - `name`
 - `phones.number`
 - `phones.phone_type`
@@ -240,25 +244,24 @@ The definition level count starts at zero for every path.
 
 For each `OPTIONAL` and `REPEATED` field we encounter in the path from the root, we will increment the count by one.
 
-| Multiplicity | Field Name | Δ | Definition Level |
-|--|--|--|--|
-| OPTIONAL | phones | +1 | 1 |
-| REPEATED | list | +1 | 2 |
-| OPTIONAL | item | +1 | 3 |
-| OPTIONAL | number | +1 | 4 |
-
+| Multiplicity | Field Name | Δ   | Definition Level |
+| ------------ | ---------- | --- | ---------------- |
+| OPTIONAL     | phones     | +1  | 1                |
+| REPEATED     | list       | +1  | 2                |
+| OPTIONAL     | item       | +1  | 3                |
+| OPTIONAL     | number     | +1  | 4                |
 
 The maximum definition level value for this path is four.
 
 Now let us see how this encodes various data states which are possible for this path.
 
-| Value | Definition Level | Description |
-|--|--|--|
-| { phones: null } | 0 | `phones` is missing |
-| { phones: [] } | 1 | `list` is empty |
-| { phones: [null] } | 2 | `item` is missing |
-| { phones: [{ number: null }] } | 3 | `number` is missing|
-| { phones: [{ number: "555-1234"}] } | 4 | all fields are present |
+| Value                               | Definition Level | Description            |
+| ----------------------------------- | ---------------- | ---------------------- |
+| { phones: null }                    | 0                | `phones` is missing    |
+| { phones: [] }                      | 1                | `list` is empty        |
+| { phones: [null] }                  | 2                | `item` is missing      |
+| { phones: [{ number: null }] }      | 3                | `number` is missing    |
+| { phones: [{ number: "555-1234"}] } | 4                | all fields are present |
 
 ### Repetition Levels
 
@@ -268,12 +271,12 @@ The repetition level count starts at zero for every path.
 
 It is incremented only for `REPEATED` paths in a field.
 
-| Multiplicity | Field Name | Δ | Repetition Level |
-|--|--|--|--|
-| OPTIONAL | phones | 0 | 0 |
-| REPEATED | list | +1 | 1 |
-| OPTIONAL | item | 0 | 1 |
-| OPTIONAL | number | 0 | 1 |
+| Multiplicity | Field Name | Δ   | Repetition Level |
+| ------------ | ---------- | --- | ---------------- |
+| OPTIONAL     | phones     | 0   | 0                |
+| REPEATED     | list       | +1  | 1                |
+| OPTIONAL     | item       | 0   | 1                |
+| OPTIONAL     | number     | 0   | 1                |
 
 The maximum repetition level for this path is therefore one.
 
@@ -295,13 +298,13 @@ The maximum repetition level for this path is therefore one.
 
 Let us see how the repetition levels are computed for the following values.
 
-| Number (String) | Repetition Level| Definition Level | Description |
-|--|--|--|--|
-| "555-1234" | 0 | 4| Record 0:<br/> Start a new list |
-| "555-5678" | 1 | 4| Record 0:<br/> Continuation of previous list |
-| null | 0 | 1 | Record 1: <br/> Start a new list <br/> Definition level shows the list is empty |
-| null | 0 | 0 | Record 2: <br/> Start a new list <br/> Definition level shows the `phones` field is missing|
-| null | 0 | 3 | Record 3: <br/> Start a new list <br/> Definition level shows the `number` is missing |
+| Number (String) | Repetition Level | Definition Level | Description                                                                                 |
+| --------------- | ---------------- | ---------------- | ------------------------------------------------------------------------------------------- |
+| "555-1234"      | 0                | 4                | Record 0:<br/> Start a new list                                                             |
+| "555-5678"      | 1                | 4                | Record 0:<br/> Continuation of previous list                                                |
+| null            | 0                | 1                | Record 1: <br/> Start a new list <br/> Definition level shows the list is empty             |
+| null            | 0                | 0                | Record 2: <br/> Start a new list <br/> Definition level shows the `phones` field is missing |
+| null            | 0                | 3                | Record 3: <br/> Start a new list <br/> Definition level shows the `number` is missing       |
 
 The repetition level zero is a special case which always identifies the first list item and also the start of a new record.
 
@@ -387,15 +390,11 @@ This makes the Dremel encoding unsuitable for direct use with semi-structured da
 [
   {
     "name": "Alice",
-    "phones": [
-      { "number": 5551234, "phone_type": "Home" }
-    ]
+    "phones": [{ "number": 5551234, "phone_type": "Home" }]
   },
   {
     "name": "Diana",
-    "phones": [
-      { "number": "555-5678", "phone_type": "Work" }
-    ]
+    "phones": [{ "number": "555-5678", "phone_type": "Work" }]
   }
 ]
 ```

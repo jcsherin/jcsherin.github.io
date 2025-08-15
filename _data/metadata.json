@@ -1,8 +1,8 @@
 {
-  "title": "jcsherin",
+  "title": "Jacob's blog",
   "url": "https://jacobsherin.com/",
   "language": "en",
-  "description": "jcsherin writes about programming",
+  "description": "A database internals blog",
   "feed": {
     "subtitle": "jcsherin writes about programming",
     "filename": "feed.xml",

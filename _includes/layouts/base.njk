@@ -7,9 +7,8 @@
     <meta name="description" content="{{ description or metadata.description }}">
     <meta name="generator" content="{{ eleventy.generator }}">
 
-    <link rel="stylesheet" href="{{ '/css/index.css' | url }}">
-    <link rel="stylesheet" href="{{ '/css/prism-base16-monokai.dark.css' | url }}">
-    <link rel="stylesheet" href="{{ '/css/prism-diff.css' | url }}">
+    <link rel="stylesheet" href="{{ '/css/pico.min.css' | url }}">
+    <link rel="stylesheet" href="{{ '/css/custom.css' | url }}">
     <link rel="alternate" href="{{ metadata.feed.path | url }}" type="application/atom+xml" title="{{ metadata.title }}">
     <link rel="alternate" href="{{ metadata.jsonfeed.path | url }}" type="application/json" title="{{ metadata.title }}">
   </head>
@@ -25,7 +24,6 @@
         {%- endfor %}
         </ul>
       </header>
-      <h4 class="page-subtitle">Bridging Theory and Practice: Exploring Analytical Query Execution with Apache DataFusion, Parquet, and Apache Arrow</h4>
 
       <main{% if templateClass %} class="{{ templateClass }}"{% endif %}>
         {{ content | safe }}
