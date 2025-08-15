@@ -18,7 +18,10 @@
   <body>
     <div class="page-wrapper">
       <header>
-        <h1 class="home"><a href="{{ '/' | url }}">{{ metadata.title }}</a></h1>
+        <hgroup>
+        <h3 class="home"><a href="{{ '/' | url }}">{{ metadata.title }}</a></h3>
+        <p>{{ metadata.description }}</p>
+      </hgroup>
 
         {#- Read more about `eleventy-navigation` at https://www.11ty.dev/docs/plugins/navigation/ #}
         <ul class="nav">

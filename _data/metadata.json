@@ -2,7 +2,7 @@
   "title": "Jacob's blog",
   "url": "https://jacobsherin.com/",
   "language": "en",
-  "description": "A database internals blog",
+  "description": "On database building blocks.",
   "feed": {
     "subtitle": "jcsherin writes about programming",
     "filename": "feed.xml",
