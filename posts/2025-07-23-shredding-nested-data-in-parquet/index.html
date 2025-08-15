@@ -4,25 +4,26 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Layman&#39;s Guide to Nested Record Shredding</title>
-    <meta name="description" content="jcsherin writes about programming">
+    <meta name="description" content="A database internals blog">
     <meta name="generator" content="Eleventy v1.0.1">
-
-    <link rel="stylesheet" href="/css/index.css">
-    <link rel="stylesheet" href="/css/prism-base16-monokai.dark.css">
-    <link rel="stylesheet" href="/css/prism-diff.css">
-    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="jcsherin">
-    <link rel="alternate" href="/feed/feed.json" type="application/json" title="jcsherin">
+    <link rel="stylesheet" href="/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/css/custom.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inria+Serif:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.remove("no-js");</script>
   </head>
   <body>
     <div class="page-wrapper">
       <header>
-        <h1 class="home"><a href="/">jcsherin</a></h1>
+        <h1 class="home"><a href="/">Jacob&#39;s blog</a></h1>
         <ul class="nav">
-          <li class="nav-item"><a href="/">Writings</a></li>
-          <li class="nav-item"><a href="/about/">About</a></li>
+          <li class="nav-item"><a href="/">posts</a></li>
+          <li class="nav-item"><a href="/about/">whoami</a></li>
         </ul>
       </header>
-      <h4 class="page-subtitle">Bridging Theory and Practice: Exploring Analytical Query Execution with Apache DataFusion, Parquet, and Apache Arrow</h4>
 
       <main class="tmpl-post">
         <h1>The Layman&#39;s Guide to Nested Record Shredding</h1>
@@ -348,7 +349,7 @@ rep: 	[0, 1, 0, 0, 0]
 <ul>
 <li>[x] <s>Show examples of JSON value where a key has a string type in some cases, and is an integer is few other cases.</s></li>
 </ul>
-<pre class="language-json"><code class="language-json"><span class="token punctuation">[</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Alice"</span><span class="token punctuation">,</span><br>    <span class="token property">"phones"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>      <span class="token punctuation">{</span> <span class="token property">"number"</span><span class="token operator">:</span> <span class="token number">5551234</span><span class="token punctuation">,</span> <span class="token property">"phone_type"</span><span class="token operator">:</span> <span class="token string">"Home"</span> <span class="token punctuation">}</span><br>    <span class="token punctuation">]</span><br>  <span class="token punctuation">}</span><span class="token punctuation">,</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Diana"</span><span class="token punctuation">,</span><br>    <span class="token property">"phones"</span><span class="token operator">:</span> <span class="token punctuation">[</span><br>      <span class="token punctuation">{</span> <span class="token property">"number"</span><span class="token operator">:</span> <span class="token string">"555-5678"</span><span class="token punctuation">,</span> <span class="token property">"phone_type"</span><span class="token operator">:</span> <span class="token string">"Work"</span> <span class="token punctuation">}</span><br>    <span class="token punctuation">]</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">]</span></code></pre>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">[</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Alice"</span><span class="token punctuation">,</span><br>    <span class="token property">"phones"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token property">"number"</span><span class="token operator">:</span> <span class="token number">5551234</span><span class="token punctuation">,</span> <span class="token property">"phone_type"</span><span class="token operator">:</span> <span class="token string">"Home"</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><br>  <span class="token punctuation">}</span><span class="token punctuation">,</span><br>  <span class="token punctuation">{</span><br>    <span class="token property">"name"</span><span class="token operator">:</span> <span class="token string">"Diana"</span><span class="token punctuation">,</span><br>    <span class="token property">"phones"</span><span class="token operator">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span> <span class="token property">"number"</span><span class="token operator">:</span> <span class="token string">"555-5678"</span><span class="token punctuation">,</span> <span class="token property">"phone_type"</span><span class="token operator">:</span> <span class="token string">"Work"</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">]</span></code></pre>
 <p>In this JSON list the first <code>phones.number</code> value is an <code>Integer</code> data type and the second <code>phones.number</code> values is <code>String</code> data type.</p>
 <p>The first value will produce a schema mismatch error and cannot be shredded.</p>
 <p>A core limitation of shredding is that it only works with values which conforms to the defined schema.</p>
