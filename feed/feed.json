@@ -4,7 +4,7 @@
   "language": "en",
   "home_page_url": "https://jacobsherin.com/",
   "feed_url": "https://example.com/feed/feed.json",
-  "description": "A database internals blog",
+  "description": "On database building blocks.",
   "author": {
     "name": "Your Name Here",
     "url": "https://example.com/about-me/"
