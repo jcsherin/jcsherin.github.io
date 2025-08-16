@@ -1,3 +1,11 @@
+.toc ul {
+  padding-left: 1rem;
+}
+
+.toc ul li {
+  list-style-type: none;
+}
+
 .page-wrapper {
   max-width: 70rem;
   margin-left: auto;
