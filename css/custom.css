@@ -39,6 +39,7 @@ hgroup p {
 
 body {
   font-family: 'Inria Serif', serif;
+  font-size: 1.5rem;
   text-rendering: geometricPrecision;
 }
 

@@ -1,12 +1,18 @@
 ---
-title: "Trade-off between Merging & Borrowing in B+Tree deletes"
+title: "A B+Tree Node Underflows: Merge or Borrow?"
 date: 2025-08-16
 summary: "coalesce nodes or merge nodes, why does it matter?"
 layout: layouts/post.njk
 draft: true
 ---
 
-This post is about the design choices and trade-offs involved when deleting a key-value from a B+Tree results in the node having a less than 50% occupancy (the node underflows).
+A B+Tree node underflow condition happens when the number of key-value pairs it contains falls below a minimum threshold. This is typically set to 50% of the total node capacity. The delete operation which removes a key-value pair from an half-occupied node will result in a node underflow. 
+
+A node underflow may in turn trigger an expensive tree rebalancing which involves removing a node separator key and pointer pair from the parent node. If the parent node is already at half capacity, this triggers another node underflow condition. In the worst case, this phenomenon can recurse all the way back to the roof of the B+Tree. 
+
+The tree rebalancing is critical for maintaining the B+Tree invariants which guarantees its stable performance.
+
+The B+Tree is made safe for concurrent readers & writers without sacrifcing performance by implementing an optimistic concurrency control (OCC) scheme. In this worst-case scenario, the optimistic approach has to be abandoned at the entire path from root to leaf node has to be exclusively locked until delete completes. This increases latency for all other B+Tree operations along this tree path for the duration of the delete.
 
 <nav class="toc" aria-labelledby="toc-heading">
   <h2 id="toc-heading">Table of Contents</h2>
