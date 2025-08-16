@@ -2,16 +2,31 @@
 layout: layouts/base.njk
 templateClass: tmpl-post
 ---
+{% if draft %}
+  <style>
+    .draft-notice {
+      /* Positioning and layout */
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
+
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+{% endif %}
+
 <h1>{{ title }}</h1>
 
 <time datetime="{{ page.date | htmlDateString }}">{{ page.date | readableDate }}</time>
-
-{% if draft %}
-  <div class="draft-indicator">
-    <p><strong>DRAFT</strong></p>
-    <p>This is a draft preview. To publish, remove draft: true from the front matter.</p>
-  </div>
-{% endif %}
 
 {{ content | safe }}
 
