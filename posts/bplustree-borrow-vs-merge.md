@@ -6,13 +6,17 @@ layout: layouts/post.njk
 draft: true
 ---
 
-A B+Tree node underflow condition happens when the number of key-value pairs it contains falls below a minimum threshold. This is typically set to 50% of the total node capacity. The delete operation which removes a key-value pair from an half-occupied node will result in a node underflow. 
+When the number of entries in a B+Tree node falls below a minimum threshold, it is classified as a node underflow situation. The underflow threshold is typically set to 50% of the node fanout. A delete operation can therefore trigger a node underflow.
 
-A node underflow may in turn trigger an expensive tree rebalancing which involves removing a node separator key and pointer pair from the parent node. If the parent node is already at half capacity, this triggers another node underflow condition. In the worst case, this phenomenon can recurse all the way back to the roof of the B+Tree. 
+When a node underflow happens, there are two choices. Either merge it with a sibling node, or borrow few entries from a sibling. If the strategy is to first try merging, there is a non-zero chance that this causes the parent node to underflow. In the worst-case scenario, this can cascade all the way to the root node.
 
-The tree rebalancing is critical for maintaining the B+Tree invariants which guarantees its stable performance.
+A B+Tree is a balanced data structure, meaning the path from root to every leaf node is exactly the same height. This is the property which guarantees stable performance. The merging of nodes is therefore tree rebalancing in action. It may be expensive, but unavoidable to maintain invariants.
 
-The B+Tree is made safe for concurrent readers & writers without sacrifcing performance by implementing an optimistic concurrency control (OCC) scheme. In this worst-case scenario, the optimistic approach has to be abandoned at the entire path from root to leaf node has to be exclusively locked until delete completes. This increases latency for all other B+Tree operations along this tree path for the duration of the delete.
+One way of making a B+Tree thread-safe is to implement an optimistic latch crabbing scheme. This makes it possible for concurrent modifications to the B+Tree data structure to happen and still service readers without blocking (optimistic) most of the times. This is critical for performance.
+
+But in the worst-case scenario, the optimistic approach has to be abandoned and pessimistic latch crabbing is used. This involves taking an exclusive latch for every node from the root to the leaf node. In a B+Tree the root node is the entry point for every operation and a contention hotspot. So for the duration of the delete and then rebalancing, the performance degrades significantly.
+
+To be fair, this is a pathological case which should happen rarely and the cost of read/write access is amortized over the long term. But practically this is a weakness in B+Tree implementations which degrades performance.
 
 <nav class="toc" aria-labelledby="toc-heading">
   <h2 id="toc-heading">Table of Contents</h2>
