@@ -57,17 +57,17 @@ Therefore by prioritizing node occupancy, this strategy relies on long-term read
 
 ### The Borrow-First Approach
 
-<!-- When a leaf node underflows, it first tries to merge its remaining key-value entries with either the right or left sibling. The existence of bidirectional links between leaf nodes makes traversals to siblings easy. It is just a single step away. The entries in both nodes should not exceed the maximum degree of the B+Tree node. This is the opposite situation, a node overflow.
+Here we prioritize minimizing data movement, and finishing the tree rebalancing as soon as possible. When a leaf node underflows, we check if one of the siblings (left or right) nodes can supply enough key-value entries without violating its own minimum degree constraint.
 
-So if the key-value entries will fit into one of the sibling nodes on the left or right, we merge the nodes together. This is also a fast operation because the keys are already in sorted order. All the key-value pairs are appended to the existing entries in the sibling node.
+If that is possible, then the key-value entries are added to the underflow node to satisfy the minimum occupancy constraint. The key-value entries can be equally split between both nodes. The navigation key in the parent will have to be rewritten to represent the new key ranges after the borrow operation completes. At this point, the tree rebalancing is completed.
 
-Now the parent node contains a key-pointer entry which points to our original node which is outdated, and has to be removed. All the key-pointer entries to the right of the deleted entry has to be shifted by one position to the left to readjust the entries in the parent inner node. The average-case cost here is the same as the minimum degree, and the worst case is the maximum degree of the node.
+If a borrow succeeds, then it is guaranteed that a cascade rebalance will never occur. This is a good strategy for B+Tree implementations which needs to prioritize high write throughput. The minimal data movement, and mutable update in the parent node reduces the risk of unpredictable latency spikes which is possible during a merge operation.
 
-If parent node did not underflow after removing the key-pointer entry, then we are done. But if an underflow happens here, we continue the same process as outlined above. In rare cases this can cascade all the way back to the root node.
+On the other hand, a borrow may not be possible because it will violate the minimum degree constraint of either sibling nodes. In that scenario, we revert to merging with a sibling node. A merge is guaranteed to be possible because a borrow only fails when the sibling has no keys to spare. This means both nodes are at minimum capacity, so their combined entries will fit into a single node.
 
-Now if the density of key-value entries in the sibling nodes is already high, then a merge is not possible without overflow. In this case, borrowing a certain number of entries from either left or right sibling will fix the underflow issue. Since this involves no node removal, the parent inner node requires no modifications.
+The borrow-first approach makes sense for B+Tree implementations which completely fits into main memory. The trade-off is predictable write throughput, but reduced cache locality. In a range scan operation the key ranges may have to be fetched from multiple nodes, which are not contiguous in main memory.
 
- -->
+We gain predictable, faster writes by trading off a potential minimal hit to read performance and space efficiency.
 
 ### Reduce Write Latency In Worst Case
 
