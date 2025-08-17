@@ -1,5 +1,13 @@
+.toc ol {
+  padding-left: 0;
+}
+
+.toc ol li {
+  list-style-type: none;
+}
+
 .toc ul {
-  padding-left: 1rem;
+  padding-left: 2rem;
 }
 
 .toc ul li {
@@ -39,8 +47,9 @@ hgroup p {
 
 body {
   font-family: 'Inria Serif', serif;
-  font-size: 1.5rem;
-  text-rendering: geometricPrecision;
+  font-size: 1.25rem;
+  font-weight: 400;
+  /*letter-spacing: 0.2px;*/
 }
 
 .inria-serif-light {
