@@ -28,6 +28,16 @@ To be fair, this is a pathological case which should happen rarely and the cost 
         <li><a href="#the-borrow-first-approach">The Borrow-First Approach</a></li>
       </ul>
     </li>
+    <li>
+      <a href="#real-world-implementations">Real-World Implementations</a>
+      <ul>
+        <li><a href="#background-merge-in-mysql-(innodb)">Background Merge In MySQL (InnoDB)</a></li>
+        <li><a href="#do-nothing-strategy-in-postgresql">Do Nothing Strategy In PostgreSQL</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#key-takeaways">Key Takeaways</a>
+    </li>
   </ol>
 </nav>
 
@@ -69,18 +79,71 @@ The borrow-first approach makes sense for B+Tree implementations which completel
 
 We gain predictable, faster writes by trading off a potential minimal hit to read performance and space efficiency.
 
-### Reduce Write Latency In Worst Case
+## Real-World Implementations
 
-## Database Examples
+### Background Merge In MySQL (InnoDB)
 
-### What does MySQL (InnoDB) Implement?
+[MySQL] provides a configurable knob and implements merging two pages if the amount of data in a page falls below the threshold when deleting a row. But the docs do no make any indication regarding what happens if a merge is not possible. So MySQL does not seem to implement a merge-then-borrow, but rather a merge-only strategy to deal with node underflow.
 
-### PostgreSQL Does Neither
+> If the “page-full” percentage for an index page falls below the MERGE_THRESHOLD value when a row is deleted or when a row is shortened by an UPDATE operation, InnoDB attempts to merge the index page with a neighboring index page. The default MERGE_THRESHOLD value is 50, which is the previously hard-coded value. The minimum MERGE_THRESHOLD value is 1 and the maximum value is 50.
 
-## A Concrete Example
+[MySQL]: https://dev.mysql.com/doc/refman/8.4/en/index-page-merge-threshold.html
 
-### An In-Memory Job Queue
+It will make a best to attempt to merge two nodes asynchronously in the background which may not always succeed. This is evident from the metrics exposed by InnoDB.
+
+```text
+mysql> SELECT NAME, COMMENT FROM INFORMATION_SCHEMA.INNODB_METRICS
+       WHERE NAME like '%index_page_merge%';
++-----------------------------+----------------------------------------+
+| NAME                        | COMMENT                                |
++-----------------------------+----------------------------------------+
+| index_page_merge_attempts   | Number of index page merge attempts    |
+| index_page_merge_successful | Number of successful index page merges |
++-----------------------------+----------------------------------------+
+```
+
+The pathological case MYSQL tries to actively prevent is recurring merge-split behavior, a kind of trashing.
+
+> If both pages are close to 50% full, a page split can occur soon after the pages are merged. If this merge-split behavior occurs frequently, it can have an adverse affect on performance. To avoid frequent merge-splits, you can lower the MERGE_THRESHOLD value so that InnoDB attempts page merges at a lower “page-full” percentage. Merging pages at a lower page-full percentage leaves more room in index pages and helps reduce merge-split behavior.
+
+### Do Nothing Strategy In PostgreSQL
+
+The [PostgreSQL] B+Tree implementation does not attempt to reclaim space after underflow. A node is only deleted after it becomes empty. So it does not implement neither the typical borrow-first nor merge-first strategy outlined above.
+
+> We consider deleting an entire page from the btree only when it's become
+> completely empty of items. (Merging partly-full pages would allow better
+> space reuse, but it seems impractical to move existing data items left or
+> right to make this happen --- a scan moving in the opposite direction
+> might miss the items if so.) Also, we _never_ delete the rightmost page
+> on a tree level (this restriction simplifies the traversal algorithms, as
+> explained below).
+
+But there is an exception. Removing an empty node which is the right-most child of a parent is explicitly prohibited. The reason for the prohibition is to prevent cascading updates which could potentially propagate up the tree because it involves a different parent node.
+
+> To preserve consistency on the parent level, we cannot merge the key space
+> of a page into its right sibling unless the right sibling is a child of
+> the same parent --- otherwise, the parent's key space assignment changes
+> too, meaning we'd have to make bounding-key updates in its parent, and
+> perhaps all the way up the tree. Since we can't possibly do that
+> atomically, we forbid this case.
+
+When a node is deleted from the B+Tree, the free space is not immediately garbage collected. This is tightly coupled with the MVCC implementation. Until all transactions to which the node is visible are completed, it is not garbage collected and put back into circulation.
+
+> Recycling a page is decoupled from page deletion. A deleted page can only
+> be put in the FSM to be recycled once there is no possible scan or search
+> that has a reference to it; until then, it must stay in place with its
+> sibling links undisturbed, as a tombstone that allows concurrent searches
+> to detect and then recover from concurrent deletions (which are rather
+> like concurrent page splits to searchers).
+
+<!-- https://gemini.google.com/app/0d2f20e0194501ab?hl=en-IN -->
+
+[PostgreSQL]: https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README
 
 ## Key Takeaways
 
-## Does It Actually Matter?
+The B+Tree implementations in PostgreSQL or MySQL (InnoDB) employs sophisticated strategies for reclaiming free space after deletions. The end goal is better performance for a wide range of workloads and different access patterns. MySQL (InnoDB) moves merging to happen asynchronously in the background. PostgreSQL avoids tree rebalancing and delays reuse of a deleted node (page). The trade-off in both cases is accepting index bloat and moving the burden to operational side of database management. This is not necessarily a bad thing, as it puts the operator in control. The implementation is also more complex, requiring an in-depth understanding of the engine quirks and harder for developers to modify.
+
+Though OLTP systems are the primary users of a B+Tree data structure for indexes they are not the only ones. They are widely used in embedded key-value stores, search indexes and as library code in custom data management tools. These systems are not burdened by the complexity of interleaving the B+Tree implementation which is both correct and performant with the transaction manager and the recovery algorithms. In these cases, the above simpler strategies can unlock higher performance with lower code complexity for most use cases.
+
+Finally, it depends on the workload and the specific access pattern. But knowing the tricks production-grade OLTP systems will come in handy in getting every ounce of performance out of the B+Tree data structures.

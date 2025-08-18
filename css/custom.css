@@ -1,3 +1,11 @@
+blockquote {
+  border-left: 4px solid lightgrey;
+  padding-left: 1rem;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  font-size: 1.1rem;
+}
+
 .toc ol {
   padding-left: 0;
 }
@@ -70,7 +78,8 @@ body {
   font-style: normal;
 }
 
-.inria-serif-light-italic {
+.inria-serif-light-italic,
+blockquote {
   font-family: 'Inria Serif', serif;
   font-weight: 300;
   font-style: italic;
