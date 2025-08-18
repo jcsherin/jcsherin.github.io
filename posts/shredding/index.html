@@ -29,16 +29,26 @@
       </header>
 
       <main class="tmpl-post">
-        <h1>Working title</h1>
+        
+  <style>
+    .draft-notice {
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
+
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+
+
+<h1>Working title</h1>
 
 <time datetime="2025-08-15">15 Aug 2025</time>
-
-
-  <div class="draft-indicator">
-    <p><strong>DRAFT</strong></p>
-    <p>This is a draft preview. To publish, remove draft: true from the front matter.</p>
-  </div>
-
 
 
 <link href="/static/dremel-post.css" rel="stylesheet" type="text/css">

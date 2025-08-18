@@ -1,3 +1,27 @@
+blockquote {
+  border-left: 4px solid lightgrey;
+  padding-left: 1rem;
+  margin-left: 1rem;
+  margin-right: 1rem;
+  font-size: 1.1rem;
+}
+
+.toc ol {
+  padding-left: 0;
+}
+
+.toc ol li {
+  list-style-type: none;
+}
+
+.toc ul {
+  padding-left: 2rem;
+}
+
+.toc ul li {
+  list-style-type: none;
+}
+
 .page-wrapper {
   max-width: 70rem;
   margin-left: auto;
@@ -31,7 +55,9 @@ hgroup p {
 
 body {
   font-family: 'Inria Serif', serif;
-  text-rendering: geometricPrecision;
+  font-size: 1.25rem;
+  font-weight: 400;
+  /*letter-spacing: 0.2px;*/
 }
 
 .inria-serif-light {
@@ -52,7 +78,8 @@ body {
   font-style: normal;
 }
 
-.inria-serif-light-italic {
+.inria-serif-light-italic,
+blockquote {
   font-family: 'Inria Serif', serif;
   font-weight: 300;
   font-style: italic;

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A B+Tree Node Underflows: Merge or Borrow?</title>
+    <meta name="description" content="On database building blocks.">
+    <meta name="generator" content="Eleventy v1.0.1">
+    <link rel="stylesheet" href="/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/css/custom.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inria+Serif:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.remove("no-js");</script>
+  </head>
+  <body>
+    <div class="page-wrapper">
+      <header>
+        <hgroup>
+        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p>On database building blocks.</p>
+      </hgroup>
+        <ul class="nav">
+          <li class="nav-item"><a href="/">posts</a></li>
+          <li class="nav-item"><a href="/about/">whoami</a></li>
+        </ul>
+      </header>
+
+      <main class="tmpl-post">
+        
+  <style>
+    .draft-notice {
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
+
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+
+
+<h1>A B+Tree Node Underflows: Merge or Borrow?</h1>
+
+<time datetime="2025-08-16">16 Aug 2025</time>
+
+<p>When the number of entries in a B+Tree node falls below a minimum threshold, it is classified as a node underflow situation. The underflow threshold is typically set to 50% of the node fanout. A delete operation can therefore trigger a node underflow.</p>
+<p>When a node underflow happens, there are two choices. Either merge it with a sibling node, or borrow few entries from a sibling. If the strategy is to first try merging, there is a non-zero chance that this causes the parent node to underflow. In the worst-case scenario, this can cascade all the way to the root node.</p>
+<p>A B+Tree is a balanced data structure, meaning the path from root to every leaf node is exactly the same height. This is the property which guarantees stable performance. The merging of nodes is therefore tree rebalancing in action. It may be expensive, but unavoidable to maintain invariants.</p>
+<p>One way of making a B+Tree thread-safe is to implement an optimistic latch crabbing scheme. This makes it possible for concurrent modifications to the B+Tree data structure to happen and still service readers without blocking (optimistic) most of the times. This is critical for performance.</p>
+<p>But in the worst-case scenario, the optimistic approach has to be abandoned and pessimistic latch crabbing is used. This involves taking an exclusive latch for every node from the root to the leaf node. In a B+Tree the root node is the entry point for every operation and a contention hotspot. So for the duration of the delete and then rebalancing, the performance degrades significantly.</p>
+<p>To be fair, this is a pathological case which should happen rarely and the cost of read/write access is amortized over the long term. But practically this is a weakness in B+Tree implementations which degrades performance.</p>
+<nav class="toc" aria-labelledby="toc-heading">
+  <h2 id="toc-heading">Table of Contents</h2>
+  <ol>
+    <li>
+      <a href="#fixing-node-underflow">Fixing Node Underflow</a>
+      <ul>
+        <li><a href="#the-merge-first-approach">The Merge-First Approach</a></li>
+        <li><a href="#the-borrow-first-approach">The Borrow-First Approach</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#real-world-implementations">Real-World Implementations</a>
+      <ul>
+        <li><a href="#background-merge-in-mysql-(innodb)">Background Merge In MySQL (InnoDB)</a></li>
+        <li><a href="#do-nothing-strategy-in-postgresql">Do Nothing Strategy In PostgreSQL</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#key-takeaways">Key Takeaways</a>
+    </li>
+  </ol>
+</nav>
+<h2 id="fixing-node-underflow" tabindex="-1">Fixing Node Underflow <a class="direct-link" href="#fixing-node-underflow" aria-hidden="true">#</a></h2>
+<p>Each B+Tree node has a minimum degree (number of entries) constraint. A node underflow happens when the occupancy of node falls below the configured minimum degree. This is a critical knob to prevent index bloat, where over the lifetime of a B+Tree the nodes become progressively sparse because of constantly adding and removing key-value entries.</p>
+<p>The strategy implemented for fixing node underflow is a classic case of choosing your trade-off. The merge-first approach optimizes for space, while the borrow-first approach optimizes for reducing write latency.</p>
+<h3 id="the-merge-first-approach" tabindex="-1">The Merge-First Approach <a class="direct-link" href="#the-merge-first-approach" aria-hidden="true">#</a></h3>
+<p>When a leaf node underflow occurs after removing a key-value entry, the first attempt is to see if this leaf node can be merged with one of its neighboring sibling (left or right) nodes. The remaining key-value entries have to fit into one of the sibling nodes for this to work.</p>
+<p>Since the node does not exist anymore, the key-pointer entry in the parent inner node has to be removed. If the parent inner node satisfies the minimum degree constraint, the write operation completes here. But if the removal causes the parent inner node to underflow, the process of rebalancing the tree has to continue. In rare situations this can propagate all the way back to the root node.</p>
+<p>Now if the key-value entries will not fit into a sibling node without causing it to overflow, then we borrow enough entries to fix the underflow. This sometimes requires an update to the key in the parent inner node. The update ensures that search continues to work correctly after the borrow completes.</p>
+<p>Crucially, a borrow operation will never trigger a cascading rebalance that propagates up the tree, which is the key difference from a merge.</p>
+<p>The merge-first approach optimizes for space by trading-off write latency in pathological cases where deleting a single key-value entry from a leaf node triggers node modifications which propagates up along the tree path.</p>
+<p>The bet here is that this worst-case scenario will happen rarely to be a problem in production workloads.</p>
+<p>The B+Tree is primarily a disk-based data structure, and therefore a compact disk size is a desirable property because it minimizes disk I/O. A denser node with more key-value entries is better for cache locality.</p>
+<p>Therefore by prioritizing node occupancy, this strategy relies on long-term read performance wins. This gain comes from reduced disk I/O and better cache locality. This comes with a small risk of occasional higher write latency for a few write operations.</p>
+<h3 id="the-borrow-first-approach" tabindex="-1">The Borrow-First Approach <a class="direct-link" href="#the-borrow-first-approach" aria-hidden="true">#</a></h3>
+<p>Here we prioritize minimizing data movement, and finishing the tree rebalancing as soon as possible. When a leaf node underflows, we check if one of the siblings (left or right) nodes can supply enough key-value entries without violating its own minimum degree constraint.</p>
+<p>If that is possible, then the key-value entries are added to the underflow node to satisfy the minimum occupancy constraint. The key-value entries can be equally split between both nodes. The navigation key in the parent will have to be rewritten to represent the new key ranges after the borrow operation completes. At this point, the tree rebalancing is completed.</p>
+<p>If a borrow succeeds, then it is guaranteed that a cascade rebalance will never occur. This is a good strategy for B+Tree implementations which needs to prioritize high write throughput. The minimal data movement, and mutable update in the parent node reduces the risk of unpredictable latency spikes which is possible during a merge operation.</p>
+<p>On the other hand, a borrow may not be possible because it will violate the minimum degree constraint of either sibling nodes. In that scenario, we revert to merging with a sibling node. A merge is guaranteed to be possible because a borrow only fails when the sibling has no keys to spare. This means both nodes are at minimum capacity, so their combined entries will fit into a single node.</p>
+<p>The borrow-first approach makes sense for B+Tree implementations which completely fits into main memory. The trade-off is predictable write throughput, but reduced cache locality. In a range scan operation the key ranges may have to be fetched from multiple nodes, which are not contiguous in main memory.</p>
+<p>We gain predictable, faster writes by trading off a potential minimal hit to read performance and space efficiency.</p>
+<h2 id="real-world-implementations" tabindex="-1">Real-World Implementations <a class="direct-link" href="#real-world-implementations" aria-hidden="true">#</a></h2>
+<h3 id="background-merge-in-mysql-(innodb)" tabindex="-1">Background Merge In MySQL (InnoDB) <a class="direct-link" href="#background-merge-in-mysql-(innodb)" aria-hidden="true">#</a></h3>
+<p><a href="https://dev.mysql.com/doc/refman/8.4/en/index-page-merge-threshold.html">MySQL</a> provides a configurable knob and implements merging two pages if the amount of data in a page falls below the threshold when deleting a row. But the docs do no make any indication regarding what happens if a merge is not possible. So MySQL does not seem to implement a merge-then-borrow, but rather a merge-only strategy to deal with node underflow.</p>
+<blockquote>
+<p>If the “page-full” percentage for an index page falls below the MERGE_THRESHOLD value when a row is deleted or when a row is shortened by an UPDATE operation, InnoDB attempts to merge the index page with a neighboring index page. The default MERGE_THRESHOLD value is 50, which is the previously hard-coded value. The minimum MERGE_THRESHOLD value is 1 and the maximum value is 50.</p>
+</blockquote>
+<p>It will make a best to attempt to merge two nodes asynchronously in the background which may not always succeed. This is evident from the metrics exposed by InnoDB.</p>
+<pre class="language-text"><code class="language-text">mysql> SELECT NAME, COMMENT FROM INFORMATION_SCHEMA.INNODB_METRICS<br>       WHERE NAME like '%index_page_merge%';<br>+-----------------------------+----------------------------------------+<br>| NAME                        | COMMENT                                |<br>+-----------------------------+----------------------------------------+<br>| index_page_merge_attempts   | Number of index page merge attempts    |<br>| index_page_merge_successful | Number of successful index page merges |<br>+-----------------------------+----------------------------------------+</code></pre>
+<p>The pathological case MYSQL tries to actively prevent is recurring merge-split behavior, a kind of trashing.</p>
+<blockquote>
+<p>If both pages are close to 50% full, a page split can occur soon after the pages are merged. If this merge-split behavior occurs frequently, it can have an adverse affect on performance. To avoid frequent merge-splits, you can lower the MERGE_THRESHOLD value so that InnoDB attempts page merges at a lower “page-full” percentage. Merging pages at a lower page-full percentage leaves more room in index pages and helps reduce merge-split behavior.</p>
+</blockquote>
+<h3 id="do-nothing-strategy-in-postgresql" tabindex="-1">Do Nothing Strategy In PostgreSQL <a class="direct-link" href="#do-nothing-strategy-in-postgresql" aria-hidden="true">#</a></h3>
+<p>The <a href="https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README">PostgreSQL</a> B+Tree implementation does not attempt to reclaim space after underflow. A node is only deleted after it becomes empty. So it does not implement neither the typical borrow-first nor merge-first strategy outlined above.</p>
+<blockquote>
+<p>We consider deleting an entire page from the btree only when it's become
+completely empty of items. (Merging partly-full pages would allow better
+space reuse, but it seems impractical to move existing data items left or
+right to make this happen --- a scan moving in the opposite direction
+might miss the items if so.) Also, we <em>never</em> delete the rightmost page
+on a tree level (this restriction simplifies the traversal algorithms, as
+explained below).</p>
+</blockquote>
+<p>But there is an exception. Removing an empty node which is the right-most child of a parent is explicitly prohibited. The reason for the prohibition is to prevent cascading updates which could potentially propagate up the tree because it involves a different parent node.</p>
+<blockquote>
+<p>To preserve consistency on the parent level, we cannot merge the key space
+of a page into its right sibling unless the right sibling is a child of
+the same parent --- otherwise, the parent's key space assignment changes
+too, meaning we'd have to make bounding-key updates in its parent, and
+perhaps all the way up the tree. Since we can't possibly do that
+atomically, we forbid this case.</p>
+</blockquote>
+<p>When a node is deleted from the B+Tree, the free space is not immediately garbage collected. This is tightly coupled with the MVCC implementation. Until all transactions to which the node is visible are completed, it is not garbage collected and put back into circulation.</p>
+<blockquote>
+<p>Recycling a page is decoupled from page deletion. A deleted page can only
+be put in the FSM to be recycled once there is no possible scan or search
+that has a reference to it; until then, it must stay in place with its
+sibling links undisturbed, as a tombstone that allows concurrent searches
+to detect and then recover from concurrent deletions (which are rather
+like concurrent page splits to searchers).</p>
+</blockquote>
+<!-- https://gemini.google.com/app/0d2f20e0194501ab?hl=en-IN -->
+<h2 id="key-takeaways" tabindex="-1">Key Takeaways <a class="direct-link" href="#key-takeaways" aria-hidden="true">#</a></h2>
+<p>The B+Tree implementations in PostgreSQL or MySQL (InnoDB) employs sophisticated strategies for reclaiming free space after deletions. The end goal is better performance for a wide range of workloads and different access patterns. MySQL (InnoDB) moves merging to happen asynchronously in the background. PostgreSQL avoids tree rebalancing and delays reuse of a deleted node (page). The trade-off in both cases is accepting index bloat and moving the burden to operational side of database management. This is not necessarily a bad thing, as it puts the operator in control. The implementation is also more complex, requiring an in-depth understanding of the engine quirks and harder for developers to modify.</p>
+<p>Though OLTP systems are the primary users of a B+Tree data structure for indexes they are not the only ones. They are widely used in embedded key-value stores, search indexes and as library code in custom data management tools. These systems are not burdened by the complexity of interleaving the B+Tree implementation which is both correct and performant with the transaction manager and the recovery algorithms. In these cases, the above simpler strategies can unlock higher performance with lower code complexity for most use cases.</p>
+<p>Finally, it depends on the workload and the specific access pattern. But knowing the tricks production-grade OLTP systems will come in handy in getting every ounce of performance out of the B+Tree data structures.</p>
+
+
+      </main>
+
+      <footer></footer>
+
+      <!-- Current page: /posts/bplustree-borrow-vs-merge/ -->
+    </body>
+  </div>
+</html>
