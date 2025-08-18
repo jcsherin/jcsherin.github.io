@@ -1,3 +1,14 @@
+p code {
+  background-color: aliceblue; /* AliceBlue - a very light, neutral blue */
+  color: dimgrey;
+  border-radius: 4px;
+  border-color: darkblue;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+  font-size: 1rem;
+  font-style: italic;
+}
+
 .draft-label {
   font-weight: 700;
   font-size: 1rem;
