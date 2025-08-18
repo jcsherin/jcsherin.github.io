@@ -1,3 +1,12 @@
+.draft-label {
+  font-weight: 700;
+  font-size: 1rem;
+  background-color: lightyellow;
+  color: dimgrey;
+  padding: 8px;
+  margin-left: 1rem;
+}
+
 blockquote {
   border-left: 4px solid lightgrey;
   padding-left: 1rem;

@@ -7,7 +7,7 @@
       <div class="post-list-meta">
         <time datetime="{{ post.date | htmlDateString }}">{{ post.date | readableDate }}</time>
         {% if post.data.draft %}
-        <span class="draft-label">Draft</span>
+        <span class="draft-label">Draft: Work In Progress</span>
         {% endif %}
       </div>
       {% if post.data.summary %}
