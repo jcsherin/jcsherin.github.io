@@ -16,9 +16,9 @@ The general problem is being able to have fine-grained control over memory layou
 <nav class="toc" aria-labelledby="toc-heading">
   <h2 id="toc-heading">Table of Contents</h2>
   <ol>
-    <li>
-      <a href="#the-struct-hack">The Struct Hack</a>
-      <ul>
+    <li><a href="#the-struct-hack">The Struct Hack</a></li>
+    <li><a href="#b+tree-node-declaration">B+Tree Node Declaration</a></li>
+<!--       <ul>
         <li><a href="#flexible-array-member">Flexible Array Member</a></li>
         <li><a href="#preallocated-memory-buffer">Preallocated Memory Buffer</a></li>
       </ul>
@@ -31,7 +31,7 @@ The general problem is being able to have fine-grained control over memory layou
         <li><a href="#opaque-layout-breaks-encapsulation">Opaque Layout Breaks Encapsulation</a></li>
         <li><a href="#hidden-issues">Hidden Issues</a></li>
       </ul>
-    </li>
+    </li> -->
   </ol>
 </nav>
 
@@ -63,91 +63,129 @@ This pattern is officially supported in the language since C99, called a [flexib
 
 [flexible array member]: https://en.wikipedia.org/wiki/Flexible_array_member
 
-### Flexible Array Member
+The C++11 standard includes the flexible array member.
 
-### Preallocated Memory Buffer
+> **Arrays of unknown bound**
+>
+> If `expr` is omitted in the declaration of an array, the type declared is "array of unknown bound of T", which is a kind of incomplete type, ...
+>
+> ```cpp
+> extern int x[];      // the type of x is "array of unknown bound of int"
+> int a[] = {1, 2, 3}; // the type of a is "array of 3 int"
+> ```
 
-## Implementation Trade-offs
+The size can be omitted from the array declaration `element[]`. The code will compile.
 
-### Manual Inserts With `std::memmove`
+## B+Tree Node Declaration
 
-### Deallocation And The Lack of RAII
-
-### Opaque Layout Breaks Encapsulation
-
-### Hidden Issues
-
-```cpp
-template <typename KeyType, typename ValueType>
-class BPlusTreeNode {
-public:
-	using KeyValuePair = std::pair<KeyType, ValueType>;
-
-private:
-	// Node Header Members ... (elided)
-
-    // Points to the memory location beyond the last key-value
-    // entry in the `start_` array.
-    KeyValuePair* end_;
-
-    // Array containing key-value entries
-    KeyValuePair start_[0];
-};
-```
-
-A B+Tree is a disk-based data structure, where a node is a contiguous region of memory both on-disk and in-memory. The number of entries stored in a node (fanout) should be a user configurable value. This memory layout improves cache efficiency and improves performance.
-
-The alternative is to store a pointer to a vector of key-value entries which is located somewhere in heap memory. This is slower by an order of magnitude because of the pointer indirection. Following the pointer often results in a cache miss, forcing the CPU to stall and wait for data to be fetched from main memory.
-
-So instead we use an array. But the code will not compile unless the size of the array is known at compile time. But if we hard-code the array size, then the node fanout is not user-configurable value anymore.
-
-So we want a cache-friendly memory layout and at the same time be able to decide the node fanout at runtime, rather than at compile time.
-
-The solution is to use the struct hack, combined with dynamic memory allocation.
-
-Here is a B+Tree node definition. (The node header details are elided for clarity).
+Using the flexible array member syntax, we can now declare a B+Tree node with a memory layout which is a continuous single block in the heap.
 
 ```cpp
 template <typename KeyType, typename ValueType>
 class BPlusTreeNode {
 public:
-	using KeyValuePair = std::pair<KeyType, ValueType>;
+  using KeyValuePair = std::pair<KeyType, ValueType>;
 
 private:
-	// .. Header containing metadata fields
+  // Node Header Members ... (elided)
 
-    // Points to offset past the last element in `start_`
-    KeyValuePair* end_;
+  // Points to the memory location beyond the last key-value
+  // entry in the `start_` array.
+  KeyValuePair* end_;
 
-    // Array storage for key-value entries
-    KeyValuePair start_[0];
+  // Array containing key-value entries of unknown bound.
+  KeyValuePair start_[];
 };
 ```
 
-You may have noticed that the key-value entries are declared as an array with zero elements, and it is the final member. This may look weird, but this code will compile without errors.
+Instead if we use a `std::vector<KeyValuePair>` for the B+Tree node data. This stores a pointer in the struct, with the node data resident in a separate block of memory in another part of the heap.
+
+Now accessing the node data can be significantly slower because of the pointer indirection. Following the pointer will increase cache misses, forcing the CPU to stall and wait for data to be fetched from main memory. A cache miss may cost hundreds of CPU cycles compared to just a cycles for a cache hit. This performance hit though is unacceptable if you need high-performance from your B+Tree implementation.
+
+So we go through all this trouble to avoid pointer indirection and co-locate both the header and data of a B+Tree node in the same memory block. This layout is cache-friendly and improves B+Tree performance.
+
+## Preallocated Memory Buffer
+
+This is the key step. The construction of the object has to be separate from its memory allocation. For this we cannot use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in this storage.
+
+Instead we will use the [placement new] syntax which will construct objects in the memory buffer specified by us.
+
+[placement new]: https://en.cppreference.com/w/cpp/language/new.html#Placement_new
 
 ```cpp
-KeyValuePair start_[0];
-```
+// A static helper to allocate storage for a B+Tree node.
+static BPlusTreeNode *Get(int p_fanout) {
+  // calculate total buffer size
+  size_t buf_size = sizeof(BPlusTreeNode) + p_fanout * sizeof(KeyValuePair);
 
-This is just a definition of the struct and does not allocate any memory. We cannot use the standard `new` operator with this definition because it will construct an object without any space for the key-value entries.
+  // allocate raw memory buffer
+  void *buf = ::operator new(buf_size);
 
-So we use the placement `new` variation which allows us to separate construction of the object from the memory allocated for it. First, we will pre-allocate memory based on user-defined value for node fanout, and then use the placement `new` constructor in our pre-allocated memory buffer.
+  // construct B+Tree node object in the preallocated buffer
+  auto node = new(buf) BPlusTreeNode(p_fanout);
 
-The memory allocation for the object is separate from the object construction phase. This fine-grained control over memory management allows us to create a contiguous B+Tree node in memory which is cache friendly, and whose node fanout is user-configurable.
-
-```cpp
-static BPlusTreeNode* Get(int max_size) {
-    // 1. Calculate the total memory needed
-    size_t total_size = sizeof(BPlusTreeNode) + (max_size * sizeof(KeyValuePair));
-
-    // 2. Allocate a single raw memory block
-    char* raw_memory = new char[total_size];
-
-    // 3. Use placement new to construct the BPlusTreeNode object in that memory
-    BPlusTreeNode* node = new(raw_memory) BPlusTreeNode();
-
-    // (The constructor would typically initialize end_, etc.)
-    return node;
+  return node;
 }
 ```
+
+We have now successfully created a cache-friendly B+Tree node with a user-defined fanout configuration which is known only at runtime.
+
+## The Price Of Fine-Grained Control
+
+To create an instance, we can no longer simply write `new BPlusTreeNode(256)`. Instead we have to use our custom helper which knows how much raw memory to allocate for the object including the data section.
+
+```cpp
+BPlusTreeNode *root = BPlusTreeNode<KeyValuePair>::Get(256);
+```
+
+### Manual Handling Of Deallocation
+
+We also need to handle object deallocation, so that when the lifetime of the object ends, the memory is freed to avoid memory leaks.
+
+```cpp
+class BPlusTreeNode {
+
+  void FreeNode() {
+    // Call the destructor for each key-value entry.
+    for (KeyValuePair* element = start_; element < end_; ++element) {
+      element->~KeyValuePair();
+    }
+
+    // Call the node destructor
+    this->~BPlusTreeNode();
+
+    // Deallocate the raw memory
+    ::operator delete(this);
+  }
+}
+```
+
+### Adding New Members In A Derived Class
+
+Adding a new member to a derived class will result in data corruption.
+
+```text
++-----------------------+
+| BPlusTreeNode Members |
+| (Header)              |
++-----------------------+ <-- offset where the data buffer starts
+| start_[0]             | <-- where the compiler thinks derived class
+| start_[1]             |     member are written to
+| ...                   |
+| start_[N]             |
++-----------------------+ <-- end_
+```
+
+The raw memory we manually allocated is opaque to the compiler and it cannot safely reason about where the newly added members to the derived class are physically located. The end result is it will overwrite the data buffer and cause data corruption.
+
+The workaround is to break encapsulation and add derived members to the base class so that the flexible array member is always in the last position. This is a significant drawback when we begin using flexible array members.
+
+### Reinventing The Wheel
+
+We lose RAII guarantees provided by the compiler and runtime bounds checking in `std::vector`.
+
+We now bear the full responsibility of manually implementing, testing and maintaining the code for utility functions like insertion, deletion and iteration. The bounds-checking code to prevent buffer overflows requires verification.
+
+### Hidden Assumptions
+
+If you use `std::memmove` to perform a bitwise copy of memory, it will work fine as long as `BPlusTreeNode` ....
