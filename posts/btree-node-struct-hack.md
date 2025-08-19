@@ -9,9 +9,73 @@ draft: true
 
 The ideal memory layout for a B+Tree node is one in which both the header and data is stored contiguously in a block of memory. This rules out using an `std::vector` for storing the node data because of the pointer indirection. The `std::vector` is a pointer to the data, which is stored in a separate block of memory on the heap. We need fine-grained control over how memory is allocated for a B+Tree node.
 
-The immediate challenge which comes up when you try to use an array for storing node data is that the size of the B+Tree node has to be known at compile time. This value should be configurable by the user during runtime. It is common to have different sizes configured for the inner nodes and leaf nodes. Hard-coding combinations of different sizes a plausible workaround but less than ideal.
+Using an array instead presents another immediate challenge. A standard member array like `entries[N]` requires `N` to be a compile-time constant. Hard-coding commonly used combinations though plausible, is not an ideal workaround. B+Tree are often initialized with different configuration for leaf nodes and inner nodes. This prevents user-configurable node fanout.
 
-The generalized problem here is that we want to construct objects with a flexible vector like member but be able to use a preallocated buffer in memory. This is often done for high-performance, because this layout is cache efficient.
+The general problem is being able to have fine-grained control over memory layout when a member is a variable-length sequence. This pattern appears often in a format with a fixed header section followed by a variable-length data section. At first when you encounter this problem, it is non-obvious how to write a program which compiles without memory indirection.
+
+<nav class="toc" aria-labelledby="toc-heading">
+  <h2 id="toc-heading">Table of Contents</h2>
+  <ol>
+    <li>
+      <a href="#the-struct-hack">The Struct Hack</a>
+      <ul>
+        <li><a href="#flexible-array-member">Flexible Array Member</a></li>
+        <li><a href="#preallocated-memory-buffer">Preallocated Memory Buffer</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#implementation-trade-offs">Implementation Trade-offs</a>
+      <ul>
+        <li><a href="#manual-inserts-with-stdmemmove">Manual Inserts With <code>std::memmove</code></a></li>
+        <li><a href="#deallocation-and-the-lack-of-raii">Deallocation And The Lack of RAII</a></li>
+        <li><a href="#opaque-layout-breaks-encapsulation">Opaque Layout Breaks Encapsulation</a></li>
+        <li><a href="#hidden-issues">Hidden Issues</a></li>
+      </ul>
+    </li>
+  </ol>
+</nav>
+
+## The Struct Hack
+
+The solution to the this problem is a technique which originates in C programming known as the struct hack. The variable-length member (implemented as an array) is placed at the last position in a struct. To satisfy the compiler a size of `1` is specified, so the array size is known at compilation time.
+
+```c
+struct Payload {
+  /* Header Section */
+  // ...
+
+  /* Data Section */
+
+  // The variable-length member is in last position.
+  // The size `1` satisfies the compiler.
+  char elements[1];
+}
+```
+
+Then during runtime when you know `N` you allocate a single block of memory for both the struct and the `N` elements. To the compiler this is an opaque block, and it cannot provide any guarantees. But writing past the struct is safe because the variable-length member is in the last position.
+
+```c
+// The (N - 1) adjusts for the 1-element array in Payload struct
+Payload *item = malloc(sizeof(Payload) + (N - 1) * sizeof(char))
+```
+
+This pattern is officially supported in the language since C99, called a [flexible array member].
+
+[flexible array member]: https://en.wikipedia.org/wiki/Flexible_array_member
+
+### Flexible Array Member
+
+### Preallocated Memory Buffer
+
+## Implementation Trade-offs
+
+### Manual Inserts With `std::memmove`
+
+### Deallocation And The Lack of RAII
+
+### Opaque Layout Breaks Encapsulation
+
+### Hidden Issues
 
 ```cpp
 template <typename KeyType, typename ValueType>
