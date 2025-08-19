@@ -18,20 +18,16 @@ The general problem is being able to have fine-grained control over memory layou
   <ol>
     <li><a href="#the-struct-hack">The Struct Hack</a></li>
     <li><a href="#b+tree-node-declaration">B+Tree Node Declaration</a></li>
-<!--       <ul>
-        <li><a href="#flexible-array-member">Flexible Array Member</a></li>
-        <li><a href="#preallocated-memory-buffer">Preallocated Memory Buffer</a></li>
+    <li><a href="#raw-memory-buffer">Raw Memory Buffer</a></li>
+    <li>
+      <a href="#the-price-of-fine-grained-control">The Price Of Fine-Grained Control</a>
+      <ul>
+        <li><a href="#manual-handling-of-deallocation">Manual Handling Of Deallocation</a></li>
+        <li><a href="#adding-new-members-in-a-derived-class">Adding New Members In A Derived Class</a></li>
+        <li><a href="#reinventing-the-wheel">Reinventing The Wheel</a></li>
+        <li><a href="#hidden-data-type-assumptions">Hidden Data Type Assumptions</a></li>
       </ul>
     </li>
-    <li>
-      <a href="#implementation-trade-offs">Implementation Trade-offs</a>
-      <ul>
-        <li><a href="#manual-inserts-with-stdmemmove">Manual Inserts With <code>std::memmove</code></a></li>
-        <li><a href="#deallocation-and-the-lack-of-raii">Deallocation And The Lack of RAII</a></li>
-        <li><a href="#opaque-layout-breaks-encapsulation">Opaque Layout Breaks Encapsulation</a></li>
-        <li><a href="#hidden-issues">Hidden Issues</a></li>
-      </ul>
-    </li> -->
   </ol>
 </nav>
 
@@ -104,7 +100,7 @@ Now accessing the node data can be significantly slower because of the pointer i
 
 So we go through all this trouble to avoid pointer indirection and co-locate both the header and data of a B+Tree node in the same memory block. This layout is cache-friendly and improves B+Tree performance.
 
-## Preallocated Memory Buffer
+## Raw Memory Buffer
 
 This is the key step. The construction of the object has to be separate from its memory allocation. For this we cannot use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in this storage.
 
@@ -186,6 +182,47 @@ We lose RAII guarantees provided by the compiler and runtime bounds checking in 
 
 We now bear the full responsibility of manually implementing, testing and maintaining the code for utility functions like insertion, deletion and iteration. The bounds-checking code to prevent buffer overflows requires verification.
 
-### Hidden Assumptions
+### Hidden Data Type Assumptions
 
-If you use `std::memmove` to perform a bitwise copy of memory, it will work fine as long as `BPlusTreeNode` ....
+The following is an implementation for inserting a `KeyValuePair` element in the data array.
+
+```cpp
+bool Insert(const KeyValuePair &element, KeyValuePair *pos) {
+  // The node is currently full so we cannot insert this element.
+  if (GetCurrentSize() >= GetMaxSize()) { return false; }
+
+  // Shift elements from `pos` to the right by one to make
+  // place for inserting new `element`.
+  if (std::distance(pos, End()) > 0) {
+      std::memmove(
+        reinterpret_cast<void *>(std::next(pos)), // Destination
+        reinterpret_cast<void *>(pos), // Source
+        std::distance(pos, End()) * sizeof(KeyValuePair) // Count
+      );
+  }
+
+  // Insert element at `pos`.
+  new(pos) KeyValuePair{element};
+
+  // Bookkeeping
+  std::advance(end_, 1);
+
+  return true;
+}
+```
+
+The code above uses `std::memmove` to shift entries within the node. This introduces a hidden constraint, that the data types implementing the `BPlusTreeNode` should be POD (plain old data) types or trivially copyable.
+
+The class interface is generic over the key and value types. But it doesn't convey this constraint to the user of the `BPlusTreeNode`.
+
+```cpp
+template <typename KeyType, typename ValueType>
+class BPlusTreeNode {
+public:
+  using KeyValuePair = std::pair<KeyType, ValueType>;
+
+  // ...
+}
+```
+
+If we used `std::string` as either the `KeyType` or `ValueType` then calling the `Insert` method introduces undefined behavior. Copying a `std::string` object with `memmove` creates a shallow copy of its internal pointers. When the original string is destroyed, it will deallocate the memory, leaving the copied string with a dangling pointer.
