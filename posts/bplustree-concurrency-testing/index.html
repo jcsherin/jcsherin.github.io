@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Concurrency Correct Is A Hard Problem</title>
+    <meta name="description" content="On database building blocks.">
+    <meta name="generator" content="Eleventy v1.0.1">
+    <link rel="stylesheet" href="/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/css/custom.css">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inria+Serif:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.remove("no-js");</script>
+  </head>
+  <body>
+    <div class="page-wrapper">
+      <header>
+        <hgroup>
+        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p>On database building blocks.</p>
+      </hgroup>
+        <ul class="nav">
+          <li class="nav-item"><a href="/">posts</a></li>
+          <li class="nav-item"><a href="/about/">whoami</a></li>
+        </ul>
+      </header>
+
+      <main class="tmpl-post">
+        
+  <style>
+    .draft-notice {
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
+
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+
+
+<h1>Getting Concurrency Correct Is A Hard Problem</h1>
+
+<time datetime="2025-08-21">21 Aug 2025</time>
+
+<p>The challenge of implementing a correct, concurrent B+Tree is that it becomes immediately apparent that the debugger will not help. If you try to step through the code, subtle timing issues can make the problem disappear and make it impossible to reproduce the concurrency bug. But the program will continue to crash, but not when you fire up the debugger.</p>
+<p><em>If you are in a hurry ship with a debugger!</em></p>
+<p>Deadlocks should be avoided. This is done through careful programming. The technique involves ensuring that latches (locks) are always acquired only in a single direction. A correct implementation will never deadlock.</p>
+<blockquote>
+<p><strong>Latches vs Locks Distinction</strong> - In database management systems latches are used for protecting in-memory data structures. Locks are used for transactions, and protecting database pages, rows etc.</p>
+<p>-[ ] Include a summary table from the Goetze Grafe paper</p>
+</blockquote>
+<p>In practice, this is harder for B+Tree implementations where the leaf nodes are linked together in both directions. And it is common to provide both forward and reverse iterators over the key space. This immediately conflicts with our deadlock prevention in code technique of only acquiring latches in one direction. The problem here is that if both a forward and reverse iterator are active at the same time, they can meet each other in the middle and deadlock. So the implementation becomes a little more challenging and we'll see how later in this post.</p>
+<h2 id="optimistic-crab-latching-protocol" tabindex="-1">Optimistic Crab Latching Protocol <a class="direct-link" href="#optimistic-crab-latching-protocol" aria-hidden="true">#</a></h2>
+<p>The B+Tree is a self-balancing data structure which uses node splits, merging and redistribution of key-value entries to maintain its height property, and a minimum threshold of values per node.</p>
+<p>The optimistic approach is the key to performance where an exclusive latch which locks out other readers and writers from a node is almost never acquired under &quot;safe&quot; conditions. A node is deemed safe if the write operation we are about to perform will not cause it to underflow. A condition where a node contains less key-value entries than the minimum defined threshold. So when inserting or deleting a key-value from a node, an exclusive write latch is required only for a short period of time.</p>
+<p>But if the operation is &quot;unsafe&quot;, if it will cause an underflow or overflow which triggers a tree rebalancing operation. Then the optimistic approach is abandoned, and traversal is restarted by acquiring latches starting at the root using a pessimistic approach.</p>
+<p>Since multiple writers may not be modifying the same parts of the tree, this cost of the pessimistic latching is amortized away over the longer term.</p>
+<h2 id="iterator-implementation-with-retry" tabindex="-1">Iterator Implementation With Retry <a class="direct-link" href="#iterator-implementation-with-retry" aria-hidden="true">#</a></h2>
+<p>Acquiring a latch is not guaranteed unlike for insert, delete or get operations. This is to prevent two iterators crossing each other, or an iterator blocking a tree balancing operation.</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token keyword">void</span> <span class="token keyword">operator</span><span class="token operator">++</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>  <span class="token comment">// ...</span><br><br>  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token operator">!</span><span class="token punctuation">(</span>current_node_<span class="token operator">-></span><span class="token function">TrySharedLock</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>    previous_node<span class="token operator">-></span><span class="token function">ReleaseNodeSharedLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>    <span class="token function">SetRetryIterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>    <span class="token keyword">return</span><span class="token punctuation">;</span><br>  <span class="token punctuation">}</span><br><br>  <span class="token comment">// ...</span><br><br><span class="token punctuation">}</span></code></pre>
+<p>Requires a non-blocking latching method which is not guaranteed to always succeed. The normal latching routines are blocking operations which wait for the mutex to be available. But we use them only for traversals where we can guarantee a top-bottom order of latching. It cannot be used for iterators which have both left-right (forward) and right-left (reverse) directions.</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token keyword">bool</span> <span class="token function">TryLockShared</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>  <span class="token keyword">return</span> latch_<span class="token punctuation">.</span><span class="token function">try_lock_shared</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br><span class="token punctuation">}</span></code></pre>
+<p>The iterator internally has a <code>RETRY</code> state which is set if the iteration is blocked. This puts the operator responsible for handling the situation. The data structure typically will not implement any code to handle the <code>RETRY</code> situation internally.</p>
+<pre class="language-cpp"><code class="language-cpp">        <span class="token keyword">void</span> <span class="token function">SetRetryIterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>            <span class="token function">ResetIterator</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>            state_ <span class="token operator">=</span> RETRY<span class="token punctuation">;</span><br>        <span class="token punctuation">}</span><br></code></pre>
+<h2 id="testing-strategy" tabindex="-1">Testing Strategy <a class="direct-link" href="#testing-strategy" aria-hidden="true">#</a></h2>
+<p>The serial tests exercises every branch of code for node splits, merges and redistribution.</p>
+<p>See <a href="https://github.com/jcsherin/btree/blob/main/test/btree_insert_test.cpp">Insert Tests</a> and <a href="https://github.com/jcsherin/btree/blob/main/test/btree_delete_test.cpp">Delete Tests</a>.</p>
+<p>The concurrency tests simulate real-world conditions and also uses key space randomization to induce failure in the crab latching protocol implementation.</p>
+<p>See <a href="https://github.com/jcsherin/btree/blob/main/test/btree_concurrent_test.cpp">Concurrent Tests</a>.</p>
+<h3 id="instrumenting-lock-and-unlocks" tabindex="-1">Instrumenting Lock And Unlocks <a class="direct-link" href="#instrumenting-lock-and-unlocks" aria-hidden="true">#</a></h3>
+<p>The <a href="https://github.com/jcsherin/btree/blob/main/src/shared_latch.h">latch implementation</a> adds compile-time instrumentation which is useful in development to find out mistakes as soon as they appear in a crab latching implementation.</p>
+<p>The lock and unlock calls are instrumented using an atomic counter. When the lifetime of a node ends, it will release the latch in the destructor phase. In the latch destructor we have static assertions enabled through the <code>ENABLE_LATCH_DEBUGGING</code> compile-time flag, which will assert that the latch counts are zero at the time the latch is destroyed.</p>
+<pre class="language-cpp"><code class="language-cpp"><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">ifdef</span> <span class="token expression">ENABLE_LATCH_DEBUGGING</span></span><br><span class="token operator">~</span><span class="token function">SharedLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>  <span class="token keyword">if</span> <span class="token punctuation">(</span>exclusive_lock_count_ <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>      <span class="token function">fprintf</span><span class="token punctuation">(</span><span class="token constant">stderr</span><span class="token punctuation">,</span> <span class="token string">"exclusive_lock_count_ is %d, expected 0\n"</span><span class="token punctuation">,</span> exclusive_lock_count_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>  <span class="token punctuation">}</span><br>  <span class="token function">assert</span><span class="token punctuation">(</span>exclusive_lock_count_ <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>  <span class="token keyword">if</span> <span class="token punctuation">(</span>shared_lock_count_ <span class="token operator">!=</span> <span class="token number">0</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>      <span class="token function">fprintf</span><span class="token punctuation">(</span><span class="token constant">stderr</span><span class="token punctuation">,</span> <span class="token string">"shared_lock_count_ is %d, expected 0\n"</span><span class="token punctuation">,</span> shared_lock_count_<span class="token punctuation">.</span><span class="token function">load</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>  <span class="token punctuation">}</span><br>  <span class="token function">assert</span><span class="token punctuation">(</span>shared_lock_count_ <span class="token operator">==</span> <span class="token number">0</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br><span class="token punctuation">}</span><br><span class="token macro property"><span class="token directive-hash">#</span><span class="token directive keyword">endif</span></span></code></pre>
+<p>This guarantees that for every latch which was acquired, it was also released. Simple, yet catches mistakes in implementation as soon as the tests are run.</p>
+<h3 id="tsan:-detecting-data-races" tabindex="-1">TSAN: Detecting Data Races <a class="direct-link" href="#tsan:-detecting-data-races" aria-hidden="true">#</a></h3>
+<p>The earlier defensive programming techniques works for preventing deadlocks from every happening. But data races are different. It is a synchronization bug which happens if two threads access the same memory location concurrently and one of them modifies it. This is practically impossible to reproduce even through diligent testing, because they may happen only one in a million times.</p>
+<p>This is where the ThreadSanitizer (TSAN) tool becomes invaluable in detecting and fixing data race conditions in code. It is capable of finding a race condition even if it doesn't fail in our test suite. This is such a useful tool for fixing bugs which are otherwise impossible to detect or even reproduce.</p>
+<p>Here are a few bugs made possible by TSAN,</p>
+<ol>
+<li><a href="https://github.com/jcsherin/btree/blob/main/src/bplustree.h#L993-L1006">Insertion deadlock</a></li>
+<li><a href="https://github.com/jcsherin/btree/blob/aa2c6c22f1cc47cd4ea1aa3f98443e5140f6cc05/src/bplustree.h#L1023-L1048">Split internal node with insufficient node pointers</a></li>
+<li><a href="https://github.com/jcsherin/btree/blame/aa2c6c22f1cc47cd4ea1aa3f98443e5140f6cc05/src/bplustree.h#L1191-L1203">Recheck conditions after entering critical section</a></li>
+<li><a href="https://github.com/jcsherin/btree/blame/aa2c6c22f1cc47cd4ea1aa3f98443e5140f6cc05/src/bplustree.h#L1501-L1517">Prevent data-race when updating B+Tree root</a></li>
+</ol>
+<h2 id="limitations-and-future-work" tabindex="-1">Limitations and Future Work <a class="direct-link" href="#limitations-and-future-work" aria-hidden="true">#</a></h2>
+<p>The above multi-layered approach is not perfect. There is still room for improvement.</p>
+<p>The randomized tests when they fail, do not automatically shrink the failing test like a property testing framework. So it requires manual effort to narrow down the cause of failure through trial-and-error.</p>
+<p>The current test workloads operates on data which is sequential, or randomized order. But real-world workloads mostly follow a Zipfian distribution. This will improve the quality of the test suite and prove the robustness of the implementation if such data distributions could be generated and tested.</p>
+<p>Despite all this it is not possible to guarantee that all data races have been eliminated. But if we detect a new kind of failure mode in the future, the foundation is solid to add a regression test and prevent known modes of failure in the future.</p>
+
+
+      </main>
+
+      <footer></footer>
+
+      <!-- Current page: /posts/bplustree-concurrency-testing/ -->
+    </body>
+  </div>
+</html>
