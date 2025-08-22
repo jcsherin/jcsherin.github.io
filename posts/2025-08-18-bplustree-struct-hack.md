@@ -7,15 +7,33 @@ layout: layouts/post.njk
 draft: true
 ---
 
-The ideal memory layout for a B+Tree node is one in which both the header and data is stored contiguously in a block of memory. This rules out using an `std::vector` for storing the node data because of the pointer indirection. The `std::vector` is a pointer to the data, which is stored in a separate block of memory on the heap. We need fine-grained control over how memory is allocated for a B+Tree node.
+If a B+Tree node has to fit into the cpu cache, the memory layout has to be a single contiguous block. This memory layout requires low-level control which increases the complexity of the implementation, but is a necessary trade-off for higher performance.
 
-Using an array instead presents another immediate challenge. A standard member array like `entries[N]` requires `N` to be a compile-time constant. Hard-coding commonly used combinations though plausible, is not an ideal workaround. B+Tree are often initialized with different configuration for leaf nodes and inner nodes. This prevents user-configurable node fanout.
+**Memory Layout of a B+Tree Node**
 
-The general problem is being able to have fine-grained control over memory layout when a member is a variable-length sequence. This pattern appears often in a format with a fixed header section followed by a variable-length data section. At first when you encounter this problem, it is non-obvious how to write a program which compiles without memory indirection.
+```text
+  +----------------------+
+  | Node Header Metadata |
+  +----------------------+
+  | node_type            |  <-- Inner or Leaf Node
+  | max_size             |  <-- Maximum Entries Per Node (fanout)
+  | node_latch           |  <-- RW-Lock
+  | end_ptr              |  <-- Past-the-end pointer
+  +----------------------+
+  | Node Data            |
+  +----------------------+  <-- Data Elements (key-value)
+  | data[0]              |
+  | data[1]              |
+  | data[2]              |  <-- end_ptr: if current size = 2
+  | ...                  |
+  | data[N]              |  <-- N = max_size - 1
+  +----------------------+
+```
 
 <nav class="toc" aria-labelledby="toc-heading">
   <h2 id="toc-heading">Table of Contents</h2>
   <ol>
+    <li><a href="#challenges">Challenges</a></li>
     <li><a href="#the-struct-hack">The Struct Hack</a></li>
     <li><a href="#b+tree-node-declaration">B+Tree Node Declaration</a></li>
     <li><a href="#raw-memory-buffer">Raw Memory Buffer</a></li>
@@ -30,6 +48,16 @@ The general problem is being able to have fine-grained control over memory layou
     </li>
   </ol>
 </nav>
+
+## Challenges
+
+The `std::vector` can be ruled out for storing the key-value elements of a B+Tree node. It is a pointer to the data, which is then stored in another block of memory on the heap. The memory layout is not contiguous. Therefore, we have to fallback to using C-style arrays for the data section of the B+Tree node.
+
+The size of the array `data[N]` must be known at compilation time. The typical B+Tree implementation makes the fanout a user-configurable parameter. There is also no restriction that the fanout value should be similar for the inner nodes and leaf nodes.
+
+This problem is not isolated to B+Tree node implementations. The pattern here is that you need low-level control over memory layout. The concerned object contains at a variable-length payload whose size is determined only at runtime.
+
+It is not obvious how to escape this conundrum. Systems programmers for ages have run into this problem, and applied the same workaround over and over again. So much that, it has been standardized in C99, and has support in both C/C++ compiler implementations.
 
 ## The Struct Hack
 
@@ -94,17 +122,19 @@ private:
 };
 ```
 
-Instead if we use a `std::vector<KeyValuePair>` for the B+Tree node data. This stores a pointer in the struct, with the node data resident in a separate block of memory in another part of the heap.
+If we had used `std::vector<KeyValuePair>` for the B+Tree node data it will result in indirection. The `std::vector` is a pointer to data which is stored in separate block of memory in another part of the heap memory. The memory layout of the B+Tree node is not going to be contiguous.
 
-Now accessing the node data can be significantly slower because of the pointer indirection. Following the pointer will increase cache misses, forcing the CPU to stall and wait for data to be fetched from main memory. A cache miss may cost hundreds of CPU cycles compared to just a cycles for a cache hit. This performance hit though is unacceptable if you need high-performance from your B+Tree implementation.
+Trying to access the node data will be significantly slower because of the pointer indirection.
 
-So we go through all this trouble to avoid pointer indirection and co-locate both the header and data of a B+Tree node in the same memory block. This layout is cache-friendly and improves B+Tree performance.
+Following the pointer will increase cache misses, forcing the CPU to stall and wait for data to be fetched from main memory. A cache miss may cost hundreds of CPU cycles compared to just a few cycles for a cache hit. This latency cost adds up and is unacceptable for performance sensitive data structure implementations such as the B+Tree.
+
+The struct hack or flexible array member prevents the pointer indirection. The node header and data are co-located in one continuous memory block. This layout is cache-friendly and will result in fewer cache misses.
 
 ## Raw Memory Buffer
 
-This is the key step. The construction of the object has to be separate from its memory allocation. For this we cannot use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in this storage.
+This is the key step. The construction of the object has to be separate from its memory allocation. We cannot therefor use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in the same storage.
 
-Instead we will use the [placement new] syntax which will construct objects in the memory buffer specified by us.
+Instead we will use the [placement new] syntax which will construct objects in the memory buffer we created. We know exactly how much space to allocate, which is information the standard `new` operator does not have in this scenario because of the flexible array member.
 
 [placement new]: https://en.cppreference.com/w/cpp/language/new.html#Placement_new
 
@@ -128,7 +158,9 @@ We have now successfully created a cache-friendly B+Tree node with a user-define
 
 ## The Price Of Fine-Grained Control
 
-To create an instance, we can no longer simply write `new BPlusTreeNode(256)`. Instead we have to use our custom helper which knows how much raw memory to allocate for the object including the data section.
+To create an instance of a B+Tree node with a fanout of `256`, it is not possibly to write simple idiomatic code like this: `new BPlusTreeNode(256)`.
+
+Instead we use the custom `BPlusTreeNode::Get` helper which knows how much raw memory to allocate for the object including the data section.
 
 ```cpp
 BPlusTreeNode *root = BPlusTreeNode<KeyValuePair>::Get(256);
@@ -136,7 +168,7 @@ BPlusTreeNode *root = BPlusTreeNode<KeyValuePair>::Get(256);
 
 ### Manual Handling Of Deallocation
 
-We also need to handle object deallocation, so that when the lifetime of the object ends, the memory is freed to avoid memory leaks.
+The destructor code is also no idiomatic anymore. When the lifetime of the B+Tree node ends, the deallocation code has to be carefully crafted to avoid resource or memory leaks.
 
 ```cpp
 class BPlusTreeNode {
@@ -158,7 +190,7 @@ class BPlusTreeNode {
 
 ### Adding New Members In A Derived Class
 
-Adding a new member to a derived class will result in data corruption.
+Adding a new member to a derived class will result in data corruption. It is not possible to add new fields to a specialized `InnerNode` or `LeafNode` class.
 
 ```text
 +-----------------------+
@@ -178,9 +210,9 @@ The workaround is to break encapsulation and add derived members to the base cla
 
 ### Reinventing The Wheel
 
-We lose RAII guarantees provided by the compiler and runtime bounds checking in `std::vector`.
+For the data array we now effectively end up reinventing `std::vector` utilities for insertion, deletion and iteration. This includes bound-checking to prevent buffer overflows.
 
-We now bear the full responsibility of manually implementing, testing and maintaining the code for utility functions like insertion, deletion and iteration. The bounds-checking code to prevent buffer overflows requires verification.
+This significantly raises the complexity, and maintenance burden of the implementation. We also have to make sure that our custom implementation is performant at par, with the standard library implementation.
 
 ### Hidden Data Type Assumptions
 
