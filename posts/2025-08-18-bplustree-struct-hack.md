@@ -4,7 +4,7 @@ date: 2025-08-18
 summary: >
   The B+Tree node contains an array of key-value entries whose size must be known at compile time. But if you hard-code the sizes, it prevents the user from configuring the node fanout when using the B+Tree data structure implementation. Furthermore, the node layout should be contiguous in memory, and should not contain an indirection to heap allocated memory for the key-value entries array field. This post demonstrates how the struct hack combined with dynamic memory allocation solves both the challenges elegantly.
 layout: layouts/post.njk
-draft: true
+draft: false
 ---
 
 If a B+Tree node has to fit into the cpu cache, the memory layout has to be a single contiguous block. This memory layout requires low-level control which increases the complexity of the implementation, but is a necessary trade-off for higher performance.
@@ -158,7 +158,7 @@ We have now successfully created a cache-friendly B+Tree node with a user-define
 
 ## The Price Of Fine-Grained Control
 
-To create an instance of a B+Tree node with a fanout of `256`, it is not possibly to write simple idiomatic code like this: `new BPlusTreeNode(256)`.
+To create an instance of a B+Tree node with a fanout of `256`, it is not possible to write simple idiomatic code like this: `new BPlusTreeNode(256)`.
 
 Instead we use the custom `BPlusTreeNode::Get` helper which knows how much raw memory to allocate for the object including the data section.
 
@@ -168,7 +168,7 @@ BPlusTreeNode *root = BPlusTreeNode<KeyValuePair>::Get(256);
 
 ### Manual Handling Of Deallocation
 
-The destructor code is also no idiomatic anymore. When the lifetime of the B+Tree node ends, the deallocation code has to be carefully crafted to avoid resource or memory leaks.
+The destructor code is also not idiomatic anymore. When the lifetime of the B+Tree node ends, the deallocation code has to be carefully crafted to avoid resource or memory leaks.
 
 ```cpp
 class BPlusTreeNode {
