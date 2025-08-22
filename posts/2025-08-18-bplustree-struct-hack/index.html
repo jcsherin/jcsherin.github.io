@@ -30,21 +30,6 @@
 
       <main class="tmpl-post">
         
-  <style>
-    .draft-notice {
-      padding: 0.75rem 0; /* Adds needed spacing */      
-      border-block: 2px dashed; 
-      font-style: italic;
-    }
-    .draft-notice p {
-      margin: 0; /* Removes default paragraph margin */
-    }
-  </style>
-
-  <aside class="draft-notice">
-    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
-  </aside>
-
 
 <h1>Cache-Friendly B+Tree Nodes With Dynamic Fanout</h1>
 
@@ -102,11 +87,11 @@
 <pre class="language-cpp"><code class="language-cpp"><span class="token comment">// A static helper to allocate storage for a B+Tree node.</span><br><span class="token keyword">static</span> BPlusTreeNode <span class="token operator">*</span><span class="token function">Get</span><span class="token punctuation">(</span><span class="token keyword">int</span> p_fanout<span class="token punctuation">)</span> <span class="token punctuation">{</span><br>  <span class="token comment">// calculate total buffer size</span><br>  size_t buf_size <span class="token operator">=</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>BPlusTreeNode<span class="token punctuation">)</span> <span class="token operator">+</span> p_fanout <span class="token operator">*</span> <span class="token keyword">sizeof</span><span class="token punctuation">(</span>KeyValuePair<span class="token punctuation">)</span><span class="token punctuation">;</span><br><br>  <span class="token comment">// allocate raw memory buffer</span><br>  <span class="token keyword">void</span> <span class="token operator">*</span>buf <span class="token operator">=</span> <span class="token double-colon punctuation">::</span><span class="token keyword">operator</span> <span class="token keyword">new</span><span class="token punctuation">(</span>buf_size<span class="token punctuation">)</span><span class="token punctuation">;</span><br><br>  <span class="token comment">// construct B+Tree node object in the preallocated buffer</span><br>  <span class="token keyword">auto</span> node <span class="token operator">=</span> <span class="token keyword">new</span><span class="token punctuation">(</span>buf<span class="token punctuation">)</span> <span class="token function">BPlusTreeNode</span><span class="token punctuation">(</span>p_fanout<span class="token punctuation">)</span><span class="token punctuation">;</span><br><br>  <span class="token keyword">return</span> node<span class="token punctuation">;</span><br><span class="token punctuation">}</span></code></pre>
 <p>We have now successfully created a cache-friendly B+Tree node with a user-defined fanout configuration which is known only at runtime.</p>
 <h2 id="the-price-of-fine-grained-control" tabindex="-1">The Price Of Fine-Grained Control <a class="direct-link" href="#the-price-of-fine-grained-control" aria-hidden="true">#</a></h2>
-<p>To create an instance of a B+Tree node with a fanout of <code>256</code>, it is not possibly to write simple idiomatic code like this: <code>new BPlusTreeNode(256)</code>.</p>
+<p>To create an instance of a B+Tree node with a fanout of <code>256</code>, it is not possible to write simple idiomatic code like this: <code>new BPlusTreeNode(256)</code>.</p>
 <p>Instead we use the custom <code>BPlusTreeNode::Get</code> helper which knows how much raw memory to allocate for the object including the data section.</p>
 <pre class="language-cpp"><code class="language-cpp">BPlusTreeNode <span class="token operator">*</span>root <span class="token operator">=</span> <span class="token class-name">BPlusTreeNode</span><span class="token operator">&lt;</span>KeyValuePair<span class="token operator">></span><span class="token double-colon punctuation">::</span><span class="token function">Get</span><span class="token punctuation">(</span><span class="token number">256</span><span class="token punctuation">)</span><span class="token punctuation">;</span></code></pre>
 <h3 id="manual-handling-of-deallocation" tabindex="-1">Manual Handling Of Deallocation <a class="direct-link" href="#manual-handling-of-deallocation" aria-hidden="true">#</a></h3>
-<p>The destructor code is also no idiomatic anymore. When the lifetime of the B+Tree node ends, the deallocation code has to be carefully crafted to avoid resource or memory leaks.</p>
+<p>The destructor code is also not idiomatic anymore. When the lifetime of the B+Tree node ends, the deallocation code has to be carefully crafted to avoid resource or memory leaks.</p>
 <pre class="language-cpp"><code class="language-cpp"><span class="token keyword">class</span> <span class="token class-name">BPlusTreeNode</span> <span class="token punctuation">{</span><br><br>  <span class="token keyword">void</span> <span class="token function">FreeNode</span><span class="token punctuation">(</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br>    <span class="token comment">// Call the destructor for each key-value entry.</span><br>    <span class="token keyword">for</span> <span class="token punctuation">(</span>KeyValuePair<span class="token operator">*</span> element <span class="token operator">=</span> start_<span class="token punctuation">;</span> element <span class="token operator">&lt;</span> end_<span class="token punctuation">;</span> <span class="token operator">++</span>element<span class="token punctuation">)</span> <span class="token punctuation">{</span><br>      element<span class="token operator">-></span><span class="token operator">~</span><span class="token function">KeyValuePair</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>    <span class="token punctuation">}</span><br><br>    <span class="token comment">// Call the node destructor</span><br>    <span class="token keyword">this</span><span class="token operator">-></span><span class="token operator">~</span><span class="token function">BPlusTreeNode</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br><br>    <span class="token comment">// Deallocate the raw memory</span><br>    <span class="token double-colon punctuation">::</span><span class="token keyword">operator</span> <span class="token keyword">delete</span><span class="token punctuation">(</span><span class="token keyword">this</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>  <span class="token punctuation">}</span><br><span class="token punctuation">}</span></code></pre>
 <h3 id="adding-new-members-in-a-derived-class" tabindex="-1">Adding New Members In A Derived Class <a class="direct-link" href="#adding-new-members-in-a-derived-class" aria-hidden="true">#</a></h3>
 <p>Adding a new member to a derived class will result in data corruption. It is not possible to add new fields to a specialized <code>InnerNode</code> or <code>LeafNode</code> class.</p>
