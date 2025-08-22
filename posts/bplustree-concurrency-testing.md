@@ -13,8 +13,8 @@ _If you are in a hurry ship with a debugger!_
 
 Deadlocks should be avoided. This is done through careful programming. The technique involves ensuring that latches (locks) are always acquired only in a single direction. A correct implementation will never deadlock.
 
-> __Latches vs Locks Distinction__ - In database management systems latches are used for protecting in-memory data structures. Locks are used for transactions, and protecting database pages, rows etc.
-> 
+> **Latches vs Locks Distinction** - In database management systems latches are used for protecting in-memory data structures. Locks are used for transactions, and protecting database pages, rows etc.
+>
 > -[ ] Include a summary table from the Goetze Grafe paper
 
 In practice, this is harder for B+Tree implementations where the leaf nodes are linked together in both directions. And it is common to provide both forward and reverse iterators over the key space. This immediately conflicts with our deadlock prevention in code technique of only acquiring latches in one direction. The problem here is that if both a forward and reverse iterator are active at the same time, they can meet each other in the middle and deadlock. So the implementation becomes a little more challenging and we'll see how later in this post.
@@ -27,7 +27,7 @@ The optimistic approach is the key to performance where an exclusive latch which
 
 But if the operation is "unsafe", if it will cause an underflow or overflow which triggers a tree rebalancing operation. Then the optimistic approach is abandoned, and traversal is restarted by acquiring latches starting at the root using a pessimistic approach.
 
-Since multiple writers may not be modifying the same parts of the tree, this cost of the pessimistic latching is amortized away over the longer term. 
+Since multiple writers may not be modifying the same parts of the tree, this cost of the pessimistic latching is amortized away over the longer term.
 
 ## Iterator Implementation With Retry
 
@@ -48,7 +48,7 @@ void operator++() {
 }
 ```
 
-Requires a non-blocking latching method which is not guaranteed to always succeed. The normal latching routines are blocking operations which wait for the mutex to be available. But we use them only for traversals where we can guarantee a top-bottom order of latching. It cannot be used for iterators which have both left-right (forward) and right-left (reverse) directions. 
+Requires a non-blocking latching method which is not guaranteed to always succeed. The normal latching routines are blocking operations which wait for the mutex to be available. But we use them only for traversals where we can guarantee a top-bottom order of latching. It cannot be used for iterators which have both left-right (forward) and right-left (reverse) directions.
 
 ```cpp
 bool TryLockShared() {
@@ -64,7 +64,7 @@ The iterator internally has a `RETRY` state which is set if the iteration is blo
             state_ = RETRY;
         }
 
-``` 
+```
 
 ## Testing Strategy
 
@@ -75,13 +75,11 @@ See [Insert Tests] and [Delete Tests].
 [Insert Tests]: https://github.com/jcsherin/btree/blob/main/test/btree_insert_test.cpp
 [Delete Tests]: https://github.com/jcsherin/btree/blob/main/test/btree_delete_test.cpp
 
-
 The concurrency tests simulate real-world conditions and also uses key space randomization to induce failure in the crab latching protocol implementation.
 
 See [Concurrent Tests].
 
 [Concurrent Tests]: https://github.com/jcsherin/btree/blob/main/test/btree_concurrent_test.cpp
-
 
 ### Instrumenting Lock And Unlocks
 
