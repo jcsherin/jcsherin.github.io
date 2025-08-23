@@ -132,9 +132,9 @@ This technique avoids the pointer indirection and provides fine-grained control 
 
 ## Raw Memory Buffer
 
-This is the key step. The construction of the object has to be separate from its memory allocation. We cannot therefor use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in the same storage.
+This is the key step. The construction of the object has to be separate from its memory allocation. We cannot therefore use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in the same storage.
 
-Instead we will use the [placement new] syntax which will construct objects in the memory buffer we created. We know exactly how much space to allocate, which is information the standard `new` operator does not have in this scenario because of the flexible array member.
+Instead, we use the [placement new] syntax which only constructs an object in a preallocated memory buffer. We know exactly how much space to allocate, which is information the standard `new` operator does not have in this scenario because of the flexible array member.
 
 [placement new]: https://en.cppreference.com/w/cpp/language/new.html#Placement_new
 
@@ -154,7 +154,7 @@ static BPlusTreeNode *Get(int p_fanout) {
 }
 ```
 
-We have now successfully created a cache-friendly B+Tree node with a user-defined fanout configuration which is known only at runtime.
+The result is a cache-friendly B+Tree node with a fanout that can be configured at runtime.
 
 ## The Price Of Fine-Grained Control
 
@@ -193,26 +193,51 @@ class BPlusTreeNode {
 Adding a new member to a derived class will result in data corruption. It is not possible to add new fields to a specialized `InnerNode` or `LeafNode` class.
 
 ```text
-+-----------------------+
-| BPlusTreeNode Members |
-| (Header)              |
-+-----------------------+ <-- offset where the data buffer starts
-| entries_[0]             | <-- where the compiler thinks derived class
-| entries_[1]             |     member are written to
-| ...                   |
-| entries_[N]             |
-+-----------------------+ <-- iter_end_
++----------------------+
+| Node Metadata Header |
++----------------------+
+| ...                  |
++----------------------+
+| Node Data            |
++----------------------+ <-- offset where the data buffer starts
+| entries_[0]          | <-- offset where the derived class members
+| entries_[1]          |     will be written to, overwriting the
+| ...                  |     entries
+| entries_[N]          |
++----------------------+
 ```
+
+<figcaption>Fig 2. Adding new members in a derived class will overwrite the <code>entries_</code> array.</figcaption>
 
 The raw memory we manually allocated is opaque to the compiler and it cannot safely reason about where the newly added members to the derived class are physically located. The end result is it will overwrite the data buffer and cause data corruption.
 
 The workaround is to break encapsulation and add derived members to the base class so that the flexible array member is always in the last position. This is a significant drawback when we begin using flexible array members.
 
+```text
++----------------------+
+| Node Metadata Header |
++----------------------+
+| ...                  |
+| low_key_             | <-- Inner Node: left-most node pointer
+| left_sibling_        | <-- Leaf Node: link to left sibling
+| right_sibling_       | <-- Leaf Node link to right sibling
++----------------------+
+| Node Data            |
++----------------------+ <-- Flexible array member guaranteed to
+| entries_[0]          |     be in the last position
+| entries_[1]          |
+| ...                  |
+| entries_[N]          |
++----------------------+
+```
+
+<figcaption>Fig 3. Memory layout of base class with members necessary for the derived <code>Inner</code> and <code>Leaf</code> node implementations.</figcaption>
+
 ### Reinventing The Wheel
 
-For the data array we now effectively end up reinventing `std::vector` utilities for insertion, deletion and iteration. This includes bound-checking to prevent buffer overflows.
+By using a raw C-style array, we effectively reinvent parts of `std::vector`, implementing our own utilities for insertion, deletion and iteration. This not only raises the complexity and maintenance burden but also means we are responsible for ensuring our custom implementation is as performant as the highly-optimized standard library version.
 
-This significantly raises the complexity, and maintenance burden of the implementation. We also have to make sure that our custom implementation is performant at par, with the standard library implementation.
+The engineering cost to make this implementation production-grade is significant.
 
 ### Hidden Data Type Assumptions
 
