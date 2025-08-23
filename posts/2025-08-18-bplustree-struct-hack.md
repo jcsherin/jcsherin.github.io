@@ -7,28 +7,30 @@ layout: layouts/post.njk
 draft: false
 ---
 
-If a B+Tree node has to fit into the cpu cache, the memory layout has to be a single contiguous block. This memory layout requires low-level control which increases the complexity of the implementation, but is a necessary trade-off for higher performance.
+For a high-performance B+Tree, the memory layout of each node must be a single contiguous block. This improves locality of reference, increasing the likelihood that the node's contents reside in the CPU cache.
 
-**Memory Layout of a B+Tree Node**
+In C++, achieving this means forgoing the use of `std::vector`, as it introduces a layer of indirection through a separate memory allocation. The technique involved inevitably increases the implementation complexity and introduces several non-obvious drawbacks. Nevertheless, this is a necessary trade-off for unlocking high performance.
 
 ```text
   +----------------------+
-  | Node Header Metadata |
+  | Node Metadata Header |
   +----------------------+
-  | node_type            |  <-- Inner or Leaf Node
-  | max_size             |  <-- Maximum Entries Per Node (fanout)
-  | node_latch           |  <-- RW-Lock
-  | end_ptr              |  <-- Past-the-end pointer
+  | node_type            |  <-- Identify as Inner or Leaf Node
+  | max_size             |  <-- Maximum Capacity (aka Node Fanout)
+  | node_latch           |  <-- RW-Lock Mutex
+  | iter_end_            |  <-- Past-the-end Pointer
   +----------------------+
   | Node Data            |
-  +----------------------+  <-- Data Elements (key-value)
-  | data[0]              |
-  | data[1]              |
-  | data[2]              |  <-- end_ptr: if current size = 2
+  +----------------------+  <-- Key-Value Elements Stored From Here
+  | entries_[0]          |
+  | entries_[1]          |
+  | entries_[2]          |  <-- iter_end_ (when current size = 2)
   | ...                  |
-  | data[N]              |  <-- N = max_size - 1
-  +----------------------+
+  | entries_[N]          |  <-- N = max_size - 1
+  +----------------------+  <-- iter_end_ (when node is full)
 ```
+
+<figcaption>Fig 1. Memory Layout of a B+Tree Node</figcaption>
 
 <nav class="toc" aria-labelledby="toc-heading">
   <h2 id="toc-heading">Table of Contents</h2>
@@ -51,17 +53,17 @@ If a B+Tree node has to fit into the cpu cache, the memory layout has to be a si
 
 ## Challenges
 
-The `std::vector` can be ruled out for storing the key-value elements of a B+Tree node. It is a pointer to the data, which is then stored in another block of memory on the heap. The memory layout is not contiguous. Therefore, we have to fallback to using C-style arrays for the data section of the B+Tree node.
+Using `std::vector` for a B+Tree node's entries is a non-starter. A `std::vector` object holds a pointer to its entries which are stored in a separate block of memory on the heap. This indirection breaks up the memory layout, forcing us to fall back on C-style arrays for storing the node's entries.
 
-The size of the array `data[N]` must be known at compilation time. The typical B+Tree implementation makes the fanout a user-configurable parameter. There is also no restriction that the fanout value should be similar for the inner nodes and leaf nodes.
+This leads to a dilemma. The size of the array must be known at compilation time, yet we need to allow users to configure the fanout (the array's size) at runtime. Furthermore, the implementation should allow inner nodes and leaf nodes to have different fanouts.
 
-This problem is not isolated to B+Tree node implementations. The pattern here is that you need low-level control over memory layout. The concerned object contains at a variable-length payload whose size is determined only at runtime.
+This isn't just a B+Tree problem. It is a common challenge in systems programming whenever an object needs to contain a variable-length payload whose size is only known at runtime. How can you define a class that occupies a single block of memory when a part of the block has a dynamic size?
 
-It is not obvious how to escape this conundrum. Systems programmers for ages have run into this problem, and applied the same workaround over and over again. So much that, it has been standardized in C99, and has support in both C/C++ compiler implementations.
+The solution isn't obvious, but it's a well-known trick that systems programmers have used for decades--a technique so common it was eventually standardized in C99.
 
 ## The Struct Hack
 
-The solution to the this problem is a technique which originates in C programming known as the struct hack. The variable-length member (implemented as an array) is placed at the last position in a struct. To satisfy the compiler a size of `1` is specified, so the array size is known at compilation time.
+The solution to this problem is a technique originating in C programming known as the struct hack. The variable-length member (implemented as an array) is placed at the last position in the struct. To satisfy the compiler a size of `1` is specified, ensuring the array's size is known at compilation time.
 
 ```c
 struct Payload {
@@ -76,18 +78,18 @@ struct Payload {
 }
 ```
 
-Then during runtime when you know `N` you allocate a single block of memory for both the struct and the `N` elements. To the compiler this is an opaque block, and it cannot provide any guarantees. But writing past the struct is safe because the variable-length member is in the last position.
+At runtime, when the required size `N` is known, you allocate a single block of memory for the struct and the `N` elements combined. The compiler treats this as an opaque block, and provides no safety guarantees. However, accessing the extra allocated space is safe because the variable-length member is the final field in the struct.
 
 ```c
 // The (N - 1) adjusts for the 1-element array in Payload struct
 Payload *item = malloc(sizeof(Payload) + (N - 1) * sizeof(char))
 ```
 
-This pattern is officially supported in the language since C99, called a [flexible array member].
+This pattern was officially standardized in C99, where it is known as a [flexible array member].
 
 [flexible array member]: https://en.wikipedia.org/wiki/Flexible_array_member
 
-The C++11 standard includes the flexible array member.
+The C++11 standard formally incorporates the flexible array member, referring to it as an **array of unknown bound** when it is the last member of a struct.
 
 > **Arrays of unknown bound**
 >
@@ -98,7 +100,7 @@ The C++11 standard includes the flexible array member.
 > int a[] = {1, 2, 3}; // the type of a is "array of 3 int"
 > ```
 
-The size can be omitted from the array declaration `element[]`. The code will compile.
+This means that in C++, the size can be omitted from the final array declaration (e.g. `entries_[]`), and the code will compile, enabling the same pattern.
 
 ## B+Tree Node Declaration
 
@@ -114,21 +116,19 @@ private:
   // Node Header Members ... (elided)
 
   // Points to the memory location beyond the last key-value
-  // entry in the `start_` array.
-  KeyValuePair* end_;
+  // entry in the `entries_` array.
+  KeyValuePair* iter_end_;
 
   // Array containing key-value entries of unknown bound.
-  KeyValuePair start_[];
+  KeyValuePair entries_[];
 };
 ```
 
-If we had used `std::vector<KeyValuePair>` for the B+Tree node data it will result in indirection. The `std::vector` is a pointer to data which is stored in separate block of memory in another part of the heap memory. The memory layout of the B+Tree node is not going to be contiguous.
+Using a `std::vector<KeyValuePair>` for the node's entries would result in an indirection. This immediately fragments the memory layout. Attempting to access a node entry will be noticeably slower. The pointer indirection is costly: following the pointer increases the risk of a cache miss, forcing the CPU to stall and wait for the cache line to be fetched from main memory.
 
-Trying to access the node data will be significantly slower because of the pointer indirection.
+A cache miss may cost hundreds of CPU cycles compared to just a few cycles for a cache hit. This cumulative latency is unacceptable for any high-performance data structure.
 
-Following the pointer will increase cache misses, forcing the CPU to stall and wait for data to be fetched from main memory. A cache miss may cost hundreds of CPU cycles compared to just a few cycles for a cache hit. This latency cost adds up and is unacceptable for performance sensitive data structure implementations such as the B+Tree.
-
-The struct hack or flexible array member prevents the pointer indirection. The node header and data are co-located in one continuous memory block. This layout is cache-friendly and will result in fewer cache misses.
+This technique avoids the pointer indirection and provides fine-grained control over memory layout. The node header and data are co-located in one continuous memory block. This layout is cache-friendly and will result in fewer cache misses.
 
 ## Raw Memory Buffer
 
@@ -175,7 +175,7 @@ class BPlusTreeNode {
 
   void FreeNode() {
     // Call the destructor for each key-value entry.
-    for (KeyValuePair* element = start_; element < end_; ++element) {
+    for (KeyValuePair* element = entries_; element < iter_end_; ++element) {
       element->~KeyValuePair();
     }
 
@@ -197,11 +197,11 @@ Adding a new member to a derived class will result in data corruption. It is not
 | BPlusTreeNode Members |
 | (Header)              |
 +-----------------------+ <-- offset where the data buffer starts
-| start_[0]             | <-- where the compiler thinks derived class
-| start_[1]             |     member are written to
+| entries_[0]             | <-- where the compiler thinks derived class
+| entries_[1]             |     member are written to
 | ...                   |
-| start_[N]             |
-+-----------------------+ <-- end_
+| entries_[N]             |
++-----------------------+ <-- iter_end_
 ```
 
 The raw memory we manually allocated is opaque to the compiler and it cannot safely reason about where the newly added members to the derived class are physically located. The end result is it will overwrite the data buffer and cause data corruption.
@@ -237,7 +237,7 @@ bool Insert(const KeyValuePair &element, KeyValuePair *pos) {
   new(pos) KeyValuePair{element};
 
   // Bookkeeping
-  std::advance(end_, 1);
+  std::advance(iter_end_, 1);
 
   return true;
 }

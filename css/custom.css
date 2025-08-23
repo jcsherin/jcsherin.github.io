@@ -1,11 +1,8 @@
 p code {
-  background-color: aliceblue; /* AliceBlue - a very light, neutral blue */
+  background-color: lightyellow;
   color: dimgrey;
-  border-radius: 4px;
-  border-color: darkblue;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
-  font-size: 1rem;
+  font-size: 14px;
+  font-weight: 700;
   font-style: italic;
 }
 
@@ -75,9 +72,8 @@ hgroup p {
 
 body {
   font-family: 'Inria Serif', serif;
-  font-size: 1.25rem;
+  font-size: 18px;
   font-weight: 400;
-  /*letter-spacing: 0.2px;*/
 }
 
 .inria-serif-light {
