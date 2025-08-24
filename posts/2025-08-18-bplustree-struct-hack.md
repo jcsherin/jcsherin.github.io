@@ -2,35 +2,39 @@
 title: 'Cache-Friendly B+Tree Nodes With Dynamic Fanout'
 date: 2025-08-18
 summary: >
-  A B+Tree node needs a contiguous, cache-friendly memory layout and a dynamic number of entries, but standard C++ tools can't deliver both. This post explores how to solve this classic problem using the "struct hack" and manual object construction, detailing the trade-offs required when chasing raw performance
+  A B+Tree node requires a contiguous, cache-friendly memory layout and a dynamic number of entries, but standard C++ tools falls short on both ends. This post explores how to solve this classic problem using the "struct hack" and manual memory management, while also exposing the higher complexity and drawbacks involved when chasing raw performance.
 layout: layouts/post.njk
 draft: false
 ---
 
 For a high-performance B+Tree, the memory layout of each node must be a single contiguous block. This improves locality of reference, increasing the likelihood that the node's contents reside in the CPU cache.
 
-In C++, achieving this means forgoing the use of `std::vector`, as it introduces a layer of indirection through a separate memory allocation. The technique involved inevitably increases the implementation complexity and introduces several non-obvious drawbacks. Nevertheless, this is a necessary trade-off for unlocking high performance.
+In C++, achieving this means forgoing the use of `std::vector`, as it introduces a layer of indirection through a separate memory allocation. The solution to this problem though inevitably increases the implementation complexity and is mired with hidden drawbacks. Nevertheless, this is still a necessary trade-off for unlocking high performance.
 
 ```text
   +----------------------+
   | Node Metadata Header |
   +----------------------+
-  | node_type            |  <-- Identify as Inner or Leaf Node
-  | max_size             |  <-- Maximum Capacity (aka Node Fanout)
-  | node_latch           |  <-- RW-Lock Mutex
-  | iter_end_            |  <-- Past-the-end Pointer
-  +----------------------+
-  | Node Data            |
-  +----------------------+  <-- Key-Value Elements Stored From Here
-  | entries_[0]          |
-  | entries_[1]          |
-  | entries_[2]          |  <-- iter_end_ (when current size = 2)
+  | node_type_           |<-- Inner Node or Leaf Node
+  | max_size_            |<-- Maximum Capacity (aka Node Fanout)
+  | node_latch_          |<-- RW-Lock Mutex
+  | iter_end_            |--------------------+
+  +----------------------+                    |
+  | Node Data            |                    |
+  +----------------------+                    |
+  | entries_[0]          | <--+               |
+  | entries_[1]          |    |               |
+  | entries_[2]          |    + used space    |
+  | ...                  |    |               |
+  | entries_[k]          | <--+               |
+  +----------------------+<-------------------+ iter_end_ points to
+  |                      |    entries_[k+1], which is one-past-the-last
+  | (unused space)       |    entry in the node.
   | ...                  |
-  | entries_[N]          |  <-- N = max_size - 1
-  +----------------------+  <-- iter_end_ (when node is full)
+  +----------------------+
 ```
 
-<figcaption>Fig 1. Memory Layout of a B+Tree Node</figcaption>
+<figcaption>Fig 1. Memory Layout of a B+Tree Node as a single contiguous block in heap</figcaption>
 
 <nav class="toc" aria-labelledby="toc-heading">
   <h2 id="toc-heading">Table of Contents</h2>
@@ -54,17 +58,17 @@ In C++, achieving this means forgoing the use of `std::vector`, as it introduces
 
 ## Challenges
 
-Using `std::vector` for a B+Tree node's entries is a non-starter. A `std::vector` object holds a pointer to its entries which are stored in a separate block of memory on the heap. This indirection breaks up the memory layout, forcing us to fall back on C-style arrays for storing the node's entries.
+Using `std::vector` for a B+Tree node's entries is a non-starter. A `std::vector` object holds a pointer to its entries which are stored in a separate block of memory on the heap. This indirection fragments the memory layout, forcing us to fall back on C-style arrays for a contiguous layout when storing variable-length node entries.
 
 This leads to a dilemma. The size of the array must be known at compilation time, yet we need to allow users to configure the fanout (the array's size) at runtime. Furthermore, the implementation should allow inner nodes and leaf nodes to have different fanouts.
 
 This isn't just a B+Tree problem. It is a common challenge in systems programming whenever an object needs to contain a variable-length payload whose size is only known at runtime. How can you define a class that occupies a single block of memory when a part of the block has a dynamic size?
 
-The solution isn't obvious, but it's a well-known trick that systems programmers have used for decades--a technique so common it was eventually standardized in C99.
+The solution isn't obvious, but it's a well-known trick that systems programmers have used for decades, a technique so common it has eventually been standardized in C99.
 
 ## The Struct Hack
 
-The solution to this problem is a technique originating in C programming known as the struct hack. The variable-length member (implemented as an array) is placed at the last position in the struct. To satisfy the compiler a size of `1` is specified, ensuring the array's size is known at compilation time.
+The solution to this problem is a technique originating in C programming known as the struct hack. The variable-length member (array) is placed at the last position in the struct. To satisfy the compiler an array size of one is hard-coded, ensuring the array size is known at compilation time.
 
 ```c
 struct Payload {
@@ -125,9 +129,9 @@ private:
 };
 ```
 
-Using a `std::vector<KeyValuePair>` for the node's entries would result in an indirection. This immediately fragments the memory layout. Attempting to access a node entry will be noticeably slower. The pointer indirection is costly: following the pointer increases the risk of a cache miss, forcing the CPU to stall and wait for the cache line to be fetched from main memory.
+Using a `std::vector<KeyValuePair>` for the node's entries would result in an indirection. This immediately fragments the memory layout. Accessing an entry within a node is slower, and has higher latency because of the pointer indirection. Chasing the pointer increases the probability of a cache miss, which will force the CPU to stall while it waits for the cache line to be fetched from a different region in main memory.
 
-A cache miss may cost hundreds of CPU cycles compared to just a few cycles for a cache hit. This cumulative latency is unacceptable for any high-performance data structure.
+A cache miss will cost hundreds of CPU cycles compared to just a few cycles for a cache hit. This cumulative latency is unacceptable for any high-performance data structure.
 
 This technique avoids the pointer indirection and provides fine-grained control over memory layout. The node header and data are co-located in one continuous memory block. This layout is cache-friendly and will result in fewer cache misses.
 
@@ -135,7 +139,7 @@ This technique avoids the pointer indirection and provides fine-grained control 
 
 This is the key step. The construction of the object has to be separate from its memory allocation. We cannot therefore use the standard `new` syntax which will attempt to allocate storage, and then initialize the object in the same storage.
 
-Instead, we use the [placement new] syntax which only constructs an object in a preallocated memory buffer. We know exactly how much space to allocate, which is information the standard `new` operator does not have in this scenario because of the flexible array member.
+Instead, we use the [placement new] syntax which only constructs an object in a preallocated memory buffer provided by us. We know exactly how much space to allocate, which is information the standard `new` operator does not have in this scenario because of the flexible array member.
 
 [placement new]: https://en.cppreference.com/w/cpp/language/new.html#Placement_new
 
@@ -189,6 +193,8 @@ class BPlusTreeNode {
 }
 ```
 
+This carefully ordered cleanup is necessary because we took manual control of memory. The process is the mirror opposite of our `Get` function. We constructed the object outside in: _raw memory buffer -> node object -> individual elements_. So we teardown in the opposite direction, from the inside out: _individual elements -> node object -> raw memory buffer_.
+
 ### Adding New Members In A Derived Class
 
 Adding a new member to a derived class will result in data corruption. It is not possible to add new fields to a specialized `InnerNode` or `LeafNode` class.
@@ -200,15 +206,15 @@ Adding a new member to a derived class will result in data corruption. It is not
 | ...                  |
 +----------------------+
 | Node Data            |
-+----------------------+ <-- offset where the data buffer starts
-| entries_[0]          | <-- offset where the derived class members
-| entries_[1]          |     will be written to, overwriting the
-| ...                  |     entries
++----------------------+<-- offset where the data buffer starts
+| entries_[0]          |<-- offset where the derived class members
+| entries_[1]          |    will be written to, overwriting the
+| ...                  |    entries
 | entries_[N]          |
 +----------------------+
 ```
 
-<figcaption>Fig 2. Adding new members in a derived class will overwrite the <code>entries_</code> array.</figcaption>
+<figcaption>Fig 2. Adding new members in a derived class will overwrite the <code>entries_</code> array in memory.</figcaption>
 
 The raw memory we manually allocated is opaque to the compiler and it cannot safely reason about where the newly added members to the derived class are physically located. The end result is it will overwrite the data buffer and cause data corruption.
 
@@ -219,20 +225,20 @@ The workaround is to break encapsulation and add derived members to the base cla
 | Node Metadata Header |
 +----------------------+
 | ...                  |
-| low_key_             | <-- Inner Node: left-most node pointer
-| left_sibling_        | <-- Leaf Node: link to left sibling
-| right_sibling_       | <-- Leaf Node link to right sibling
+| low_key_             |<-- `InnerNode`: left-most node pointer
+| left_sibling_        |<-- `LeafNode` : link to left sibling
+| right_sibling_       |<-- `LeafNode` : link to right sibling
 +----------------------+
 | Node Data            |
-+----------------------+ <-- Flexible array member guaranteed to
-| entries_[0]          |     be in the last position
++----------------------+<-- Flexible array member guaranteed to
+| entries_[0]          |    be in the last position
 | entries_[1]          |
 | ...                  |
 | entries_[N]          |
 +----------------------+
 ```
 
-<figcaption>Fig 3. Memory layout of base class with members necessary for the derived <code>Inner</code> and <code>Leaf</code> node implementations.</figcaption>
+<figcaption>Fig 3. Memory layout of base class with members necessary for the derived <code>InnerNode</code> and <code>LeafNode</code> implementations.</figcaption>
 
 ### Reinventing The Wheel
 
