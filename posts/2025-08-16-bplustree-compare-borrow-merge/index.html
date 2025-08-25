@@ -30,21 +30,6 @@
 
       <main class="tmpl-post">
         
-  <style>
-    .draft-notice {
-      padding: 0.75rem 0; /* Adds needed spacing */      
-      border-block: 2px dashed; 
-      font-style: italic;
-    }
-    .draft-notice p {
-      margin: 0; /* Removes default paragraph margin */
-    }
-  </style>
-
-  <aside class="draft-notice">
-    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
-  </aside>
-
 
 <h1>A B+Tree Node Underflows: Merge or Borrow?</h1>
 
@@ -144,12 +129,15 @@ like concurrent page splits to searchers).</p>
 <p>Though OLTP systems are the primary users of a B+Tree data structure for indexes they are not the only ones. They are widely used in embedded key-value stores, search indexes and as library code in custom data management tools. These systems are not burdened by the complexity of interleaving the B+Tree implementation which is both correct and performant with the transaction manager and the recovery algorithms. In these cases, the above simpler strategies can unlock higher performance with lower code complexity for most use cases.</p>
 <p>Finally, it depends on the workload and the specific access pattern. But knowing the tricks production-grade OLTP systems will come in handy in getting every ounce of performance out of the B+Tree data structures.</p>
 
+<hr>
+<ul><li>Next: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li>
+</ul>
 
       </main>
 
       <footer></footer>
 
-      <!-- Current page: /posts/bplustree-borrow-vs-merge/ -->
+      <!-- Current page: /posts/2025-08-16-bplustree-compare-borrow-merge/ -->
     </body>
   </div>
 </html>

@@ -117,6 +117,9 @@
 <p>We started with a clear goal: a cache-friendly, contiguous B+Tree node with a dynamic, runtime-configurable fanout. The flexible array member proved to be the perfect tool, giving us direct control over memory layout while supporting variable-length entries.</p>
 <p>However, this fine-grained control comes at a steep cost. We must abandon idiomatic C++, manually manage memory, give up inheritance, and enforce hidden data type constraints. This is the fundamental trade-off: we sacrifice simplicity and safety for raw performance.</p>
 
+<hr>
+<ul><li>Previous: <a href="/posts/2025-08-16-bplustree-compare-borrow-merge/">A B+Tree Node Underflows: Merge or Borrow?</a></li>
+</ul>
 
       </main>
 
