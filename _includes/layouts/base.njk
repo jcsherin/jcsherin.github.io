@@ -7,7 +7,7 @@
     <meta name="description" content="{{ description or metadata.description }}">
     <meta name="generator" content="{{ eleventy.generator }}">
     <link rel="stylesheet" href="{{ '/css/prism-okaidia.css' | url }}">
-    <link rel="stylesheet" href="{{ '/css/custom.css' | url }}">
+    <link rel="stylesheet" href="{{ ( '/css/custom.css?v=' ~ timestamp) | url }}">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="{{ site.title }}">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="{{ site.title }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
