@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756134786656">
+    <link rel="stylesheet" href="/css/custom.css?v=1756142544315">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,8 +61,11 @@
   </ol>
 </nav>
 <h2 id="fixing-node-underflow" tabindex="-1">Fixing Node Underflow <a class="direct-link" href="#fixing-node-underflow" aria-hidden="true">#</a></h2>
-<p>Each B+Tree node has a minimum degree (number of entries) constraint. A node underflow happens when the occupancy of node falls below the configured minimum degree. This is a critical knob to prevent index bloat, where over the lifetime of a B+Tree the nodes become progressively sparse because of constantly adding and removing key-value entries.</p>
-<p>The strategy implemented for fixing node underflow is a classic case of choosing your trade-off. The merge-first approach optimizes for space, while the borrow-first approach optimizes for reducing write latency.</p>
+<p>A node underflow happens when the used space (or occupancy) within a node falls below a minimum threshold. This is a possibility after removing an entry from the node. A viable solution is to do nothing. By doing nothing, a tree balancing procedure is never activated. The major downside though is index bloat. A failure to garbage collect the unused memory results in the nodes becoming progressively sparse as entries continue to be added and removed.</p>
+<blockquote>
+<p>In contrast, a node overflow will always trigger a tree rebalancing because it creates a new node whose reference needs to be inserted in the parent node. Here, doing nothing is not even an available option.</p>
+</blockquote>
+<p>The two basic strategies for fixing node underflow both involve merging and borrowing. They differ by which operation is executed first - a merge or a borrow. The merge-first is an immediate garbage collection strategy. While borrow-first is a strategy that prioritizes write speed by avoiding a merging nodes as far as possible. The merge-first trades-off speed for better compaction. The borrow-first strategy trades-off space for writes completing faster.</p>
 <h3 id="the-merge-first-approach" tabindex="-1">The Merge-First Approach <a class="direct-link" href="#the-merge-first-approach" aria-hidden="true">#</a></h3>
 <p>When a leaf node underflow occurs after removing a key-value entry, the first attempt is to see if this leaf node can be merged with one of its neighboring sibling (left or right) nodes. The remaining key-value entries have to fit into one of the sibling nodes for this to work.</p>
 <p>Since the node does not exist anymore, the key-pointer entry in the parent inner node has to be removed. If the parent inner node satisfies the minimum degree constraint, the write operation completes here. But if the removal causes the parent inner node to underflow, the process of rebalancing the tree has to continue. In rare situations this can propagate all the way back to the root node.</p>
