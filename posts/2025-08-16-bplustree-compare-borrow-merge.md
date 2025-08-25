@@ -1,9 +1,10 @@
 ---
 title: 'A B+Tree Node Underflows: Merge or Borrow?'
 date: 2025-08-16
-summary: 'coalesce nodes or merge nodes, why does it matter?'
+summary: >
+  The stable logarithmic performance of a B+Tree is an outcome of its self-balancing property. When an inner node or leaf node falls below its minimum occupancy threshold during deletions, the tree rebalancing procedure is activated. The first choice is to either merge with a sibling, or borrow (redistribute) keys from a sibling. Neither choice is inherently better. Instead, the design decision signals the fundamental trade-off for that specific implementation. A survey of highly tuned OLTP systems reveals a design space for rebalancing that is far richer, more complex than this simple binary choice suggests.
 layout: layouts/post.njk
-draft: true
+draft: false
 ---
 
 When the number of entries in a B+Tree node falls below a minimum threshold, it is classified as a node underflow situation. The underflow threshold is typically set to 50% of the node fanout. A delete operation can therefore trigger a node underflow.
