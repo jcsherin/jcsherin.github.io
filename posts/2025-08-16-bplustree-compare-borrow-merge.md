@@ -38,9 +38,11 @@ How the implementation decides to fix the underflow is therefore a critical desi
 
 ## Fixing Node Underflow
 
-Each B+Tree node has a minimum degree (number of entries) constraint. A node underflow happens when the occupancy of node falls below the configured minimum degree. This is a critical knob to prevent index bloat, where over the lifetime of a B+Tree the nodes become progressively sparse because of constantly adding and removing key-value entries.
+A node underflow happens when the used space (or occupancy) within a node falls below a minimum threshold. This is a possibility after removing an entry from the node. A viable solution is to do nothing. By doing nothing, a tree balancing procedure is never activated. The major downside though is index bloat. A failure to garbage collect the unused memory results in the nodes becoming progressively sparse as entries continue to be added and removed.
 
-The strategy implemented for fixing node underflow is a classic case of choosing your trade-off. The merge-first approach optimizes for space, while the borrow-first approach optimizes for reducing write latency.
+> In contrast, a node overflow will always trigger a tree rebalancing because it creates a new node whose reference needs to be inserted in the parent node. Here, doing nothing is not even an available option.
+
+The two basic strategies for fixing node underflow both involve merging and borrowing. They differ by which operation is executed first - a merge or a borrow. The merge-first is an immediate garbage collection strategy. While borrow-first is a strategy that prioritizes write speed by avoiding a merging nodes as far as possible. The merge-first trades-off speed for better compaction. The borrow-first strategy trades-off space for writes completing faster.
 
 ### The Merge-First Approach
 
