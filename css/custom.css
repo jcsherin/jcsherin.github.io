@@ -71,10 +71,18 @@ hgroup p {
   margin-top: 0;
 }
 
-body {
+/*body {
   font-family: 'Inria Serif', serif;
   font-size: 18px;
   font-weight: 400;
+}
+*/
+
+body {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1.4;
 }
 
 .inria-serif-light {
