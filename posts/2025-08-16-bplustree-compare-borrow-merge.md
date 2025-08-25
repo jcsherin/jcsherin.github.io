@@ -2,7 +2,7 @@
 title: 'A B+Tree Node Underflows: Merge or Borrow?'
 date: 2025-08-16
 summary: >
-  The stable logarithmic performance of a B+Tree is an outcome of its self-balancing property. When an inner node or leaf node falls below its minimum occupancy threshold during deletions, the tree rebalancing procedure is activated. The first choice is to either merge with a sibling, or borrow (redistribute) keys from a sibling. Neither choice is inherently better. Instead, the design decision signals the fundamental trade-off for that specific implementation. A survey of highly tuned OLTP systems reveals a design space that is far richer, more complex than this simple binary choice suggests.
+  The stable logarithmic performance of a B+Tree is an outcome of its self-balancing property. When an inner node or leaf node falls below its minimum occupancy threshold during deletions, the tree rebalancing procedure is activated. The first choice is to either merge with a sibling, or borrow (redistribute) keys from a sibling. Neither choice is inherently better. Instead, the design decision signals the fundamental trade-off preferred by the specific implementation. A survey of major OLTP systems reveals a design space that is far more nuanced than this simple binary choice suggests.
 layout: layouts/post.njk
 draft: false
 ---
