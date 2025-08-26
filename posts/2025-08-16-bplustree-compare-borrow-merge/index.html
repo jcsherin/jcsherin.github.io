@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756142544315">
+    <link rel="stylesheet" href="/css/custom.css?v=1756214080608">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -65,23 +65,24 @@
 <blockquote>
 <p>In contrast, a node overflow will always trigger a tree rebalancing because it creates a new node whose reference needs to be inserted in the parent node. Here, doing nothing is not even an available option.</p>
 </blockquote>
-<p>The two basic strategies for fixing node underflow both involve merging and borrowing. They differ by which operation is executed first - a merge or a borrow. The merge-first is an immediate garbage collection strategy. While borrow-first is a strategy that prioritizes write speed by avoiding a merging nodes as far as possible. The merge-first trades-off speed for better compaction. The borrow-first strategy trades-off space for writes completing faster.</p>
+<p>The two basic strategies for fixing node underflow both involve merging and borrowing. They differ by which operation is executed first: a merge or a borrow. The merge-first approach prioritizes immediate garbage collection of unused space. It trades-off write speed for more efficient utilization of space. In contrast, the borrow-first approach prioritizes write throughput through redistribution of keys within existing nodes avoiding a merge whenever possible, trading-off long term space-efficiency for short-term write speed.</p>
 <h3 id="the-merge-first-approach" tabindex="-1">The Merge-First Approach <a class="direct-link" href="#the-merge-first-approach" aria-hidden="true">#</a></h3>
-<p>When a leaf node underflow occurs after removing a key-value entry, the first attempt is to see if this leaf node can be merged with one of its neighboring sibling (left or right) nodes. The remaining key-value entries have to fit into one of the sibling nodes for this to work.</p>
-<p>Since the node does not exist anymore, the key-pointer entry in the parent inner node has to be removed. If the parent inner node satisfies the minimum degree constraint, the write operation completes here. But if the removal causes the parent inner node to underflow, the process of rebalancing the tree has to continue. In rare situations this can propagate all the way back to the root node.</p>
-<p>Now if the key-value entries will not fit into a sibling node without causing it to overflow, then we borrow enough entries to fix the underflow. This sometimes requires an update to the key in the parent inner node. The update ensures that search continues to work correctly after the borrow completes.</p>
-<p>Crucially, a borrow operation will never trigger a cascading rebalance that propagates up the tree, which is the key difference from a merge.</p>
-<p>The merge-first approach optimizes for space by trading-off write latency in pathological cases where deleting a single key-value entry from a leaf node triggers node modifications which propagates up along the tree path.</p>
-<p>The bet here is that this worst-case scenario will happen rarely to be a problem in production workloads.</p>
-<p>The B+Tree is primarily a disk-based data structure, and therefore a compact disk size is a desirable property because it minimizes disk I/O. A denser node with more key-value entries is better for cache locality.</p>
-<p>Therefore by prioritizing node occupancy, this strategy relies on long-term read performance wins. This gain comes from reduced disk I/O and better cache locality. This comes with a small risk of occasional higher write latency for a few write operations.</p>
+<p>For a merge to work, the combined entries in the underflowing node and the target sibling node must fit within a single node. After merging two nodes into one, the memory belonging to the underflowing node can be garbage collected.</p>
+<blockquote>
+<p>An efficient implementation will avoid allocation for a new node, and reuse the memory of the sibling node.</p>
+</blockquote>
+<p>The problem with the merge-first approach is that in the worst-case it can recursively cascade all the way back to the root of the B+Tree. In practice though this should happen rarely. The reason for this behavior is that merge eliminates an existing node, and its reference has to be removed from the parent inner node. Removing an entry from a node, has the potential however small to again cause an underflow.</p>
+<p>What if the combined entries will not fit into a single node?</p>
+<p>Then we fallback to borrowing entries from a sibling to fix the underflow. This will not cause a cascading rebalance, as there is no change in nodes, only a redistribution of keys.</p>
+<blockquote>
+<p><em>Disclaimer</em>: The following is a simplified view of how the B+Tree algorithm and concurrency protocols interleave with each other. An implementation in code is more complex.</p>
+</blockquote>
+<p>In optimistic (crab latching) concurrency, if removing an entry will cause a node to underflow it is categorized as an &quot;unsafe&quot; node. The optimistic approach is abandoned and we restart traversal back from the root. It involves acquiring a chain of exclusive latches along the search path to safely complete the operation. This significantly slower path blocks other readers and writers from accessing the latched nodes until the rebalancing operation completes.</p>
+<p>The merge-first approach compresses nodes and therefore more keys are stored within the minimum amount of nodes. This occupies less space on disk and therefore requires less read I/O to be performed. For range scans then a minimum number of nodes needs to be read from disk for a given key range. The higher node density also results in better cache locality and this further improves compute performance.</p>
 <h3 id="the-borrow-first-approach" tabindex="-1">The Borrow-First Approach <a class="direct-link" href="#the-borrow-first-approach" aria-hidden="true">#</a></h3>
-<p>Here we prioritize minimizing data movement, and finishing the tree rebalancing as soon as possible. When a leaf node underflows, we check if one of the siblings (left or right) nodes can supply enough key-value entries without violating its own minimum degree constraint.</p>
-<p>If that is possible, then the key-value entries are added to the underflow node to satisfy the minimum occupancy constraint. The key-value entries can be equally split between both nodes. The navigation key in the parent will have to be rewritten to represent the new key ranges after the borrow operation completes. At this point, the tree rebalancing is completed.</p>
-<p>If a borrow succeeds, then it is guaranteed that a cascade rebalance will never occur. This is a good strategy for B+Tree implementations which needs to prioritize high write throughput. The minimal data movement, and mutable update in the parent node reduces the risk of unpredictable latency spikes which is possible during a merge operation.</p>
-<p>On the other hand, a borrow may not be possible because it will violate the minimum degree constraint of either sibling nodes. In that scenario, we revert to merging with a sibling node. A merge is guaranteed to be possible because a borrow only fails when the sibling has no keys to spare. This means both nodes are at minimum capacity, so their combined entries will fit into a single node.</p>
-<p>The borrow-first approach makes sense for B+Tree implementations which completely fits into main memory. The trade-off is predictable write throughput, but reduced cache locality. In a range scan operation the key ranges may have to be fetched from multiple nodes, which are not contiguous in main memory.</p>
-<p>We gain predictable, faster writes by trading off a potential minimal hit to read performance and space efficiency.</p>
+<p>For borrowing to work, removing the entries from the sibling node must not result in an underflow. Since there is no change in nodes the tree rebalancing is guaranteed not to cascade and therefore completes faster. If borrowing will cause a node underflow, we fallback to merging nodes.</p>
+<p>The concurrency aspects are similar to the merge-first approach. In comparison, it is reasonable to expect that the exclusive latches held on the nodes in the search path segment, will be for a relatively shorter duration.</p>
+<p>This approach prioritizes faster writes and predictable latency by avoiding merging nodes unless strictly necessary. The downside is that node density is lower. The range scans now require more node I/O because the same key range is now spread over a wide span of leaf nodes.</p>
 <h2 id="real-world-implementations" tabindex="-1">Real-World Implementations <a class="direct-link" href="#real-world-implementations" aria-hidden="true">#</a></h2>
 <h3 id="background-merge-in-mysql-(innodb)" tabindex="-1">Background Merge In MySQL (InnoDB) <a class="direct-link" href="#background-merge-in-mysql-(innodb)" aria-hidden="true">#</a></h3>
 <p><a href="https://dev.mysql.com/doc/refman/8.4/en/index-page-merge-threshold.html">MySQL</a> provides a configurable knob and implements merging two pages if the amount of data in a page falls below the threshold when deleting a row. But the docs do no make any indication regarding what happens if a merge is not possible. So MySQL does not seem to implement a merge-then-borrow, but rather a merge-only strategy to deal with node underflow.</p>
