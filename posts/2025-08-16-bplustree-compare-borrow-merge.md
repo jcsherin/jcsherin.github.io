@@ -107,7 +107,19 @@ This results in index bloat, which directly harms read efficiency. The same key 
 
 ### Do Nothing Strategy In PostgreSQL
 
-The [PostgreSQL] B+Tree implementation does not attempt to reclaim space after underflow. A node is only deleted after it becomes empty. So it does not implement neither the typical borrow-first nor merge-first strategy outlined above.
+In PostgreSQL deleting an index entry, marks a tombstone bit and completes instantly. This requires a light-weight shared lock. In a stark departure from other implementations, no attempt is made whatsoever to merge nodes, or borrow entries and redistribute them between nodes. Deletes in PostgreSQL do not result in tree rebalancing.
+
+The physical deletion of the entry is separated from the marking a tombstone. Physically deleting an entry requires an exclusive lock on the node, and is more expensive. This separation improves concurrency. It also benefits index scans which use the tombstone as a hint for excluding the deleted entry from the final result set.
+
+There are two ways in which physical deletion of an entry is performed. The most common method for reclaiming the space for reuse is when `VACUUM` runs in the background.
+
+The other way is when an insert lands on the node and there is no space for an entry, it can check for tombstone entries. Then it can acquire an exclusive lock, and physically delete the entries reclaiming enough space for inserting the new entry. This is an opportunistic delete optimization.
+
+[Source]\: `src/backend/access/nbtree/README`
+
+[Source]: https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README
+
+<!-- The [PostgreSQL] B+Tree implementation does not attempt to reclaim space after underflow. A node is only deleted after it becomes empty. So it does not implement neither the typical borrow-first nor merge-first strategy outlined above.
 
 > We consider deleting an entire page from the btree only when it's become
 > completely empty of items. (Merging partly-full pages would allow better
@@ -135,9 +147,7 @@ When a node is deleted from the B+Tree, the free space is not immediately garbag
 > to detect and then recover from concurrent deletions (which are rather
 > like concurrent page splits to searchers).
 
-<!-- https://gemini.google.com/app/0d2f20e0194501ab?hl=en-IN -->
-
-[PostgreSQL]: https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README
+[Source]: https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README
 
 ## Key Takeaways
 
@@ -146,3 +156,4 @@ The B+Tree implementations in PostgreSQL or MySQL (InnoDB) employs sophisticated
 Though OLTP systems are the primary users of a B+Tree data structure for indexes they are not the only ones. They are widely used in embedded key-value stores, search indexes and as library code in custom data management tools. These systems are not burdened by the complexity of interleaving the B+Tree implementation which is both correct and performant with the transaction manager and the recovery algorithms. In these cases, the above simpler strategies can unlock higher performance with lower code complexity for most use cases.
 
 Finally, it depends on the workload and the specific access pattern. But knowing the tricks production-grade OLTP systems will come in handy in getting every ounce of performance out of the B+Tree data structures.
+ -->

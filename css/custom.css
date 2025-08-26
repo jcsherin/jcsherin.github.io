@@ -2,7 +2,7 @@ p code,
 figcaption code {
   background-color: lightyellow;
   color: dimgrey;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   font-style: italic;
 }
@@ -18,10 +18,9 @@ figcaption code {
 
 blockquote {
   border-left: 4px solid lightgrey;
-  padding-left: 1rem;
-  margin-left: 1rem;
-  margin-right: 1rem;
-  font-size: 1.1rem;
+  padding-left: 16px;
+  margin: 0;
+  font-size: 16px;
 }
 
 .toc ol {
