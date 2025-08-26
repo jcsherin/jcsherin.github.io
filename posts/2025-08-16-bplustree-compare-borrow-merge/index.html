@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756214080608">
+    <link rel="stylesheet" href="/css/custom.css?v=1756221997288">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,9 +49,9 @@
       </ul>
     </li>
     <li>
-      <a href="#real-world-implementations">Real-World Implementations</a>
+      <a href="#in-oltp-systems">In OLTP systems</a>
       <ul>
-        <li><a href="#background-merge-in-mysql-(innodb)">Background Merge In MySQL (InnoDB)</a></li>
+        <li><a href="#background-merge-in-mysql-innodb">Background Merge In MySQL InnoDB</a></li>
         <li><a href="#do-nothing-strategy-in-postgresql">Do Nothing Strategy In PostgreSQL</a></li>
       </ul>
     </li>
@@ -81,20 +81,26 @@
 <p>The merge-first approach compresses nodes and therefore more keys are stored within the minimum amount of nodes. This occupies less space on disk and therefore requires less read I/O to be performed. For range scans then a minimum number of nodes needs to be read from disk for a given key range. The higher node density also results in better cache locality and this further improves compute performance.</p>
 <h3 id="the-borrow-first-approach" tabindex="-1">The Borrow-First Approach <a class="direct-link" href="#the-borrow-first-approach" aria-hidden="true">#</a></h3>
 <p>For borrowing to work, removing the entries from the sibling node must not result in an underflow. Since there is no change in nodes the tree rebalancing is guaranteed not to cascade and therefore completes faster. If borrowing will cause a node underflow, we fallback to merging nodes.</p>
-<p>The concurrency aspects are similar to the merge-first approach. In comparison, it is reasonable to expect that the exclusive latches held on the nodes in the search path segment, will be for a relatively shorter duration.</p>
+<p>The concurrency aspects are similar to the merge-first approach. In comparison, it is reasonable to expect that the exclusive latches held on the nodes in the search path segment, will be for a relatively shorter duration. It is still orders of magnitude slower than the optimistic approach.</p>
 <p>This approach prioritizes faster writes and predictable latency by avoiding merging nodes unless strictly necessary. The downside is that node density is lower. The range scans now require more node I/O because the same key range is now spread over a wide span of leaf nodes.</p>
-<h2 id="real-world-implementations" tabindex="-1">Real-World Implementations <a class="direct-link" href="#real-world-implementations" aria-hidden="true">#</a></h2>
-<h3 id="background-merge-in-mysql-(innodb)" tabindex="-1">Background Merge In MySQL (InnoDB) <a class="direct-link" href="#background-merge-in-mysql-(innodb)" aria-hidden="true">#</a></h3>
-<p><a href="https://dev.mysql.com/doc/refman/8.4/en/index-page-merge-threshold.html">MySQL</a> provides a configurable knob and implements merging two pages if the amount of data in a page falls below the threshold when deleting a row. But the docs do no make any indication regarding what happens if a merge is not possible. So MySQL does not seem to implement a merge-then-borrow, but rather a merge-only strategy to deal with node underflow.</p>
+<h2 id="in-oltp-systems" tabindex="-1">In OLTP Systems <a class="direct-link" href="#in-oltp-systems" aria-hidden="true">#</a></h2>
+<p>The discussion so far is confined to a stand-alone thread-safe B+Tree implementation. We are looking at behavior and performance at the data structure level. In major OLTP database management systems, the B+Tree index is also tightly integrated with the transaction manager, write ahead log and recovery manager. So the scope of the design decisions are not limited to the data structure level, rather how it impacts the overall systems performance.</p>
+<h3 id="background-merge-in-mysql-innodb" tabindex="-1">Background Merge In MySQL InnoDB <a class="direct-link" href="#background-merge-in-mysql-innodb" aria-hidden="true">#</a></h3>
+<p>In MYSQL's InnoDB, tree balancing opts for a merge-first approach. Rather than performing an online tree balancing, it is offloaded as a separate asynchronous process in the background. The minimum occupancy of a node is configurable through the <a href="https://dev.mysql.com/doc/refman/8.4/en/index-page-merge-threshold.html">MERGE_THRESHOLD</a> parameter.</p>
 <blockquote>
 <p>If the “page-full” percentage for an index page falls below the MERGE_THRESHOLD value when a row is deleted or when a row is shortened by an UPDATE operation, InnoDB attempts to merge the index page with a neighboring index page. The default MERGE_THRESHOLD value is 50, which is the previously hard-coded value. The minimum MERGE_THRESHOLD value is 1 and the maximum value is 50.</p>
 </blockquote>
-<p>It will make a best to attempt to merge two nodes asynchronously in the background which may not always succeed. This is evident from the metrics exposed by InnoDB.</p>
+<p>You can monitor the background merge by querying the following InnoDB metrics:</p>
 <pre class="language-text"><code class="language-text">mysql> SELECT NAME, COMMENT FROM INFORMATION_SCHEMA.INNODB_METRICS<br>       WHERE NAME like '%index_page_merge%';<br>+-----------------------------+----------------------------------------+<br>| NAME                        | COMMENT                                |<br>+-----------------------------+----------------------------------------+<br>| index_page_merge_attempts   | Number of index page merge attempts    |<br>| index_page_merge_successful | Number of successful index page merges |<br>+-----------------------------+----------------------------------------+</code></pre>
-<p>The pathological case MYSQL tries to actively prevent is recurring merge-split behavior, a kind of trashing.</p>
+<p>Merging entries from a sibling reduces the unused space remaining within a node. If new insertions land on this node, it can immediately overflow. The overflow forces a node split which requires a new node allocation and redistribution of entries. Now both nodes are half-full, and a delete from either node can tip another underflow creating a cycle of merging and splitting. This thrashing merge-split behavior is terrible news for index performance.</p>
 <blockquote>
 <p>If both pages are close to 50% full, a page split can occur soon after the pages are merged. If this merge-split behavior occurs frequently, it can have an adverse affect on performance. To avoid frequent merge-splits, you can lower the MERGE_THRESHOLD value so that InnoDB attempts page merges at a lower “page-full” percentage. Merging pages at a lower page-full percentage leaves more room in index pages and helps reduce merge-split behavior.</p>
 </blockquote>
+<p>What happens if you over-tune the <code>MERGE_THRESHOLD</code> knob for your workload?</p>
+<blockquote>
+<p>A MERGE_THRESHOLD setting that is too small could result in large data files due to an excessive amount of empty page space.</p>
+</blockquote>
+<p>This results in index bloat, which directly harms read efficiency. The same key space instead of being densely packed, is now spread over a larger number of sparse nodes, requiring more I/O for range scans, and takes up more buffer pool capacity to keep the index in memory.</p>
 <h3 id="do-nothing-strategy-in-postgresql" tabindex="-1">Do Nothing Strategy In PostgreSQL <a class="direct-link" href="#do-nothing-strategy-in-postgresql" aria-hidden="true">#</a></h3>
 <p>The <a href="https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README">PostgreSQL</a> B+Tree implementation does not attempt to reclaim space after underflow. A node is only deleted after it becomes empty. So it does not implement neither the typical borrow-first nor merge-first strategy outlined above.</p>
 <blockquote>
