@@ -76,7 +76,7 @@ The discussion so far is confined to a stand-alone thread-safe B+Tree implementa
 
 ### Background Merge In MySQL InnoDB
 
-In MYSQL's InnoDB, tree balancing opts for a merge-first approach. Rather than performing an online tree balancing, it is offloaded as a separate asynchronous process in the background. The minimum occupancy of a node is configurable through the [MERGE_THRESHOLD] parameter.
+In MYSQL's InnoDB, node underflow is handling through merging. Rather than performing an online tree balancing, it is offloaded as a separate asynchronous process in the background. The minimum occupancy of a node is configurable through the [MERGE_THRESHOLD] parameter.
 
 > If the “page-full” percentage for an index page falls below the MERGE_THRESHOLD value when a row is deleted or when a row is shortened by an UPDATE operation, InnoDB attempts to merge the index page with a neighboring index page. The default MERGE_THRESHOLD value is 50, which is the previously hard-coded value. The minimum MERGE_THRESHOLD value is 1 and the maximum value is 50.
 
@@ -107,29 +107,17 @@ This results in index bloat, which directly harms read efficiency. The same key 
 
 ### Do Nothing Strategy In PostgreSQL
 
-In PostgreSQL deleting an index entry, marks a tombstone bit and completes instantly. This requires a light-weight shared lock. In a stark departure from other implementations, no attempt is made whatsoever to merge nodes, or borrow entries and redistribute them between nodes. Deletes in PostgreSQL do not result in tree rebalancing.
+In PostgreSQL deleting an index entry happens in two separate phases: a logical deletion followed by a physical deletion. The logical deletion creates a tombstone marker, and is lightweight. The physical deletion is more expensive, and happens in the background.
 
-The physical deletion of the entry is separated from the marking a tombstone. Physically deleting an entry requires an exclusive lock on the node, and is more expensive. This separation improves concurrency. It also benefits index scans which use the tombstone as a hint for excluding the deleted entry from the final result set.
-
-There are two ways in which physical deletion of an entry is performed. The most common method for reclaiming the space for reuse is when `VACUUM` runs in the background.
-
-The other way is when an insert lands on the node and there is no space for an entry, it can check for tombstone entries. Then it can acquire an exclusive lock, and physically delete the entries reclaiming enough space for inserting the new entry. This is an opportunistic delete optimization.
-
-[Source]\: `src/backend/access/nbtree/README`
-
-[Source]: https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README
-
-<!-- The [PostgreSQL] B+Tree implementation does not attempt to reclaim space after underflow. A node is only deleted after it becomes empty. So it does not implement neither the typical borrow-first nor merge-first strategy outlined above.
+When a node underflows, PostgreSQL does nothing to rectify the situation. The only time it attempts to reclaim space is when all the entries are removed from a leaf node and it becomes empty.
 
 > We consider deleting an entire page from the btree only when it's become
 > completely empty of items. (Merging partly-full pages would allow better
 > space reuse, but it seems impractical to move existing data items left or
 > right to make this happen --- a scan moving in the opposite direction
-> might miss the items if so.) Also, we _never_ delete the rightmost page
-> on a tree level (this restriction simplifies the traversal algorithms, as
-> explained below).
+> might miss the items if so.)
 
-But there is an exception. Removing an empty node which is the right-most child of a parent is explicitly prohibited. The reason for the prohibition is to prevent cascading updates which could potentially propagate up the tree because it involves a different parent node.
+There is an exception to this rule. PostgreSQL will never delete the right-most node of parent, even if it becomes empty. Removing the right-most node will have to be followed by transferring the key space used for navigation to the next or previous parent. Since we do not hold latches on those nodes yet, they will have to be freshly acquired. All of this is avoided by sticking to this rule, and it simplifies the implementation.
 
 > To preserve consistency on the parent level, we cannot merge the key space
 > of a page into its right sibling unless the right sibling is a child of
@@ -138,7 +126,7 @@ But there is an exception. Removing an empty node which is the right-most child 
 > perhaps all the way up the tree. Since we can't possibly do that
 > atomically, we forbid this case.
 
-When a node is deleted from the B+Tree, the free space is not immediately garbage collected. This is tightly coupled with the MVCC implementation. Until all transactions to which the node is visible are completed, it is not garbage collected and put back into circulation.
+The deletion of a node is also separated into logical and physical phases. A logical deletion happens first which marks a tombstone. A physical deletion, which reclaims the space for reuse is only performed when this node is not visible to any active transactions.
 
 > Recycling a page is decoupled from page deletion. A deleted page can only
 > be put in the FSM to be recycled once there is no possible scan or search
@@ -146,6 +134,8 @@ When a node is deleted from the B+Tree, the free space is not immediately garbag
 > sibling links undisturbed, as a tombstone that allows concurrent searches
 > to detect and then recover from concurrent deletions (which are rather
 > like concurrent page splits to searchers).
+
+[Source]\: `src/backend/access/nbtree/README`
 
 [Source]: https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README
 
@@ -156,4 +146,4 @@ The B+Tree implementations in PostgreSQL or MySQL (InnoDB) employs sophisticated
 Though OLTP systems are the primary users of a B+Tree data structure for indexes they are not the only ones. They are widely used in embedded key-value stores, search indexes and as library code in custom data management tools. These systems are not burdened by the complexity of interleaving the B+Tree implementation which is both correct and performant with the transaction manager and the recovery algorithms. In these cases, the above simpler strategies can unlock higher performance with lower code complexity for most use cases.
 
 Finally, it depends on the workload and the specific access pattern. But knowing the tricks production-grade OLTP systems will come in handy in getting every ounce of performance out of the B+Tree data structures.
- -->
+-->
