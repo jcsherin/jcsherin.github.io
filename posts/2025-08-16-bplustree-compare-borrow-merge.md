@@ -117,7 +117,7 @@ When a node underflows, PostgreSQL does nothing to rectify the situation. The on
 > right to make this happen --- a scan moving in the opposite direction
 > might miss the items if so.)
 
-There is an exception to this rule. PostgreSQL will never delete the right-most node of parent, even if it becomes empty. Removing the right-most node will have to be followed by transferring the key space used for navigation to the next or previous parent. Since we do not hold latches on those nodes yet, they will have to be freshly acquired. All of this is avoided by sticking to this rule, and it simplifies the implementation.
+There is an exception to this rule. PostgreSQL will never delete the right-most child of a parent on any given level, even if it becomes empty. Removing the right-most node will have to be followed by transferring the key space used for navigation to the next or previous parent. Since we do not hold latches on those nodes yet, they will have to be freshly acquired. All of this is avoided by sticking to this rule, and it simplifies the implementation.
 
 > To preserve consistency on the parent level, we cannot merge the key space
 > of a page into its right sibling unless the right sibling is a child of
@@ -141,9 +141,8 @@ The deletion of a node is also separated into logical and physical phases. A log
 
 ## Key Takeaways
 
-The B+Tree implementations in PostgreSQL or MySQL (InnoDB) employs sophisticated strategies for reclaiming free space after deletions. The end goal is better performance for a wide range of workloads and different access patterns. MySQL (InnoDB) moves merging to happen asynchronously in the background. PostgreSQL avoids tree rebalancing and delays reuse of a deleted node (page). The trade-off in both cases is accepting index bloat and moving the burden to operational side of database management. This is not necessarily a bad thing, as it puts the operator in control. The implementation is also more complex, requiring an in-depth understanding of the engine quirks and harder for developers to modify.
+Fixing a node underflow is presented as a binary choice between a merge-first or borrow-first approach for tree rebalancing at the data structure level. For a concurrent implementation, when a node underflow happens the pessimistic (slower) path is preferred for correctness and protecting the integrity of the B+Tree. For non-OLTP use cases, neither merge-first nor borrow-first is inherently better than the other.
 
-Though OLTP systems are the primary users of a B+Tree data structure for indexes they are not the only ones. They are widely used in embedded key-value stores, search indexes and as library code in custom data management tools. These systems are not burdened by the complexity of interleaving the B+Tree implementation which is both correct and performant with the transaction manager and the recovery algorithms. In these cases, the above simpler strategies can unlock higher performance with lower code complexity for most use cases.
+In MySQL the rebalancing is offline, and happens in the background. While in PostgreSQL, rebalancing is not undertaken for node underflows. The priority is higher concurrency by avoiding rebalancing. The trade-off in both systems is accumulating index bloat. The burden of managing index bloat now falls upon the operator.
 
-Finally, it depends on the workload and the specific access pattern. But knowing the tricks production-grade OLTP systems will come in handy in getting every ounce of performance out of the B+Tree data structures.
--->
+Two brilliant lessons we can learn from these OLTP systems to improve concurrency are: offline (asynchronous) rebalancing, and separating the deletion of entries, and nodes into logical and physical phases.
