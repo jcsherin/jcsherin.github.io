@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A Gap Between Theory &amp; Practice in B+Tree Concurrency</title>
+    <title>Practical Hurdles In Crab Latching Concurrency</title>
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756318412519">
+    <link rel="stylesheet" href="/css/custom.css?v=1756379651339">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,13 +46,19 @@
   </aside>
 
 
-<h1>A Gap Between Theory &amp; Practice in B+Tree Concurrency</h1>
+<h1>Practical Hurdles In Crab Latching Concurrency</h1>
 
 <time datetime="2025-08-21">21 Aug 2025</time>
 
-<!--   # The same goes for
-  # An optimistic concurrency control (OCC) implementation in a B+Tree index data structure avoids deadlocks from ever happening. During concurrent access, latches are only to be acquired going in one direction. This principle works well for insertions, deletions and tree rebalancing operations. Until you have to implement range scans over the index key range in both forward and backward directions. The academic papers are light on how to deal with this aspect, and therefore the techniques for dealing with dangerous race conditions introduced by iterators come primarily from real-world B+Tree implementations in major OLTP sytems.
- -->
+<p>Contrary to popular belief, the concurrency models described in B+Tree papers like Yao-Lehman(1981), Bayer-Schkolnick(1977) etc. cover only a limited set of operations. It seems like at the time these papers where written, at the time when these papers were written was to prove that concurrent operations were possible on a B+Tree index.</p>
+<blockquote>
+<p>Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
+and maximal performance and scalability. Latch acquisition and release may
+require tens of instructions only, usually with no additional cache faults since a latch can be embedded in the data structure it protects.</p>
+<p>Goetz Graefe, &quot;A Survey of B-Tree Locking Techniques&quot; (2010)</p>
+</blockquote>
+<p>The concurrency papers surveyed in <a href="https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf">Graefe (2010)</a> demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.</p>
+<hr>
 <p>A correct, thread-safe B+Tree implementation is based on deadlock prevention, which makes deadlocks impossible by design. This is achieved through careful ordering protocol of how latches are acquired, held and released on B+Tree nodes. This is distinct from deadlock detection, which is a runtime mechanism found within the transaction manager to resolve deadlocks between transactions. Simply put, prevention for low-level data structures and detection for high-level transactions.</p>
 <p>The strict ordering in an optimistic concurrency control (OCC), prevents deadlocks by design. In a B+Tree a new shared (read-only) or an exclusive (write) latch is acquired only ever going in one direction: from top to bottom. Since latches are never acquired from bottom to top direction, it is guaranteed that a deadlock can never happen during traversal.</p>
 <!-- A correct thread-safe B+Tree implementation is based on dead avoidance which is a compile-time guarantee of the implementation. This is distinct from deadlock detection, which is a found within the transaction manager. Deadlock avoidance for data structures, and deadlock detection for transactions. -->
