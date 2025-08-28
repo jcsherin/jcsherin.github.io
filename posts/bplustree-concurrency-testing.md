@@ -4,7 +4,7 @@ date: 2025-08-21
 summary: >
   Concurrency models (not limited to crab latching) prove that concurrent operations on a B+Tree index are possible with fine-grained latching. This contributes significantly to performance at the same time guaranteeing correctness and safety. However real-world implementations have to bridge a gap between the model and implementing useful features which directly conflicts with its safety properties. For instance, a naive bi-directional range scan implementation will introduce data races and create deadlocks.
 layout: layouts/post.njk
-draft: true
+draft: false
 ---
 
 An optimistic concurrency control (OCC) implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring in the first place. We do not try to detect a deadlock, and then resolve it which will make it a runtime mechanism and is not appropriate for a data structure.
@@ -27,7 +27,7 @@ If you are implementing a symmetrical delete algorithm which is allowed to merge
 
 Therefore, a practical implementation has to come up with practical methods for solving these challenges without reverting back to serial execution order. The obvious limitation is that safety, and correctness of the implementation is not proven formally via proof methods. Rather, testing strategies, code reviews, analyzers (e.g. ThreadSanitizer) help us improve our confidence in the implementation. While we cannot completely rule out the absence of data races, we can get to a place where the implementation is robust and reliable in practice.
 
----
+<!-- ---
 
 The concurrency papers surveyed in [Graefe (2010)] demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.
 
@@ -35,9 +35,9 @@ A correct, thread-safe B+Tree implementation is based on deadlock prevention, wh
 
 The strict ordering in an optimistic concurrency control (OCC), prevents deadlocks by design. In a B+Tree a new shared (read-only) or an exclusive (write) latch is acquired only ever going in one direction: from top to bottom. Since latches are never acquired from bottom to top direction, it is guaranteed that a deadlock can never happen during traversal.
 
-<!-- A correct thread-safe B+Tree implementation is based on dead avoidance which is a compile-time guarantee of the implementation. This is distinct from deadlock detection, which is a found within the transaction manager. Deadlock avoidance for data structures, and deadlock detection for transactions. -->
+A correct thread-safe B+Tree implementation is based on dead avoidance which is a compile-time guarantee of the implementation. This is distinct from deadlock detection, which is a found within the transaction manager. Deadlock avoidance for data structures, and deadlock detection for transactions.
 
-<!-- The optimistic crab latching (or locking) is a concurrency protocol for making a B+Tree index implementation thread-safe. At the data structure level,  -->
+The optimistic crab latching (or locking) is a concurrency protocol for making a B+Tree index implementation thread-safe. At the data structure level,
 
 The challenge of implementing a correct, concurrent B+Tree is that it becomes immediately apparent that the debugger will not help. If you try to step through the code, subtle timing issues can make the problem disappear and make it impossible to reproduce the concurrency bug. But the program will continue to crash, but not when you fire up the debugger.
 
@@ -160,3 +160,4 @@ The randomized tests when they fail, do not automatically shrink the failing tes
 The current test workloads operates on data which is sequential, or randomized order. But real-world workloads mostly follow a Zipfian distribution. This will improve the quality of the test suite and prove the robustness of the implementation if such data distributions could be generated and tested.
 
 Despite all this it is not possible to guarantee that all data races have been eliminated. But if we detect a new kind of failure mode in the future, the foundation is solid to add a regression test and prevent known modes of failure in the future.
+ -->
