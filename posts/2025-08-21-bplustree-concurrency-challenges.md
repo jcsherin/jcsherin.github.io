@@ -11,14 +11,6 @@ An implementation of the crab latching protocol enforces a strict top-down order
 
 Deadlock avoidance is guaranteed by design through careful programming of critical sections in the code. Any mistakes here will result in deadlocks. Even worse, a data race which silently corrupts the index.
 
-> Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
-> and maximal performance and scalability. Latch acquisition and release may
-> require tens of instructions only, usually with no additional cache faults since a latch can be embedded in the data structure it protects.
->
-> Goetz Graefe, "A Survey of B-Tree Locking Techniques" (2010)
-
-[Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
-
 The main strength of a B+Tree index (compared to a hash index) is its unique capability to perform range scans. This is possible because all the entries are stored in key lexicographic order in the leaf nodes, and the leaf nodes themselves are connected to each other like a doubly-linked list. So scanning is efficient once you locate the starting leaf node. Scanning in ascending or descending key order is as simple as following the left or right sibling pointers.
 
 This forwards or backwards movement during index scans violates the strict top-down ordering required for safety and correctness by the crab latching protocol.
@@ -27,18 +19,43 @@ A delete algorithm which implements a symmetrical tree rebalancing procedure req
 
 Therefore, an implementation has to come up with practical methods to avoid serial execution order and preserve concurrency. There is no formal verification of correctness via proof in these scenarios. We can improve our confidence in the implementation through engineering effort: code reviews, test suites, analyzers (ThreadSanitizer). Though the existence of data races cannot be ruled out, in practice this is sufficient for a robust and reliable implementation as evidenced by major OLTP systems.
 
-## Overview Of Crab Latching
+<nav class="toc" aria-labelledby="toc-heading">
+  <h2 id="toc-heading">Table of Contents</h2>
+  <ol>
+    <li>
+      <a href="#an-overview-of-crab-latching">An Overview Of Crab Latching</a>
+      <ul>
+        <li><a href="#how-do-deadlocks-happen">How Do Deadlocks Happen?</a></li>
+        <li><a href="#how-are-deadlocks-prevented">How Are Deadlocks Prevented?</a></li>
+        <li><a href="#efficient-fine-grained-crab-latching">Efficient Fine-Grained Crab Latching</a></li>
+      </ul>
+    </li>
+  </ol>
+</nav>
 
+## An Overview Of Crab Latching
+
+> Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
+> and maximal performance and scalability. Latch acquisition and release may
+> require tens of instructions only, usually with no additional cache faults since a latch can be embedded in the data structure it protects.
+>
+> Goetz Graefe, "A Survey of B-Tree Locking Techniques" (2010)
+
+[Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
+
+### How Do Deadlocks Happen?
 (`Thread 1`) Holds an exclusive (write) latch on `Node P`. It now wants to acquire an exclusive latch on it's child `Node C` for inserting an element.
 
 (`Thread 2`) Already holds an exclusive latch on `Node C`. It is waiting to acquire an exclusive latch on it's parent `Node P`, so that the pivot key can be updated.
 
 This creates a deadlock, where neither threads can make any progress. This could have been prevented if a strict ordering of the direction in which latches are acquired existed. A top-down ordering is better because all traversals begin at the root node to reach a leaf node. 
 
+### How Are Deadlocks Prevented?
 The ordering requirement implies that only a parent node can acquire an exclusive latch on a child node. The implementation of `Thread 2` becomes an invalid state and should not be possible. So instead the exclusive latch on `Node P` is never released when traversing down to the child `Node C`. Since only one writer can hold the exclusive (write) latch at a time, this will not create a deadlock with `Thread 1`. The first thread to acquire the exclusive latch on `Node P`, will block the second thread.
 
 Even though latches are light-weight and held only for a short duration of time, it is not a good idea to hold latches which are strictly not necessary. It will create contention in hot paths which is bad news for throughput. This is where the crab latching protocol shines with its efficiency.
 
+### Efficient Fine-Grained Crab Latching
 In crab latching, a child node is considered "unsafe" if the current operation will cause it to either split (overflow) or merge (underflow). An "unsafe" node may also end up modifying it's parent like `Thread 2`. So exclusive latches are held for the entire path segment, which contains "unsafe" nodes.
 
 But we know that a node split or merge is going to be rare. More often an insert or delete will be local to a leaf node and does not have cascading changes which recurse back to the root node. Such nodes are considered to be "safe"
