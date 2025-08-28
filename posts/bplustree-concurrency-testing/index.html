@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756395715697">
+    <link rel="stylesheet" href="/css/custom.css?v=1756395984904">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -56,7 +56,7 @@ require tens of instructions only, usually with no additional cache faults since
 <p>In crab latching, a child node is considered &quot;unsafe&quot; if the current operation will cause it to either split (overflow) or merge (underflow). An &quot;unsafe&quot; node may also end up modifying it's parent like <code>Thread 2</code>. So exclusive latches are held for the entire path segment, which contains &quot;unsafe&quot; nodes.</p>
 <p>But we know that a node split or merge is going to be rare. More often an insert or delete will be local to a leaf node and does not have cascading changes which recurse back to the root node. Such nodes are considered to be &quot;safe&quot;</p>
 <p>In the common scenario, when crab latching sees that a child node is &quot;safe&quot;, it first acquires a shared (read-only) latch on the child node and then release it's shared (read-only) latch on the parent. Hence the &quot;crab latching&quot; terminology. A shared latch does not block other threads. An exclusive latch is only acquired on the leaf node at the time of an insertion or deletion.</p>
-<p>This fine-grained latching is efficient and allows concurrent readers and writers, improving throughput.</p>
+<p>This fine-grained latching is efficient and allows other concurrent readers and only makes writers to wait, improving overall throughput. This is the optimistic approach which assumes will happen in the general case. We fallback to the pessimistic approach only if leaf node will underflow or overflow after an operation.</p>
 <!-- ---
 
 The concurrency papers surveyed in [Graefe (2010)] demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.
