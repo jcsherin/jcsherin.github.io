@@ -7,9 +7,9 @@ layout: layouts/post.njk
 draft: false
 ---
 
-An optimistic concurrency control (OCC) implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring in the first place. We do not try to detect a deadlock, and then resolve it which will make it a runtime mechanism and is not appropriate for a data structure.
+An implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring during concurrent operations. This is distinct from deadlock detection and resolution which is a runtime mechanism.
 
-Deadlock avoidance is guaranteed by design through careful programming in critical sections where the latches are acquired, held and released. A mistake here will create deadlocks, worse it may result in data race condition that results in silent index corruption.
+Deadlock avoidance is guaranteed by design through careful programming of critical sections in the code. Any mistakes here will result in deadlocks. Even worse, a data race which silently corrupts the index.
 
 > Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
 > and maximal performance and scalability. Latch acquisition and release may
@@ -19,13 +19,17 @@ Deadlock avoidance is guaranteed by design through careful programming in critic
 
 [Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
 
+The main strength of a B+Tree index (compared to a hash index) is its unique capability to perform range scans. This is possible because all the entries are stored in key lexicographic order in the leaf nodes, and the leaf nodes themselves are connected to each other like a doubly-linked list. So scanning is efficient once you locate the starting leaf node. Scanning in ascending or descending key order is as simple as following the left or right sibling pointers.
+
+This forwards or backwards movement during index scans violates the strict top-down ordering required for safety and correctness by the crab latching protocol.
+
+A delete algorithm which implements a symmetrical tree rebalancing procedure requires acquiring an exclusive latch on either a left or right sibling for merging nodes. There is an equal chance of nodes merging left-right and right-left. This too violates the strict ordering requirement.
+
+Therefore, an implementation has to come up with practical methods to avoid serial execution order and preserve concurrency. There is no formal verification of correctness via proof in these scenarios. We can improve our confidence in the implementation through engineering effort: code reviews, test suites, analyzers (ThreadSanitizer). Though the existence of data races cannot be ruled out, in practice this is sufficient for a robust and reliable implementation as evidenced by major OLTP systems.
+
+--
+
 Consider thread 1, `Node P` wants to acquire an exclusive latch on its child `Node C` for inserting an element. This is a top-bottom ordering from parent to child node. Now another thread 2, holds a latch on `Node C` and is waiting to acquire a latch on it's parent `Node P` to rewrite the pivot key. This is a reverse bottom-up ordering from child to parent. This creates a deadlock which prevents, and both threads from making progress. We can prevent this entirely by enforcing a strict direction for latching.
-
-A strong reason to prefer a B+Tree index is its ability to provide range scans in ascending and descending order. The data in a B+Tree index is always stored in its leaf nodes, represented as a doubly-linked list. This makes range scans efficient, because you only need to traverse from root to the a leaf node once. The siblings on either side can be reached by traversing the doubly linked list. This is a left-right and right-left movement, which directly conflicts with the above safety directive.
-
-If you are implementing a symmetrical delete algorithm which is allowed to merge an underflowing node with either its left or right sibling at any level for rebalancing the tree, the same directional issues pops back up.
-
-Therefore, a practical implementation has to come up with practical methods for solving these challenges without reverting back to serial execution order. The obvious limitation is that safety, and correctness of the implementation is not proven formally via proof methods. Rather, testing strategies, code reviews, analyzers (e.g. ThreadSanitizer) help us improve our confidence in the implementation. While we cannot completely rule out the absence of data races, we can get to a place where the implementation is robust and reliable in practice.
 
 <!-- ---
 
