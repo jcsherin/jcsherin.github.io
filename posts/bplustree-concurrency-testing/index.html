@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756393434216">
+    <link rel="stylesheet" href="/css/custom.css?v=1756395715697">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -47,8 +47,16 @@ require tens of instructions only, usually with no additional cache faults since
 <p>This forwards or backwards movement during index scans violates the strict top-down ordering required for safety and correctness by the crab latching protocol.</p>
 <p>A delete algorithm which implements a symmetrical tree rebalancing procedure requires acquiring an exclusive latch on either a left or right sibling for merging nodes. There is an equal chance of nodes merging left-right and right-left. This too violates the strict ordering requirement.</p>
 <p>Therefore, an implementation has to come up with practical methods to avoid serial execution order and preserve concurrency. There is no formal verification of correctness via proof in these scenarios. We can improve our confidence in the implementation through engineering effort: code reviews, test suites, analyzers (ThreadSanitizer). Though the existence of data races cannot be ruled out, in practice this is sufficient for a robust and reliable implementation as evidenced by major OLTP systems.</p>
-<p>--</p>
-<p>Consider thread 1, <code>Node P</code> wants to acquire an exclusive latch on its child <code>Node C</code> for inserting an element. This is a top-bottom ordering from parent to child node. Now another thread 2, holds a latch on <code>Node C</code> and is waiting to acquire a latch on it's parent <code>Node P</code> to rewrite the pivot key. This is a reverse bottom-up ordering from child to parent. This creates a deadlock which prevents, and both threads from making progress. We can prevent this entirely by enforcing a strict direction for latching.</p>
+<h2 id="overview-of-crab-latching" tabindex="-1">Overview Of Crab Latching <a class="direct-link" href="#overview-of-crab-latching" aria-hidden="true">#</a></h2>
+<p>(<code>Thread 1</code>) Holds an exclusive (write) latch on <code>Node P</code>. It now wants to acquire an exclusive latch on it's child <code>Node C</code> for inserting an element.</p>
+<p>(<code>Thread 2</code>) Already holds an exclusive latch on <code>Node C</code>. It is waiting to acquire an exclusive latch on it's parent <code>Node P</code>, so that the pivot key can be updated.</p>
+<p>This creates a deadlock, where neither threads can make any progress. This could have been prevented if a strict ordering of the direction in which latches are acquired existed. A top-down ordering is better because all traversals begin at the root node to reach a leaf node.</p>
+<p>The ordering requirement implies that only a parent node can acquire an exclusive latch on a child node. The implementation of <code>Thread 2</code> becomes an invalid state and should not be possible. So instead the exclusive latch on <code>Node P</code> is never released when traversing down to the child <code>Node C</code>. Since only one writer can hold the exclusive (write) latch at a time, this will not create a deadlock with <code>Thread 1</code>. The first thread to acquire the exclusive latch on <code>Node P</code>, will block the second thread.</p>
+<p>Even though latches are light-weight and held only for a short duration of time, it is not a good idea to hold latches which are strictly not necessary. It will create contention in hot paths which is bad news for throughput. This is where the crab latching protocol shines with its efficiency.</p>
+<p>In crab latching, a child node is considered &quot;unsafe&quot; if the current operation will cause it to either split (overflow) or merge (underflow). An &quot;unsafe&quot; node may also end up modifying it's parent like <code>Thread 2</code>. So exclusive latches are held for the entire path segment, which contains &quot;unsafe&quot; nodes.</p>
+<p>But we know that a node split or merge is going to be rare. More often an insert or delete will be local to a leaf node and does not have cascading changes which recurse back to the root node. Such nodes are considered to be &quot;safe&quot;</p>
+<p>In the common scenario, when crab latching sees that a child node is &quot;safe&quot;, it first acquires a shared (read-only) latch on the child node and then release it's shared (read-only) latch on the parent. Hence the &quot;crab latching&quot; terminology. A shared latch does not block other threads. An exclusive latch is only acquired on the leaf node at the time of an insertion or deletion.</p>
+<p>This fine-grained latching is efficient and allows concurrent readers and writers, improving throughput.</p>
 <!-- ---
 
 The concurrency papers surveyed in [Graefe (2010)] demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.
