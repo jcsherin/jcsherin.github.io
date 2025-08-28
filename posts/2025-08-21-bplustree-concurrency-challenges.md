@@ -44,18 +44,21 @@ Therefore, an implementation has to come up with practical methods to avoid seri
 [Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
 
 ### How Do Deadlocks Happen?
+
 (`Thread 1`) Holds an exclusive (write) latch on `Node P`. It now wants to acquire an exclusive latch on it's child `Node C` for inserting an element.
 
 (`Thread 2`) Already holds an exclusive latch on `Node C`. It is waiting to acquire an exclusive latch on it's parent `Node P`, so that the pivot key can be updated.
 
-This creates a deadlock, where neither threads can make any progress. This could have been prevented if a strict ordering of the direction in which latches are acquired existed. A top-down ordering is better because all traversals begin at the root node to reach a leaf node. 
+This creates a deadlock, where neither threads can make any progress. This could have been prevented if a strict ordering of the direction in which latches are acquired existed. A top-down ordering is better because all traversals begin at the root node to reach a leaf node.
 
 ### How Are Deadlocks Prevented?
+
 The ordering requirement implies that only a parent node can acquire an exclusive latch on a child node. The implementation of `Thread 2` becomes an invalid state and should not be possible. So instead the exclusive latch on `Node P` is never released when traversing down to the child `Node C`. Since only one writer can hold the exclusive (write) latch at a time, this will not create a deadlock with `Thread 1`. The first thread to acquire the exclusive latch on `Node P`, will block the second thread.
 
 Even though latches are light-weight and held only for a short duration of time, it is not a good idea to hold latches which are strictly not necessary. It will create contention in hot paths which is bad news for throughput. This is where the crab latching protocol shines with its efficiency.
 
 ### Efficient Fine-Grained Crab Latching
+
 In crab latching, a child node is considered "unsafe" if the current operation will cause it to either split (overflow) or merge (underflow). An "unsafe" node may also end up modifying it's parent like `Thread 2`. So exclusive latches are held for the entire path segment, which contains "unsafe" nodes.
 
 But we know that a node split or merge is going to be rare. More often an insert or delete will be local to a leaf node and does not have cascading changes which recurse back to the root node. Such nodes are considered to be "safe"
@@ -63,6 +66,81 @@ But we know that a node split or merge is going to be rare. More often an insert
 In the common scenario, when crab latching sees that a child node is "safe", it first acquires a shared (read-only) latch on the child node and then release it's shared (read-only) latch on the parent. Hence the "crab latching" terminology. A shared latch does not block other threads. An exclusive latch is only acquired on the leaf node at the time of an insertion or deletion.
 
 This fine-grained latching is efficient and allows other concurrent readers and only makes writers to wait, improving overall throughput. This is the optimistic approach which assumes will happen in the general case. We fallback to the pessimistic approach only if leaf node will underflow or overflow after an operation.
+
+## Concurrent Index Scans
+
+The fundamental problem is that the concurrency models do not take into consideration B+Tree iterators. At the leaf node, traversing to a sibling uses the bi-directional links between leaf nodes. An ascending scan moves from left-right, while a descending scan moves from right-left. This conflicts with the safety property for avoiding deadlocks that traversals have a strictly enforced direction. Following the protocol exactly means the implementation can provide only one type of scan, either forward (ascending) or reverse (descending), but never both together.
+
+```cpp
+// A forward index scan
+for (auto iter = index.Begin(); iter != index.End(); ++iter) {
+  int key = (*iter).first;
+  int value = (*iter).second;
+}
+
+// A reverse index scan
+for (auto iter = index.RBegin(); iter != index.REnd(); --iter) {
+  int key = (*iter).first;
+  int value = (*iter).second;
+}
+
+/**
+ * index.Begin()  : first element
+ * index.End()    : one-past-the-last element
+ * index.RBegin() : last element
+ * index.REnd()   : one-past-the-first element
+ */
+```
+
+### Extension For Concurrent Bi-directional Scans
+
+The crab latching protocol involves latches which are either shared (read-only) or exclusive (read-write) aka a read-write (RW) mutex. The deadlock happens when you go in opposite directions, because the mutex is blocking.
+
+The concurrent operations like insert, delete, and search are expected to always return a result which matches the output type. There is no failure mode.
+
+```cpp
+// Returns `std::nullopt` if the key is not found in the index
+std::optional<KeyType> MaybeGet(KeyType key);
+
+// Returns `false` if key is not inserted. This is useful for
+// implementations which want to prevent a duplicate key overwriting
+// an existing entry.
+bool Insert(const KeyValuePair element);
+
+// Returns `false` if the key does not exist.
+bool Delete(const KeyType keyToRemove);
+```
+
+We have to relax the following constraints: a blocking latch and always returning a result for bi-directional index scans. Instead of a blocking latch we will use a non-blocking latch which immediately returns instead of waiting. We also add a failure mode to the iterators which signals to the caller that the iterator could not make progress because the non-blocking shared latch acquisition failed, and therefore the iterator is now entered an invalid state.
+
+```cpp
+// Move forward one element at a time. If latch acquisition
+// failed, then set internal state to `RETRY`.
+void operator++() {
+  // ...
+
+  // The `TrySharedLock()` is a non-blocking read-only latch
+  // which returns `true` or `false` immediately.
+  if (!(current_node_->TrySharedLock())) {
+    previous_node->ReleaseNodeSharedLatch();
+
+    // Invalidates the iterator.
+    // Sets internal state to `RETRY`.
+    SetRetryIterator();
+    return;
+  }
+
+  // ...
+
+}
+```
+
+### Limitations, Safety & Correctness
+
+- Livelock
+- Exponential backoff, bounded retries
+- Problems with restarting iteration at the current node
+- Restarting from the root node is always going to be correct
 
 <!-- ---
 
