@@ -1,15 +1,25 @@
 ---
-title: 'A Gap Between Theory & Practice in B+Tree Concurrency'
+title: 'Practical Hurdles In Crab Latching Concurrency'
 date: 2025-08-21
 summary: >
-  Contrary to popular belief, the concurrency models described in B+Tree papers like Yao-Lehman(1981), Bayer-Schkolnick(1977) etc. cover only a limited set of operations. It seems like at the time these papers where written, at the time when these papers were written was to prove that concurrent operations were possible on a B+Tree index.
+  Concurrency models (not limited to crab latching) prove that concurrent operations on a B+Tree index are possible with fine-grained latching. This contributes significantly to performance at the same time guaranteeing correctness and safety. However real-world implementations have to bridge a gap between the model and implementing useful features which directly conflicts with its safety properties. For instance, a naive bi-directional range scan implementation will introduce data races and create deadlocks.
 layout: layouts/post.njk
 draft: true
 ---
 
-<!--   # The same goes for
-  # An optimistic concurrency control (OCC) implementation in a B+Tree index data structure avoids deadlocks from ever happening. During concurrent access, latches are only to be acquired going in one direction. This principle works well for insertions, deletions and tree rebalancing operations. Until you have to implement range scans over the index key range in both forward and backward directions. The academic papers are light on how to deal with this aspect, and therefore the techniques for dealing with dangerous race conditions introduced by iterators come primarily from real-world B+Tree implementations in major OLTP sytems.
- -->
+Contrary to popular belief, the concurrency models described in B+Tree papers like Yao-Lehman(1981), Bayer-Schkolnick(1977) etc. cover only a limited set of operations. It seems like at the time these papers where written, at the time when these papers were written was to prove that concurrent operations were possible on a B+Tree index.
+
+> Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
+> and maximal performance and scalability. Latch acquisition and release may
+> require tens of instructions only, usually with no additional cache faults since a latch can be embedded in the data structure it protects.
+>
+> Goetz Graefe, "A Survey of B-Tree Locking Techniques" (2010)
+
+The concurrency papers surveyed in [Graefe (2010)] demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.
+
+[Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
+
+---
 
 A correct, thread-safe B+Tree implementation is based on deadlock prevention, which makes deadlocks impossible by design. This is achieved through careful ordering protocol of how latches are acquired, held and released on B+Tree nodes. This is distinct from deadlock detection, which is a runtime mechanism found within the transaction manager to resolve deadlocks between transactions. Simply put, prevention for low-level data structures and detection for high-level transactions.
 
