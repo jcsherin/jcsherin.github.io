@@ -7,7 +7,9 @@ layout: layouts/post.njk
 draft: true
 ---
 
-Contrary to popular belief, the concurrency models described in B+Tree papers like Yao-Lehman(1981), Bayer-Schkolnick(1977) etc. cover only a limited set of operations. It seems like at the time these papers where written, at the time when these papers were written was to prove that concurrent operations were possible on a B+Tree index.
+An optimistic concurrency control (OCC) implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring in the first place. We do not try to detect a deadlock, and then resolve it which will make it a runtime mechanism and is not appropriate for a data structure.
+
+Deadlock avoidance is guaranteed by design through careful programming in critical sections where the latches are acquired, held and released. A mistake here will create deadlocks, worse it may result in data race condition that results in silent index corruption.
 
 > Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
 > and maximal performance and scalability. Latch acquisition and release may
@@ -15,11 +17,19 @@ Contrary to popular belief, the concurrency models described in B+Tree papers li
 >
 > Goetz Graefe, "A Survey of B-Tree Locking Techniques" (2010)
 
-The concurrency papers surveyed in [Graefe (2010)] demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.
-
 [Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
 
+Consider thread 1, `Node P` wants to acquire an exclusive latch on its child `Node C` for inserting an element. This is a top-bottom ordering from parent to child node. Now another thread 2, holds a latch on `Node C` and is waiting to acquire a latch on it's parent `Node P` to rewrite the pivot key. This is a reverse bottom-up ordering from child to parent. This creates a deadlock which prevents, and both threads from making progress. We can prevent this entirely by enforcing a strict direction for latching.
+
+A strong reason to prefer a B+Tree index is its ability to provide range scans in ascending and descending order. The data in a B+Tree index is always stored in its leaf nodes, represented as a doubly-linked list. This makes range scans efficient, because you only need to traverse from root to the a leaf node once. The siblings on either side can be reached by traversing the doubly linked list. This is a left-right and right-left movement, which directly conflicts with the above safety directive.
+
+If you are implementing a symmetrical delete algorithm which is allowed to merge an underflowing node with either its left or right sibling at any level for rebalancing the tree, the same directional issues pops back up.
+
+Therefore, a practical implementation has to come up with practical methods for solving these challenges without reverting back to serial execution order. The obvious limitation is that safety, and correctness of the implementation is not proven formally via proof methods. Rather, testing strategies, code reviews, analyzers (e.g. ThreadSanitizer) help us improve our confidence in the implementation. While we cannot completely rule out the absence of data races, we can get to a place where the implementation is robust and reliable in practice.
+
 ---
+
+The concurrency papers surveyed in [Graefe (2010)] demonstrated that concurrent operations on a B+Tree index are possible with fine-grained latching. Before that, the safest way to modify a B+Tree involved protecting the entire data structure with a single, exclusive latch of the root node which effectively forced concurrent operations into a serial execution order.
 
 A correct, thread-safe B+Tree implementation is based on deadlock prevention, which makes deadlocks impossible by design. This is achieved through careful ordering protocol of how latches are acquired, held and released on B+Tree nodes. This is distinct from deadlock detection, which is a runtime mechanism found within the transaction manager to resolve deadlocks between transactions. Simply put, prevention for low-level data structures and detection for high-level transactions.
 
