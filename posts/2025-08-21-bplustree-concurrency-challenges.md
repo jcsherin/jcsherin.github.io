@@ -37,6 +37,7 @@ Therefore, an implementation has to come up with practical methods to avoid seri
         <li><a href="#deadlock:-lock-order-inversion">Deadlock: Lock Order Inversion</a></li>
       </ul>
     </li>
+    <li><a href="#extension-for-symmetric-deletion">Extension For Symmetric Deletion</a></li>
   </ol>
 </nav>
 
@@ -219,6 +220,8 @@ The iterator here holds a shared (read-only) latch on the leaf it points to. If 
 
 This creates a deadlock, even though in implementation we enforced a strict ordering. We can ensure that this does not happen by ensuring that iterator lifetimes do not intersect each other, by introducing a local scope.
 
+Most importantly, the shared latch is released at the end of the scope and therefore it also enforces a global ordering for latch acquisition and will not result in a deadlock like described above.
+
 ```cpp
 {
   auto iter_forward = index.Begin();
@@ -236,3 +239,36 @@ This creates a deadlock, even though in implementation we enforced a strict orde
 To ensure safety, the latching protocol has to be enforced for concurrent operations within the same thread. Unfortunately, our non-blocking, retriable concurrent scan iterators has introduced an API which is easy for the user to incorrectly implement, and must come with warnings.
 
 The pattern of creating two iterators in the same scope creates a lock-order-inversion within a single thread. While this does not create a deadlock by itself, because of shared latches, it creates the precondition for a deadlock with any concurrent operation which falls down the pessimistic concurrency path.
+
+## Extension For Symmetric Deletion
+
+A symmetric delete algorithm will proceed with a tree rebalancing operation after an underflow by attempting to merge with either the left sibling, and if that doesn't work with the right sibling at any level in the B+Tree. This violates our strict ordering principle for acquiring latches, because a merge can proceed in either direction.
+
+(`Thread 1`): operating on Node B, needs to merge with its previous sibling, Node A. It holds an exclusive latch on B and tries to acquire an exclusive latch on A. (left to right)
+
+(`Thread 2`): operating on Node A, needs to merge with its next sibling, Node B. It holds an exclusive latch on A and tries to acquire an exclusive latch on B. (right to left)
+
+The creates a deadlock.
+
+The fix is to enforce a strict one-way (say left-to-right) latch acquisition order. This is a delicate operation. Before locking the previous sibling A, the exclusive lock on the current node is released. The locks are reacquired in the correct order. First on the previous sibling, then on the current node.
+
+```cpp
+
+  auto maybe_previous = static_cast<InnerNode *>(parent)->MaybePreviousWithSeparator(key_to_remove);
+
+  if (maybe_previous.has_value()) {
+
+    /* ... */
+
+    // Enforcing a strict left-to-right (one-way) ordering
+    right->ReleaseNodeExclusiveLatch();
+    left->GetNodeExclusiveLatch();
+    right->GetNodeExclusiveLatch();
+
+    /* ... */
+  }
+```
+
+## Concurrent Scans Can Miss Entries
+
+The scan proceeds in an interlocking manner with other concurrent operations in the B+Tree index avoiding deadlocks. The shared latch on the current leaf node is released before attempting to
