@@ -38,6 +38,7 @@ Therefore, an implementation has to come up with practical methods to avoid seri
       </ul>
     </li>
     <li><a href="#extension-for-symmetric-deletion">Extension For Symmetric Deletion</a></li>
+    <li><a href="#concurrent-scans-can-miss-entries">Concurrent Scans Can Miss Entries</a></li>
   </ol>
 </nav>
 
@@ -271,4 +272,26 @@ The fix is to enforce a strict one-way (say left-to-right) latch acquisition ord
 
 ## Concurrent Scans Can Miss Entries
 
-The scan proceeds in an interlocking manner with other concurrent operations in the B+Tree index avoiding deadlocks. The shared latch on the current leaf node is released before attempting to
+Earlier in the case of concurrent scans we saw how local reasoning of strict ordering is not sufficient, because of the extension. A global strict ordering has to be enforced to prevent unintended deadlocks from interaction of scans with other concurrent operations.
+
+Now let us look at a scenario where both the extensions can interact in a manner which violates strict ordering and introduces lock order inversion bugs in subtle ways.
+
+(`Thread 1`): A forward scan iterator has completed scanning entries in Node A, and is next going to process it's right sibling Node B.
+
+(`Thread 2`): A delete operation has taken the pessimistic path, because Node B is going to underflow after removing this entry. So it decides to merge with left sibling Node A. It already holds an exclusive latch on Node B and has to acquire an exclusive latch on Node B.
+
+If the forward scan operator releases its shared latch on Node A, before it acquires a shared latch on Node B, the following sequence of events can happen with the right timing of events.
+
+(`Thread 1`): Releases latch on Node A before acquiring a latch on Node B.
+
+(`Thread 2`): Release exclusive latch on Node B. Acquires exclusive latch on Node A. Acquires the exclusive latch back on Node B.
+
+(`Thread 1`): Is blocked by the exclusive latch held on Node B, by the delete operation in `Thread 2`.
+
+(`Thread 2`): Merges Node A and B together, and modifies the right sibling pointer to Node C.
+
+(`Thread 1`): Finally acquires a latch on Node C which is the new right sibling on Node A, not realizing it missed node B completely.
+
+If latches acquisition is not crafted carefully in the iterator code, the following situation creates a race condition which is very hard to even detect, or reproduce.
+
+The fix here is to correctly implement crab latching in the iterator code. A shared lock should not be released before `TrySharedLock()` is attempted on the sibling node. Doing so results in race conditions which are impossible to track down. This requires careful programming discipline.
