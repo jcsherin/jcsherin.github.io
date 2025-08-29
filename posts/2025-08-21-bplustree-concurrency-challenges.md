@@ -94,24 +94,65 @@ for (auto iter = index.RBegin(); iter != index.REnd(); --iter) {
 
 ### Extension For Concurrent Bi-directional Scans
 
-The crab latching protocol involves latches which are either shared (read-only) or exclusive (read-write) aka a read-write (RW) mutex. The deadlock happens when you go in opposite directions, because the mutex is blocking.
+A shared (read-only) or exclusive (write) latch blocks execution until the latch is acquired. For scans which are sideways traversals, we do not want to limit the traversal to any one direction. A blocking latch will create deadlocks if two concurrent scans proceed in opposite directions.
 
-The concurrent operations like insert, delete, and search are expected to always return a result which matches the output type. There is no failure mode.
+Therefore we need to use a non-blocking latch to prevent blocking and avoid deadlocks. A non-blocking latch will try to acquire a latch, and will return immediately.
+
+```cpp
+#include <shared_mutex>
+
+class SharedLatch {
+  // Blocking
+  //
+  // If another thread holds the latch, execution will block
+  // until the latch is acquired.
+  //
+  // Used in insert, delete & search index operations
+  void LockShared() {
+      latch_.lock_shared();
+  }
+
+  // Non-blocking
+  //
+  // Tries to acquire a latch. If successful returns `true`,
+  // otherwise returns `false`.
+  //
+  // Used in ascending & descending index scans
+  bool TryLockShared() {
+    return latch_.try_lock_shared();
+  }
+
+  private:
+    // A wrapper around std::shared_mutex
+    std::shared_mutex latch_;
+}
+```
+
+Using `TryLockShared()` forces us rethink how a scan implementation should work if latch acquisition fails. In contrast, the concurrent insert, delete and search implementations are always expected to return a result (positive matching its output type in the signature.
 
 ```cpp
 // Returns `std::nullopt` if the key is not found in the index
 std::optional<KeyType> MaybeGet(KeyType key);
 
-// Returns `false` if key is not inserted. This is useful for
-// implementations which want to prevent a duplicate key overwriting
-// an existing entry.
+// Returns `false` if key is a duplicate.
+//
+// Note: This prevents overwriting an existing key. The handling of
+// duplicate keys is an implementation specific detail.
 bool Insert(const KeyValuePair element);
 
 // Returns `false` if the key does not exist.
-bool Delete(const KeyType keyToRemove);
+bool Delete(const KeyType key_to_remove);
 ```
 
-We have to relax the following constraints: a blocking latch and always returning a result for bi-directional index scans. Instead of a blocking latch we will use a non-blocking latch which immediately returns instead of waiting. We also add a failure mode to the iterators which signals to the caller that the iterator could not make progress because the non-blocking shared latch acquisition failed, and therefore the iterator is now entered an invalid state.
+We can introduce a failure mode, where if latch acquisition fails during a scan we set its internal state to `RETRY`.
+
+```cpp
+enum IteratorState {
+    VALID, INVALID, END, REND, RETRY
+};
+```
+
+The implementation for forward scan which uses a non-blocking latch and retriable iterator looks like this:
 
 ```cpp
 // Move forward one element at a time. If latch acquisition
@@ -133,7 +174,18 @@ void operator++() {
   // ...
 
 }
+
+
+void SetRetryIterator() {
+  // Resets internal state
+  current_node_ = nullptr;
+  current_element_ = nullptr;
+
+  state_ = RETRY;
+}
 ```
+
+We have a working bi-directional iterator implementation which will avoid deadlocks, but it is not yet free from data races and introduces the risk of livelock.
 
 ### Limitations, Safety & Correctness
 
