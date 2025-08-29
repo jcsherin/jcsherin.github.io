@@ -30,6 +30,13 @@ Therefore, an implementation has to come up with practical methods to avoid seri
         <li><a href="#efficient-fine-grained-crab-latching">Efficient Fine-Grained Crab Latching</a></li>
       </ul>
     </li>
+    <li>
+      <a href="#concurrent-index-scans">Concurrent Index Scans</a>
+      <ul>
+        <li><a href="#extension-for-concurrent-bi-directional-scans">Extension For Concurrent Bi-directional Scans</a></li>
+        <li><a href="#deadlock:-lock-order-inversion">Deadlock: Lock Order Inversion</a></li>
+      </ul>
+    </li>
   </ol>
 </nav>
 
