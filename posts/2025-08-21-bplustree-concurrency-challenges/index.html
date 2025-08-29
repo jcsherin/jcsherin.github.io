@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756469104905">
+    <link rel="stylesheet" href="/css/custom.css?v=1756471926167">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -60,6 +60,7 @@
       </ul>
     </li>
     <li><a href="#extension-for-symmetric-deletion">Extension For Symmetric Deletion</a></li>
+    <li><a href="#concurrent-scans-can-miss-entries">Concurrent Scans Can Miss Entries</a></li>
   </ol>
 </nav>
 <h2 id="an-overview-of-crab-latching" tabindex="-1">An Overview Of Crab Latching <a class="direct-link" href="#an-overview-of-crab-latching" aria-hidden="true">#</a></h2>
@@ -117,7 +118,18 @@ require tens of instructions only, usually with no additional cache faults since
 <p>The fix is to enforce a strict one-way (say left-to-right) latch acquisition order. This is a delicate operation. Before locking the previous sibling A, the exclusive lock on the current node is released. The locks are reacquired in the correct order. First on the previous sibling, then on the current node.</p>
 <pre class="language-cpp"><code class="language-cpp"><br>  <span class="token keyword">auto</span> maybe_previous <span class="token operator">=</span> <span class="token generic-function"><span class="token function">static_cast</span><span class="token generic class-name"><span class="token operator">&lt;</span>InnerNode <span class="token operator">*</span><span class="token operator">></span></span></span><span class="token punctuation">(</span>parent<span class="token punctuation">)</span><span class="token operator">-></span><span class="token function">MaybePreviousWithSeparator</span><span class="token punctuation">(</span>key_to_remove<span class="token punctuation">)</span><span class="token punctuation">;</span><br><br>  <span class="token keyword">if</span> <span class="token punctuation">(</span>maybe_previous<span class="token punctuation">.</span><span class="token function">has_value</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span> <span class="token punctuation">{</span><br><br>    <span class="token comment">/* ... */</span><br><br>    <span class="token comment">// Enforcing a strict left-to-right (one-way) ordering</span><br>    right<span class="token operator">-></span><span class="token function">ReleaseNodeExclusiveLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>    left<span class="token operator">-></span><span class="token function">GetNodeExclusiveLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br>    right<span class="token operator">-></span><span class="token function">GetNodeExclusiveLatch</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span><br><br>    <span class="token comment">/* ... */</span><br>  <span class="token punctuation">}</span></code></pre>
 <h2 id="concurrent-scans-can-miss-entries" tabindex="-1">Concurrent Scans Can Miss Entries <a class="direct-link" href="#concurrent-scans-can-miss-entries" aria-hidden="true">#</a></h2>
-<p>The scan proceeds in an interlocking manner with other concurrent operations in the B+Tree index avoiding deadlocks. The shared latch on the current leaf node is released before attempting to</p>
+<p>Earlier in the case of concurrent scans we saw how local reasoning of strict ordering is not sufficient, because of the extension. A global strict ordering has to be enforced to prevent unintended deadlocks from interaction of scans with other concurrent operations.</p>
+<p>Now let us look at a scenario where both the extensions can interact in a manner which violates strict ordering and introduces lock order inversion bugs in subtle ways.</p>
+<p>(<code>Thread 1</code>): A forward scan iterator has completed scanning entries in Node A, and is next going to process it's right sibling Node B.</p>
+<p>(<code>Thread 2</code>): A delete operation has taken the pessimistic path, because Node B is going to underflow after removing this entry. So it decides to merge with left sibling Node A. It already holds an exclusive latch on Node B and has to acquire an exclusive latch on Node B.</p>
+<p>If the forward scan operator releases its shared latch on Node A, before it acquires a shared latch on Node B, the following sequence of events can happen with the right timing of events.</p>
+<p>(<code>Thread 1</code>): Releases latch on Node A before acquiring a latch on Node B.</p>
+<p>(<code>Thread 2</code>): Release exclusive latch on Node B. Acquires exclusive latch on Node A. Acquires the exclusive latch back on Node B.</p>
+<p>(<code>Thread 1</code>): Is blocked by the exclusive latch held on Node B, by the delete operation in <code>Thread 2</code>.</p>
+<p>(<code>Thread 2</code>): Merges Node A and B together, and modifies the right sibling pointer to Node C.</p>
+<p>(<code>Thread 1</code>): Finally acquires a latch on Node C which is the new right sibling on Node A, not realizing it missed node B completely.</p>
+<p>If latches acquisition is not crafted carefully in the iterator code, the following situation creates a race condition which is very hard to even detect, or reproduce.</p>
+<p>The fix here is to correctly implement crab latching in the iterator code. A shared lock should not be released before <code>TrySharedLock()</code> is attempted on the sibling node. Doing so results in race conditions which are impossible to track down. This requires careful programming discipline.</p>
 
 <hr>
 <ul><li>Previous: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li>
