@@ -128,7 +128,7 @@ class SharedLatch {
 }
 ```
 
-Using `TryLockShared()` forces us rethink how a scan implementation should work if latch acquisition fails. In contrast, the concurrent insert, delete and search implementations are always expected to return a result (positive matching its output type in the signature.
+Using `TryLockShared()` forces us rethink how a scan implementation should work if latch acquisition fails. In contrast, the concurrent insert, delete and search implementations are always expected to return a result matching its output type in the signature.
 
 ```cpp
 // Returns `std::nullopt` if the key is not found in the index
@@ -185,14 +185,57 @@ void SetRetryIterator() {
 }
 ```
 
-We have a working bi-directional iterator implementation which will avoid deadlocks, but it is not yet free from data races and introduces the risk of livelock.
+We have a working bi-directional iterator implementation which will avoid deadlocks, but it is not yet free from data races.
 
-### Limitations, Safety & Correctness
+### Deadlock: Lock Order Inversion
+
+The current API introduces a deadlock if the user initializes two iterators within the same scope, within the same thread.
+
+```cpp
+auto iter_forward = index.Begin();
+
+// The second iterator creates a lock order inversion.
+auto iter_reverse = index.RBegin();
+```
+
+A deadlock is prevented by enforcing a strict direction for latching. Any concurrent operation must therefore acquire a latch on an ancestor node before acquiring a latch on a descendant node (top-down traversal).
+
+The iterator here holds a shared (read-only) latch on the leaf it points to. If that iterator remains alive while another operation begins a new top-down traversal from the root, we can get a deadlock.
+
+(`Thread 1`): Creates a forward iterator, which holds a shared latch on a leaf node.
+
+(`Thread 2`): Begins an insert in the pessimistic path acquiring an exclusive latch beginning at the root node all the way down to the parent of the same leaf node.
+
+(`Thread 2`): Now attempts to acquire an exclusive latch on the leaf node but it blocks, waiting for the forward iterator to complete and release its shared latch on the leaf node.
+
+(`Thread 1`): Creates a second reverse iterator, which is now blocking to acquire a shared lock on the root. It is waiting for the insert operation to release the exclusive latch.
+
+This creates a deadlock, even though in implementation we enforced a strict ordering. We can ensure that this does not happen by ensuring that iterator lifetimes do not intersect each other, by introducing a local scope.
+
+```cpp
+{
+  auto iter_forward = index.Begin();
+}
+
+// The lifetime of the first iterator ends before this
+// scope starts. This guarantees that the shared latch
+// on the leaf node is released before we start traversal
+// from the root node.
+{
+  auto iter_reverse = index.RBegin();
+}
+```
+
+To ensure safety, the latching protocol has to be enforced for concurrent operations within the same thread. Unfortunately, our non-blocking, retriable concurrent scan iterators has introduced an API which is easy for the user to incorrectly implement, and must come with warnings.
+
+The pattern of creating two iterators in the same scope creates a lock-order-inversion within a single thread. While this does not create a deadlock by itself, because of shared latches, it creates the precondition for a deadlock with any concurrent operation which falls down the pessimistic concurrency path.
+
+<!-- ### Limitations, Safety & Correctness
 
 - Livelock
 - Exponential backoff, bounded retries
 - Problems with restarting iteration at the current node
-- Restarting from the root node is always going to be correct
+- Restarting from the root node is always going to be correct -->
 
 <!-- ---
 
