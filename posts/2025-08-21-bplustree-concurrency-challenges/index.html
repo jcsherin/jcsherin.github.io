@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756464334028">
+    <link rel="stylesheet" href="/css/custom.css?v=1756464508615">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -50,6 +50,13 @@
         <li><a href="#how-do-deadlocks-happen">How Do Deadlocks Happen?</a></li>
         <li><a href="#how-are-deadlocks-prevented">How Are Deadlocks Prevented?</a></li>
         <li><a href="#efficient-fine-grained-crab-latching">Efficient Fine-Grained Crab Latching</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#concurrent-index-scans">Concurrent Index Scans</a>
+      <ul>
+        <li><a href="#extension-for-concurrent-bi-directional-scans">Extension For Concurrent Bi-directional Scans</a></li>
+        <li><a href="#deadlock:-lock-order-inversion">Deadlock: Lock Order Inversion</a></li>
       </ul>
     </li>
   </ol>
