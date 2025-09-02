@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speeding Up a Parquet Shredding Pipeline by ~8x</title>
+    <meta name="description" content="On database building blocks.">
+    <meta name="generator" content="Eleventy v1.0.1">
+    <link rel="stylesheet" href="/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/css/custom.css?v=1756833675725">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inria+Serif:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.remove("no-js");</script>
+  </head>
+  <body>
+    <div class="page-wrapper">
+      <header>
+        <hgroup>
+        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p>On database building blocks.</p>
+      </hgroup>
+        <ul class="nav">
+          <li class="nav-item"><a href="/">posts</a></li>
+          <li class="nav-item"><a href="/about/">whoami</a></li>
+        </ul>
+      </header>
+
+      <main class="tmpl-post">
+        
+  <style>
+    .draft-notice {
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
+
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+
+
+<h1>Speeding Up a Parquet Shredding Pipeline by ~8x</h1>
+
+<time datetime="2025-09-02">02 Sep 2025</time>
+
+<p>Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution over shredded data. For this, I implemented a data generator which follows a <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipfian-like</a> distribution. The generated data is staged in-memory as <a href="https://arrow.apache.org/rust/parquet/arrow/index.html">Arrow RecordBatches</a>, and then written to disk as Parquet files.</p>
+<pre class="language-rust"><code class="language-rust">    <span class="token keyword">let</span> config <span class="token operator">=</span> <span class="token class-name">PipelineConfigBuilder</span><span class="token punctuation">::</span><span class="token function">new</span><span class="token punctuation">(</span><span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">with_target_records</span><span class="token punctuation">(</span>cli<span class="token punctuation">.</span>target_records<span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">with_num_writers</span><span class="token punctuation">(</span>cli<span class="token punctuation">.</span>num_writers<span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">with_record_batch_size</span><span class="token punctuation">(</span>cli<span class="token punctuation">.</span>record_batch_size<span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">with_output_dir</span><span class="token punctuation">(</span>output_dir<span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">with_output_filename</span><span class="token punctuation">(</span>cli<span class="token punctuation">.</span>output_filename<span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">with_arrow_schema</span><span class="token punctuation">(</span><span class="token function">get_contact_schema</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">)</span><br>        <span class="token punctuation">.</span><span class="token function">try_build</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token operator">?</span><span class="token punctuation">;</span><br><br>    <span class="token keyword">let</span> factory <span class="token operator">=</span> <span class="token class-name">ContactGeneratorFactory</span><span class="token punctuation">::</span><span class="token function">from_config</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>config<span class="token punctuation">)</span><span class="token punctuation">;</span><br>    <span class="token keyword">let</span> metrics <span class="token operator">=</span> <span class="token function">run_pipeline</span><span class="token punctuation">(</span><span class="token operator">&amp;</span>config<span class="token punctuation">,</span> <span class="token operator">&amp;</span>factory<span class="token punctuation">)</span><span class="token operator">?</span><span class="token punctuation">;</span></code></pre>
+<p>The first version was a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. It took around ~3.7s to generate a dataset containing 10 million rows. Then after applying a sequence of optimizations, the final runtime is ~440ms (8x speedup).</p>
+<p>You can see below the effect on runtime as each optimization is applied. The measurements were made using <a href="https://github.com/sharkdp/hyperfine">hyperfine</a>:</p>
+<pre class="language-text"><code class="language-text">$ ~/.cargo/bin/hyperfine --warmup 1 \<br>    --runs 10 \<br>    --prepare 'sync; echo 3 > /proc/sys/vm/drop_caches'</code></pre>
+<p><img src="img/hyperfine_trend_plot.png" alt="Performance Trend Across Runs"></p>
+<figcaption>Fig 1. Total runtime measured after each optimization step (lower is better). The x-axis represents the sequence of optimizations, where the zeroth runtime is the runtime of the baseline version of the program before any optimizations were applied. The y-axis represents the total runtime.</figcaption>
+<p>From the chart we can see that not all optimizations had an impact on runtime. Even so, as we will see later it contributed to improving the efficiency of the pipeline as observed through hardware performance counter measurements.</p>
+<p>No. <code>09</code> is a string interning optimization which seemed like an obvious win, but turned out to be bad for performance in practice. Later, in this post we will get into the details, and try to understand the reason for the performance regression. In no. <code>10</code>, the changes were reverted to get back to the previous baseline.</p>
+<p>All benchmarks were run on a Linux machine with the following configuration:</p>
+<ul>
+<li>Ubuntu 24.04.2 LTS (Kernel 6.8)</li>
+<li>AMD Ryzen 7 PRO 8700GE (8 Cores, 16 Threads)</li>
+<li>64 GB of DDR5-5600 ECC RAM</li>
+<li>512 GB NVMe SSDs.</li>
+</ul>
+
+
+      </main>
+
+      <footer></footer>
+
+      <!-- Current page: /posts/2025-09-01-arrow-shredding-pipeline-perf/ -->
+    </body>
+  </div>
+</html>
