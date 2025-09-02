@@ -17,6 +17,7 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPassthroughCopy('css');
 
   eleventyConfig.addPassthroughCopy('posts/2025-07-23-shredding-nested-data-in-parquet/img');
+  eleventyConfig.addPassthroughCopy('posts/2025-09-01-arrow-shredding-pipeline-perf/img');
 
   // Add plugins
   eleventyConfig.addPlugin(pluginRss);
