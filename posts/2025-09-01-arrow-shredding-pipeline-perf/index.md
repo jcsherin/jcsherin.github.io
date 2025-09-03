@@ -12,21 +12,7 @@ Lately, I've been poking around record shredding and needed a dataset of nested 
 [Zipfian-like]: https://en.wikipedia.org/wiki/Zipf%27s_law
 [Arrow RecordBatches]: https://arrow.apache.org/rust/parquet/arrow/index.html
 
-```rust
-let config = PipelineConfigBuilder::new()
-    .with_target_records(cli.target_records)
-    .with_num_writers(cli.num_writers)
-    .with_record_batch_size(cli.record_batch_size)
-    .with_output_dir(output_dir)
-    .with_output_filename(cli.output_filename)
-    .with_arrow_schema(get_contact_schema())
-    .try_build()?;
-
-let factory = ContactGeneratorFactory::from_config(&config);
-let metrics = run_pipeline(&config, &factory)?;
-```
-
-The first (baseline) version is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~440ms (8x speedup).
+The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~440ms (8x speedup).
 
 ![Performance Trend Across Runs](img/hyperfine_trend_plot.png)
 
@@ -37,8 +23,77 @@ This chart displays only improvements in total runtime, which does not tell the 
 A string interning optimization (no. 9) looked like a guaranteed win. It was introduced to eliminate a lot of small string allocations in the data generation (producer) threads. The performance got worse (more on this later in this post) and the change had to be reverted. This strongly reinforces, the importance of measurements and profiling data for knowing unambiguously if a code optimization made an improvement or did the opposite.
 
 All benchmarks were run on a Linux machine with the following configuration:
+
 - Ubuntu 24.04.2 LTS (Kernel 6.8)
 - AMD Ryzen 7 PRO 8700GE (8 Cores, 16 Threads)
 - 64 GB of DDR5-5600 ECC RAM
 - 512 GB NVMe SSDs.
 
+<nav class="toc" aria-labelledby="toc-heading">
+  <h2 id="toc-heading">Table of Contents</h2>
+  <ol>
+    <li><a href="#background">Background</a></li>
+<!--     <li>
+      <a href="#an-overview-of-crab-latching">An Overview Of Crab Latching</a>
+      <ul>
+        <li><a href="#how-do-deadlocks-happen">How Do Deadlocks Happen?</a></li>
+        <li><a href="#how-are-deadlocks-prevented">How Are Deadlocks Prevented?</a></li>
+        <li><a href="#efficient-fine-grained-crab-latching">Efficient Fine-Grained Crab Latching</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#concurrent-index-scans">Concurrent Index Scans</a>
+      <ul>
+        <li><a href="#extension-for-concurrent-bi-directional-scans">Extension For Concurrent Bi-directional Scans</a></li>
+        <li><a href="#deadlock:-lock-order-inversion">Deadlock: Lock Order Inversion</a></li>
+      </ul>
+    </li>
+    <li><a href="#extension-for-symmetric-deletion">Extension For Symmetric Deletion</a></li>
+    <li><a href="#concurrent-scans-can-miss-entries">Concurrent Scans Can Miss Entries</a></li>
+ -->  </ol>
+</nav>
+
+## Background
+
+The program is a CLI tool for generating a target number of rows of nested data structures and then written to disk in Parquet format.
+
+Nested data structures do not naturally fit into a flat columnar format. Record shredding is a process which converts the nested data into a flat, columnar format while preserving the original structural hierarchy of the raw data.
+
+The generated data follows a [Zipfian-like] distribution. It is staged in memory as [Arrow RecordBatches], before being written to disk as Parquet files.
+
+The data is generated in parallel using a [Rayon] thread pool. Then data generator threads (producers) sends the data to a Parquet writer thread (consumer). The number of writers are configurable from the CLI.
+
+[Rayon]: https://github.com/rayon-rs/rayon
+
+```rust
+fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+    // ...
+
+    // Directory for output Parquet files
+    let output_dir = PathBuf::from(cli.output_dir);
+    fs::create_dir_all(&output_dir)?;
+
+    // Pipeline Configuration
+    let config = PipelineConfigBuilder::new()
+        .with_target_records(cli.target_records)
+        .with_num_writers(cli.num_writers)
+        .with_record_batch_size(cli.record_batch_size)
+        .with_output_dir(output_dir)
+        .with_output_filename(cli.output_filename)
+        // Schema for a concrete nested data structure
+        .with_arrow_schema(get_contact_schema())
+        .try_build()?;
+
+    // A trait implementation for generating `Contact` nested
+    // data structure rows with a Zipfian-like distribution.
+    let factory = ContactGeneratorFactory::from_config(&config);
+
+    // Runs the pipeline and collects metrics like time elapsed, record
+    // throughput, Arrow memory overhead etc.
+    let metrics = run_pipeline(&config, &factory)?;
+
+    // ...
+
+    Ok(())
+}
+```
