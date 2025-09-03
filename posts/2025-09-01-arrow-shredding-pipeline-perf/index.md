@@ -18,6 +18,8 @@ The baseline version I wrote is a simple pipeline using Rust MPSC which connects
 
 <figcaption>Fig 1. The performance trend across a sequence of code optimizations, measured using <code>hyperfine</code>. The black line indicates the median runtime in seconds, while the shaded area indicates the range between min and max runtime.</figcaption>
 
+![IPC Trend Across Runs](img/ipc_trend_plot.png)
+
 This chart displays only improvements in total runtime, which does not tell the whole story. While some optimizations here show no difference in the total runtime, the improvements came from higher IPC (instructions per cycle), fewer cache misses and fewer branch mispredictions.
 
 A string interning optimization (no. 9) looked like a guaranteed win. It was introduced to eliminate a lot of small string allocations in the data generation (producer) threads. The performance got worse (more on this later in this post) and the change had to be reverted. This strongly reinforces, the importance of measurements and profiling data for knowing unambiguously if a code optimization made an improvement or did the opposite.
@@ -35,6 +37,9 @@ All benchmarks were run on a Linux machine with the following configuration:
     <li><a href="#background">Background</a></li>
     <li>
         <a href="#phase-1:-minor-improvements">Phase 1: Minor Improvements</a>
+        <ul>
+            <li><a href="#01:-use-a-dictionary-data-type">01: Use a Dictionary Data Type</a></li>
+        </ul>
     </li>
     <li>
         <a href="#phase-2:-architectural-changes">Phase 2: Architectural Changes</a>
@@ -60,42 +65,68 @@ The data is generated in parallel using a [Rayon] thread pool. Then data generat
 
 [Rayon]: https://github.com/rayon-rs/rayon
 
+## Phase 1: Minor Improvements
+
+### 01: Use a Dictionary Data Type
+
+In the baseline version, the `PhoneType` Rust enum is mapped to a string data type (`DataType::Utf8`) in the Arrow schema.
+
 ```rust
-fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    // ...
-
-    // Directory for output Parquet files
-    let output_dir = PathBuf::from(cli.output_dir);
-    fs::create_dir_all(&output_dir)?;
-
-    // Pipeline Configuration
-    let config = PipelineConfigBuilder::new()
-        .with_target_records(cli.target_records)
-        .with_num_writers(cli.num_writers)
-        .with_record_batch_size(cli.record_batch_size)
-        .with_output_dir(output_dir)
-        .with_output_filename(cli.output_filename)
-        // Schema for a concrete nested data structure
-        .with_arrow_schema(get_contact_schema())
-        .try_build()?;
-
-    // A trait implementation for generating `Contact` nested
-    // data structure rows with a Zipfian-like distribution.
-    let factory = ContactGeneratorFactory::from_config(&config);
-
-    // Runs the pipeline and collects metrics like time elapsed, record
-    // throughput, Arrow memory overhead etc.
-    let metrics = run_pipeline(&config, &factory)?;
-
-    // ...
-
-    Ok(())
+pub enum PhoneType {
+    Mobile,
+    Home,
+    Work,
 }
 ```
 
-The above code snippet shows how the pipeline is configured from input CLI parameters provided by the user, and is used to execute the pipeline.
+Instead, by changing the Arrow field data type to `DataType::Dictionary`, the expectation is that the total memory footprint of the program, and storage size of the Parquet file will improve.
 
-## Phase 1: Minor Improvements
+```diff
+ pub fn get_contact_phone_fields() -> Vec<Arc<Field>> {
+     vec![
+         Arc::from(Field::new("number", DataType::Utf8, true)),
+-        Arc::from(Field::new("phone_type", DataType::Utf8, true)),
++        Arc::from(Field::new(
++            "phone_type",
++            DataType::Dictionary(Box::new(DataType::UInt8), Box::new(DataType::Utf8)),
++            true,
++        )),
+     ]
+ }
+```
+
+After the change, the maximum RSS (resident set size) is reduced by ~1MB in a run for generating 10 million rows. The Parquet storage size improvement is negligible. There is a minor regression in runtime.
+
+Even though, there are no dramatic gains here like we expected, we will maintain this change because it removes the mismatch between the underlying Rust and Arrow data types. That is definitely a readability improvement.
+
+### 02: Eliminate Vec Allocation
+
+The generate data with a predefined data skew (Zipfian-like), a data template value is first generated. The holes in the templates are filled in to generate the final `Contact` struct value, which is then converted to an Arrow `RecordBatch`. The series of value transformations looks like this:
+
+`Vec<PartialContact>` → `Vec<Contact>` → `RecordBatch`.
+
+Instead of creating the intermediate `Vec<Contact>`, we can do a late materialization of the final `Contact` value when building a `RecordBatch` by directly passing it the instructions within `Vec<PartialContact>`. After eliminating the intermediate step, the value transformation will look like this:
+
+`Vec<PartialContact>` → `RecordBatch`.
+
+```diff
+-  // Assemble the Vec<Contact> for this small chunk
+-  let contacts_chunk: Vec<Contact> = partial_contacts
+-      .into_iter()
+-      .map(|partial_contact| { ... })
+-      .collect();
+-
+-  // Convert the chunk to a RecordBatch and send it to the writer
+-  let record_batch = create_record_batch(parquet_schema.clone(), &contacts_chunk)
+-      .expect("Failed to create RecordBatch");
++  let record_batch =
++      to_record_batch(
+            parquet_schema.clone(), &phone_id_counter, partial_contacts)
++       .expect("Failed to create RecordBatch");
++
+```
+
+After the change, there is no noticeable change in total runtime. On the other hand, there is a noticeable improvement across the board in CPU utilization metrics. Even though the pipeline did not execute any faster, it ran more efficiently.
 
 ![Flamegraph montage for baseline version up to run 04](img/flamegraph_montage_phase1.png)
 ![Hyperfine box plots for baseline version up to run 04](img/hyperfine_boxplot_grid_phase1.png)
@@ -108,7 +139,6 @@ The above code snippet shows how the pipeline is configured from input CLI param
 ![Hyperfine box plots from run 04 to run 08](img/hyperfine_boxplot_grid_phase2.png)
 ![Perf stats from run 04 to run 08](img/perf_stats_phase2.png)
 ![IPC trend from run 04 to run 08](img/ipc_trend_phase2.png)
-
 
 ## Phase 3: A Performance Regression
 
@@ -123,4 +153,3 @@ The above code snippet shows how the pipeline is configured from input CLI param
 ![Hyperfine box plots from run 10 to run 12](img/hyperfine_boxplot_grid_phase4.png)
 ![Perf stats from run 10 to run 12](img/perf_stats_phase4.png)
 ![IPC trend from run 10 to run 12](img/ipc_trend_phase4.png)
-
