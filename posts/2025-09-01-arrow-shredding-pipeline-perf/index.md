@@ -33,24 +33,19 @@ All benchmarks were run on a Linux machine with the following configuration:
   <h2 id="toc-heading">Table of Contents</h2>
   <ol>
     <li><a href="#background">Background</a></li>
-<!--     <li>
-      <a href="#an-overview-of-crab-latching">An Overview Of Crab Latching</a>
-      <ul>
-        <li><a href="#how-do-deadlocks-happen">How Do Deadlocks Happen?</a></li>
-        <li><a href="#how-are-deadlocks-prevented">How Are Deadlocks Prevented?</a></li>
-        <li><a href="#efficient-fine-grained-crab-latching">Efficient Fine-Grained Crab Latching</a></li>
-      </ul>
+    <li>
+        <a href="#phase-1:-minor-improvements">Phase 1: Minor Improvements</a>
     </li>
     <li>
-      <a href="#concurrent-index-scans">Concurrent Index Scans</a>
-      <ul>
-        <li><a href="#extension-for-concurrent-bi-directional-scans">Extension For Concurrent Bi-directional Scans</a></li>
-        <li><a href="#deadlock:-lock-order-inversion">Deadlock: Lock Order Inversion</a></li>
-      </ul>
+        <a href="#phase-2:-architectural-changes">Phase 2: Architectural Changes</a>
     </li>
-    <li><a href="#extension-for-symmetric-deletion">Extension For Symmetric Deletion</a></li>
-    <li><a href="#concurrent-scans-can-miss-entries">Concurrent Scans Can Miss Entries</a></li>
- -->  </ol>
+    <li>
+        <a href="#phase-3:-a-performance-regression">Phase 3: A Performance Regression</a>
+    </li>
+    <li>
+        <a href="#phase-4:-micro-optimizations">Phase 4: Micro-Optimizations</a>
+    </li>
+</ol>
 </nav>
 
 ## Background
@@ -97,3 +92,35 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 ```
+
+The above code snippet shows how the pipeline is configured from input CLI parameters provided by the user, and is used to execute the pipeline.
+
+## Phase 1: Minor Improvements
+
+![Flamegraph montage for baseline version up to run 04](img/flamegraph_montage_phase1.png)
+![Hyperfine box plots for baseline version up to run 04](img/hyperfine_boxplot_grid_phase1.png)
+![Perf stats for baseline version up to run 04 ](img/perf_stats_phase1.png)
+![IPC trend for baseline version up to run 04](img/ipc_trend_phase1.png)
+
+## Phase 2: Architectural Changes
+
+![Flamegraph montage from run 04 to run 08](img/flamegraph_montage_phase2.png)
+![Hyperfine box plots from run 04 to run 08](img/hyperfine_boxplot_grid_phase2.png)
+![Perf stats from run 04 to run 08](img/perf_stats_phase2.png)
+![IPC trend from run 04 to run 08](img/ipc_trend_phase2.png)
+
+
+## Phase 3: A Performance Regression
+
+![Flamegraph montage from run 08 to run 10](img/flamegraph_montage_phase3.png)
+![Hyperfine box plots from run 08 to run 10](img/hyperfine_boxplot_grid_phase3.png)
+![Perf stats from run 08 to run 10](img/perf_stats_phase3.png)
+![IPC trend from run 08 to run 10](img/ipc_trend_phase3.png)
+
+## Phase 4: Micro-optimizations
+
+![Flamegraph montage from run 10 to run 12](img/flamegraph_montage_phase4.png)
+![Hyperfine box plots from run 10 to run 12](img/hyperfine_boxplot_grid_phase4.png)
+![Perf stats from run 10 to run 12](img/perf_stats_phase4.png)
+![IPC trend from run 10 to run 12](img/ipc_trend_phase4.png)
+
