@@ -36,9 +36,13 @@ All benchmarks were run on a Linux machine with the following configuration:
   <ol>
     <li><a href="#background">Background</a></li>
     <li>
-        <a href="#phase-1:-minor-improvements">Phase 1: Minor Improvements</a>
+        <a href="#phase-1:-getting-started">Phase 1: Getting Started</a>
         <ul>
             <li><a href="#01:-use-a-dictionary-data-type">01: Use a Dictionary Data Type</a></li>
+            <li><a href="#02:-eliminate-intermediate-vector-allocation">02: Eliminate Intermediate Vector Allocation</a></li>
+            <li><a href="#03:-preallocate-a-string-buffer">03: Preallocate a String Buffer</a></li>
+            <li><a href="#04:-preallocate-a-string-buffer-2">04: Preallocate a String Buffer 2</a></li>
+            <li><a href="#why-is-the-runtime-unchanged">Why is the Runtime Unchanged?</a></li>
         </ul>
     </li>
     <li>
@@ -65,7 +69,28 @@ The data is generated in parallel using a [Rayon] thread pool. Then data generat
 
 [Rayon]: https://github.com/rayon-rs/rayon
 
-## Phase 1: Minor Improvements
+## Phase 1: Getting Started
+
+First, we build the CLI program in release mode and use that for end to end benchmarking using [hyperfine].
+
+In `Cargo.toml` the following section is added for release builds:
+
+```toml
+[profile.release]
+debug = "line-tables-only"
+strip = false
+```
+
+This will include just enough debug information in the release binary which will help us trace hotspots back to the exact line of code in Rust. This is necessary when recording the call-graphs of the program's execution using `perf`.
+
+When generating flamegraphs, we will use [rustfilt] to demangle the symbols for improved readability.
+
+We will also collect hardware performance counters like - cycles, instructions retired, cache references, cache misses, branch instructions and branch mispredictions.
+
+The following optimizations from 01 through 04, uses the flamegraph to identify hotspots indicated by tall towers and then attempt to squash it.
+
+[hyperfine]: https://github.com/sharkdp/hyperfine
+[rustfilt]: https://github.com/luser/rustfilt
 
 ### 01: Use a Dictionary Data Type
 
@@ -99,7 +124,7 @@ After the change, the maximum RSS (resident set size) is reduced by ~1MB in a ru
 
 Even though, there are no dramatic gains here like we expected, we will maintain this change because it removes the mismatch between the underlying Rust and Arrow data types. That is definitely a readability improvement.
 
-### 02: Eliminate Vec Allocation
+### 02: Eliminate Intermediate Vector Allocation
 
 The generate data with a predefined data skew (Zipfian-like), a data template value is first generated. The holes in the templates are filled in to generate the final `Contact` struct value, which is then converted to an Arrow `RecordBatch`. The series of value transformations looks like this:
 
@@ -128,10 +153,81 @@ Instead of creating the intermediate `Vec<Contact>`, we can do a late materializ
 
 After the change, there is no noticeable change in total runtime. On the other hand, there is a noticeable improvement across the board in CPU utilization metrics. Even though the pipeline did not execute any faster, it ran more efficiently.
 
-![Flamegraph montage for baseline version up to run 04](img/flamegraph_montage_phase1.png)
-![Hyperfine box plots for baseline version up to run 04](img/hyperfine_boxplot_grid_phase1.png)
+### 03: Preallocate a String Buffer
+
+In the hot loop, where a `RecordBatch` is being created, a string is allocated in the heap for each generated value. For a run of 10 million rows this is the equivalent of 10 million heap allocations.
+
+We can eliminate 99% of these allocations by reusing a mutable string buffer within the loop where `PartialContact` template values are being materialized and appended into the `RecordBatch`.
+
+Suppose a `RecordBatch` is created from a chunk of 1K row values, it now requires only 10K heap allocations.
+
+```diff
++    let mut phone_number_buf = String::with_capacity(16);
++
+     for PartialContact(name, phones) in chunk {
+         name_builder.append_option(name);
+
+@@ -155,11 +158,13 @@ fn to_record_batch(
+
+     if has_phone_number {
+        let id = phone_id_counter.fetch_add(1, Ordering::Relaxed);
+-       let phone_number = Some(format!("+91-99-{id:08}"));
++       write!(phone_number_buf, "+91-99-{id:08}")?;
+        struct_builder
+            .field_builder::<StringBuilder>(PHONE_NUMBER_FIELD_INDEX)
+            .unwrap()
+-           .append_option(phone_number);
++           .append_value(&phone_number_buf);
++
++       phone_number_buf.clear();
+```
+
+After this change, there is again no noticeable change in the total runtime. But similar to earlier change, all measures point to an overall improvement in the CPU efficiency of the program.
+
+### 04: Preallocate a String Buffer 2
+
+This is a follow up optimization from the previous one. The idea is the same, to eliminate 99% of heap allocations when generating data, by preallocating a mutable string buffer, and reusing it.
+
+```diff
+ fn name_strategy() -> BoxedStrategy<Option<String>> {
+     prop_oneof![
+-        80 => Just(()).prop_map(|_| Some(format!("{} {}", FirstName().fake::<String>(), LastName().fake::<String>()))),
++        80 => Just(()).prop_map(|_| {
++            let mut name_buf = String::with_capacity(32);
++            write!(&mut name_buf, "{} {}", FirstName().fake::<&str>(), LastName().fake::<&str>()).unwrap();
++            Some(name_buf)
++         }),
+         20 => Just(None)
+     ].boxed()
+ }
+
+```
+
+The results are identical to the previous optimization. No change in the total runtime. But there is considerable improvement in the CPU efficiency of the program.
+
+### Why is the Runtime Unchanged?
+
+The CPU efficiency has improved across most metrics from the baseline version.
+
+The same program now executes in less CPU cycles, requires less instructions. Reducing heap allocations is particularly noticeable as reduced cache-references, cache-misses, branch-instructions and branch-misses.
+
+Even though the runtime has not changed, the user time metric shows that we have shaved off ~2s (from 28s to under 26s) with these optimizations.
+
 ![Perf stats for baseline version up to run 04 ](img/perf_stats_phase1.png)
+
+Even though the individual performance counter metrics looks good above, the IPC (instructions per cycle) has gone down from 1.20 to 1.18.
+
+This has to be taken into consideration with the above metrics. We are now executing the same workload to produce the exact same result using less CPU instructions. That is definitely a micro-improvement.
+
 ![IPC trend for baseline version up to run 04](img/ipc_trend_phase1.png)
+
+The optimizations so far had little to no effect on the total runtime of the program.
+
+![Hyperfine box plots for baseline version up to run 04](img/hyperfine_boxplot_grid_phase1.png)
+
+The flamegraphs look eerily similar.
+
+![Flamegraph montage for baseline version up to run 04](img/flamegraph_montage_phase1.png)
 
 ## Phase 2: Architectural Changes
 
