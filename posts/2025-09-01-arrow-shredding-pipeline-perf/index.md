@@ -207,7 +207,19 @@ The results are identical to the previous optimization. No change in the total r
 
 ### Why is the Runtime Unchanged?
 
-The CPU efficiency has improved across most metrics from the baseline version.
+The optimizations so far had little to no effect on the total runtime of the program, which has remained stable.
+
+![Hyperfine box plots for baseline version up to run 04](img/hyperfine_boxplot_grid_phase1.png)
+
+The flamegraph profiles taken after each optimization also display a similar consistency.
+
+We have not seen a speedup in the underlying program despite the optimizations is related to [Amdhal's law]. The pipeline execution spent only a small fraction of its total execution time in the hot loops which were optimized. This is characterized by tall but narrow towers in the flamegraph profile. To achieve a runtime speedup, we have to focus on the widest towers, as they indicate where the most amount of time is spend.
+
+[Amdhal's law]: https://en.wikipedia.org/wiki/Amdahl%27s_law
+
+![Flamegraph montage for baseline version up to run 04](img/flamegraph_montage_phase1.png)
+
+The CPU efficiency has improved across most metrics from the baseline version because of eliminating allocations.
 
 The same program now executes in less CPU cycles, requires less instructions. Reducing heap allocations is particularly noticeable as reduced cache-references, cache-misses, branch-instructions and branch-misses.
 
@@ -215,19 +227,9 @@ Even though the runtime has not changed, the user time metric shows that we have
 
 ![Perf stats for baseline version up to run 04 ](img/perf_stats_phase1.png)
 
-Even though the individual performance counter metrics looks good above, the IPC (instructions per cycle) has gone down from 1.20 to 1.18.
-
-This has to be taken into consideration with the above metrics. We are now executing the same workload to produce the exact same result using less CPU instructions. That is definitely a micro-improvement.
+The individual performance counter metrics have improved, but the IPC (instructions per cycle) has gone down from 1.20 to 1.18. Even so, we are now executing the workload using less CPU instructions and cycles. That counts as an efficiency improvement.
 
 ![IPC trend for baseline version up to run 04](img/ipc_trend_phase1.png)
-
-The optimizations so far had little to no effect on the total runtime of the program.
-
-![Hyperfine box plots for baseline version up to run 04](img/hyperfine_boxplot_grid_phase1.png)
-
-The flamegraphs look eerily similar.
-
-![Flamegraph montage for baseline version up to run 04](img/flamegraph_montage_phase1.png)
 
 ## Phase 2: Architectural Changes
 
