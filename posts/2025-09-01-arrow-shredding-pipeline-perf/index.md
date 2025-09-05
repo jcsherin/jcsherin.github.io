@@ -57,11 +57,15 @@ All benchmarks were run on a Linux machine with the following configuration:
     </li>
     <li>
         <a href="#phase-3:-a-performance-regression">Phase 3: A Performance Regression</a>
+        <ul>
+            <li><a href="#09:-global-string-interning">09: Global String Interning</a></li>
+            <li><a href="#10:-revert">10: Revert</a></li>
+        </ul>
     </li>
     <li>
         <a href="#phase-4:-micro-optimizations">Phase 4: Micro-Optimizations</a>
     </li>
-</ol>
+  </ol>
 </nav>
 
 ## Background
@@ -459,6 +463,22 @@ Yet another significant improvement both in speedup and efficiency of the progra
 ![IPC trend from run 04 to run 08](img/ipc_trend_phase2.png)
 
 ## Phase 3: A Performance Regression
+
+### 09: Global String Interning
+
+```diff
+-  let name = Some(name_buf.clone());
++  let name = if let Some(interned) = interner.get(name_buf) {
++      interned.clone()
++  } else {
++      let new_arc = Arc::new(name_buf.clone());
++      interner.insert(name_buf.clone(), new_arc.clone());
++      new_arc
++  };
++
+```
+
+### 10: Revert
 
 ![Flamegraph montage from run 08 to run 10](img/flamegraph_montage_phase3.png)
 ![Hyperfine box plots from run 08 to run 10](img/hyperfine_boxplot_grid_phase3.png)
