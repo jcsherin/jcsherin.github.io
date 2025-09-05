@@ -407,11 +407,15 @@ ts)
 +    }
 ```
 
-The total runtime drops below a second, to 0.8s for the very first time. This was an easy win.
+Another ~1.5x speedup in runtime. The total runtime dropped below a second (800ms) for the first time. On the other hand, the IPC dropped to 1.76 from the previous high.
 
 ### 08: Introduce Thread-Local State
 
-The flamegraph profile now shows that around 20% of the time is spend in resizing vectors, and cloning strings. This is
+The flamegraph profile now shows that around 20% of the time is spend in resizing vectors, and cloning strings in data generation.
+
+The current data generation is stateless. As soon as a chunk of nested records are created, a `RecordBatch` is created. And this is immediately send to the writer thread. The chunk size setting is hard-coded as 256. It creates ~39K `RecordBatches` for 10 million records. We could increase chunk size, but a better thing to do here is decouple the chunk size from the row count at which we finalize a `RecordBatch`, so that they can be tuned separately.
+
+For example, if the chunk size is 256, we can configure a `RecordBatch` to be finalized when we have 5K nested records. Now only ~2K `RecordBatch`es are created for a run of 10 million records. For this we introduce `GeneratorState` struct which contains the `RecordBatch` fields to which we are appending the chunk values.
 
 ```diff
 +struct GeneratorState {
@@ -442,6 +446,10 @@ The flamegraph profile now shows that around 20% of the time is spend in resizin
 +            let mut generator_state =
 +                GeneratorState::new(parquet_schema.clone(), phone_id_counter.clone());
 ```
+
+This reduces the runtime by another 25% (~800ms to ~600ms). We have also regained IPC and it is at an all time high of 2.21. Every efficiency parameter has improved.
+
+Yet another significant improvement both in speedup and efficiency of the program's execution.
 
 ### Measuring Impact
 
