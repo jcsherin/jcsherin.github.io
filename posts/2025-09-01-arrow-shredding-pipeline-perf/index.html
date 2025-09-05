@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1756925038565">
+    <link rel="stylesheet" href="/css/custom.css?v=1757064515324">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -127,17 +127,17 @@
 <pre class="language-diff"><code class="language-diff"><span class="token unchanged"><span class="token prefix unchanged"> </span><span class="token line">fn name_strategy() -> BoxedStrategy&lt;Option&lt;String>> {<br></span><span class="token prefix unchanged"> </span><span class="token line">    prop_oneof![<br></span></span><span class="token deleted-sign deleted"><span class="token prefix deleted">-</span><span class="token line">        80 => Just(()).prop_map(|_| Some(format!("{} {}", FirstName().fake::&lt;String>(), LastName().fake::&lt;String>()))),<br></span></span><span class="token inserted-sign inserted"><span class="token prefix inserted">+</span><span class="token line">        80 => Just(()).prop_map(|_| {<br></span><span class="token prefix inserted">+</span><span class="token line">            let mut name_buf = String::with_capacity(32);<br></span><span class="token prefix inserted">+</span><span class="token line">            write!(&amp;mut name_buf, "{} {}", FirstName().fake::&lt;&amp;str>(), LastName().fake::&lt;&amp;str>()).unwrap();<br></span><span class="token prefix inserted">+</span><span class="token line">            Some(name_buf)<br></span><span class="token prefix inserted">+</span><span class="token line">         }),<br></span></span><span class="token unchanged"><span class="token prefix unchanged"> </span><span class="token line">        20 => Just(None)<br></span><span class="token prefix unchanged"> </span><span class="token line">    ].boxed()<br></span><span class="token prefix unchanged"> </span><span class="token line">}<br></span></span></code></pre>
 <p>The results are identical to the previous optimization. No change in the total runtime. But there is considerable improvement in the CPU efficiency of the program.</p>
 <h3 id="why-is-the-runtime-unchanged" tabindex="-1">Why is the Runtime Unchanged? <a class="direct-link" href="#why-is-the-runtime-unchanged" aria-hidden="true">#</a></h3>
-<p>The CPU efficiency has improved across most metrics from the baseline version.</p>
+<p>The optimizations so far had little to no effect on the total runtime of the program, which has remained stable.</p>
+<p><img src="img/hyperfine_boxplot_grid_phase1.png" alt="Hyperfine box plots for baseline version up to run 04"></p>
+<p>The flamegraph profiles taken after each optimization also display a similar consistency.</p>
+<p>We have not seen a speedup in the underlying program despite the optimizations is related to <a href="https://en.wikipedia.org/wiki/Amdahl%27s_law">Amdhal's law</a>. The pipeline execution spent only a small fraction of its total execution time in the hot loops which were optimized. This is characterized by tall but narrow towers in the flamegraph profile. To achieve a runtime speedup, we have to focus on the widest towers, as they indicate where the most amount of time is spend.</p>
+<p><img src="img/flamegraph_montage_phase1.png" alt="Flamegraph montage for baseline version up to run 04"></p>
+<p>The CPU efficiency has improved across most metrics from the baseline version because of eliminating allocations.</p>
 <p>The same program now executes in less CPU cycles, requires less instructions. Reducing heap allocations is particularly noticeable as reduced cache-references, cache-misses, branch-instructions and branch-misses.</p>
 <p>Even though the runtime has not changed, the user time metric shows that we have shaved off ~2s (from 28s to under 26s) with these optimizations.</p>
 <p><img src="img/perf_stats_phase1.png" alt="Perf stats for baseline version up to run 04 "></p>
-<p>Even though the individual performance counter metrics looks good above, the IPC (instructions per cycle) has gone down from 1.20 to 1.18.</p>
-<p>This has to be taken into consideration with the above metrics. We are now executing the same workload to produce the exact same result using less CPU instructions. That is definitely a micro-improvement.</p>
+<p>The individual performance counter metrics have improved, but the IPC (instructions per cycle) has gone down from 1.20 to 1.18. Even so, we are now executing the workload using less CPU instructions and cycles. That counts as an efficiency improvement.</p>
 <p><img src="img/ipc_trend_phase1.png" alt="IPC trend for baseline version up to run 04"></p>
-<p>The optimizations so far had little to no effect on the total runtime of the program.</p>
-<p><img src="img/hyperfine_boxplot_grid_phase1.png" alt="Hyperfine box plots for baseline version up to run 04"></p>
-<p>The flamegraphs look eerily similar.</p>
-<p><img src="img/flamegraph_montage_phase1.png" alt="Flamegraph montage for baseline version up to run 04"></p>
 <h2 id="phase-2:-architectural-changes" tabindex="-1">Phase 2: Architectural Changes <a class="direct-link" href="#phase-2:-architectural-changes" aria-hidden="true">#</a></h2>
 <p><img src="img/flamegraph_montage_phase2.png" alt="Flamegraph montage from run 04 to run 08">
 <img src="img/hyperfine_boxplot_grid_phase2.png" alt="Hyperfine box plots from run 04 to run 08">
