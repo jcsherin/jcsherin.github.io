@@ -46,7 +46,14 @@ All benchmarks were run on a Linux machine with the following configuration:
         </ul>
     </li>
     <li>
-        <a href="#phase-2:-architectural-changes">Phase 2: Architectural Changes</a>
+      <a href="#phase-2:-architectural-changes">Phase 2: Architectural Changes</a>
+      <ul>
+        <li><a href="#05:-increase-parquet-encoding-bandwidth">05: Increase Parquet Encoding Bandwidth</a></li>
+        <li><a href="#06:-make-data-generation-lightweight">06: Make Data Generation Lightweight</a></li>
+        <li><a href="#07:-increase-parquet-writer-threads">07: Increase Parquet Writer Threads</a></li>
+        <li><a href="#08:-introduce-thread-local-state">08: Introduce Thread-Local State</a></li>
+        <li><a href="#measuring-impact">Measuring Impact</a></li>
+      </ul>
     </li>
     <li>
         <a href="#phase-3:-a-performance-regression">Phase 3: A Performance Regression</a>
@@ -232,6 +239,211 @@ The individual performance counter metrics have improved, but the IPC (instructi
 ![IPC trend for baseline version up to run 04](img/ipc_trend_phase1.png)
 
 ## Phase 2: Architectural Changes
+
+The lesson learned from the previous optimizations, is that to speed up the pipeline we need to focus our efforts on the most time consuming parts of the execution. The most obvious optimization then, is to increase the write throughput, by adding more writers.
+
+We can do a lot better here to improve the speed of the pipeline, by exploiting data parallelism. The data generation is parallelized, but the data encoding to Parquet is not. It is great candidate for making parallel because it is also a compute-bound workload which is now single-threaded.
+
+The size of 10 million rows on disk in Parquet format is ~292MB, and the program takes ~4s to execute. So we know for certain that the writer thread is not I/O bound. We need to be writing an order of magnitude more bytes to disk to saturate the NVME I/O write speeds.
+
+We can also optimize the data generation to speed up the program. It currently depends on [proptest] (a property testing library). I reused it instead of rolling my own, because the [Strategy trait] provides a nice API for defining data skew for the fields of the nested data structure. From the flamegraph profile it is evident that it does a lot more work than which is strictly needed in our case.
+
+[proptest]: https://github.com/proptest-rs/proptest
+[Strategy trait]: https://docs.rs/proptest/latest/proptest/strategy/trait.Strategy.html
+
+### 05: Increase Parquet Encoding Bandwidth
+
+The simplest possible thing to do here is to increase the number of writers from one to two. For that we can partition the data generator threads into two retaining the MPSC pattern. Each partition is connected to a Parquet writer. This effectively doubles the encoding bandwidth, and it requires only a minimal lines of code to be changed.
+
+```diff
+-    let (tx, rx) = mpsc::sync_channel::<RecordBatch>(num_threads * 2);
++    let (tx1, rx1) = mpsc::sync_channel::<RecordBatch>(num_threads);
++    let (tx2, rx2) = mpsc::sync_channel::<RecordBatch>(num_threads);
+
++    let writer_handle_1 = create_writer_thread("contacts_1.parquet", rx1);
++    let writer_handle_2 = create_writer_thread("contacts_2.parquet", rx2);
+
+     let chunk_count = target_contacts.div_ceil(BASE_CHUNK_SIZE);
+     let parquet_schema = get_contact_schema();
+
+     (0..chunk_count)
+         .into_par_iter()
+-        .for_each_with(tx, |tx, chunk_index| {
++        .for_each_with((tx1, tx2), |(tx1, tx2), chunk_index| {
+             let start_index = chunk_index * BASE_CHUNK_SIZE;
+             let current_chunk_size = std::cmp::min(BASE_CHUNK_SIZE, target_contacts - start_index);
+
+@@ -263,11 +275,17 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+                 to_record_batch(parquet_schema.clone(), &phone_id_counter, partial_contacts)
+                     .expect("Failed to create RecordBatch");
+
+-            tx.send(record_batch).unwrap();
++            if chunk_index % 2 == 0 {
++                tx1.send(record_batch).unwrap();
++            } else {
++                tx2.send(record_batch).unwrap();
++            }
+         });
+
+     // Teardown
+-    writer_handle.join().unwrap()?;
++    writer_handle_1.join().unwrap()?;
++    writer_handle_2.join().unwrap()?;
++
+```
+
+This shaved off ~1s (3.6s to 2.7s) from execution time. This is significant, and I need to now find if adding more writers will further reduce the runtime. The major gains are not going to come from this it.
+
+### 06: Make Data Generation Lightweight
+
+The flamegraph profile shows that over 80% of the pipeline execution time is spend in the data generation methods. It is the most dominant factor we need to focus on. Around 20% of that time is spend in [Strategy::new_tree] alone, which is the entry point for data generation.
+
+There is a lot of performed here which does not contribute to data generation, but is necessary for a test runner. We can eliminate this extra work by implementing light-weight functions, but keeping the ergonomic API design.
+
+Maybe, I could have done better at the beginning by rolling my own implementation. But the goal at the beginning was to have a correct, simple working implementation. Performance is important, but it will have been pure guesswork if I had predicted that this will so dominant in the runtime. The other reason is I like the ergonomic API design, which I can copy in the light-weight implementation.
+
+The diff below shows the implementation for the `phone_type` field in the nested data structure. You can see the structural similarities between the old and new versions of the code.
+
+[Strategy::new_tree]: https://docs.rs/proptest/latest/proptest/strategy/trait.Strategy.html#tymethod.new_tree
+
+```diff
+-// A Zipfian-like categorical distribution for `phone_type`
+-//
+-// | Phone Type | Probability |
+-// |------------|-------------|
+-// | Mobile     | 0.55        |
+-// | Work       | 0.35        |
+-// | Home       | 0.10        |
+-//
+-fn phone_type_strategy() -> BoxedStrategy<PhoneType> {
+-    prop_oneof![
+-        55 => Just(PhoneType::Mobile),
+-        35 => Just(PhoneType::Work),
+-        10 => Just(PhoneType::Home),
+-    ]
+-    .boxed()
++fn generate_phone_type(rng: &mut impl Rng) -> PhoneType {
++    match rng.random_range(0..100) {
++        0..=54 => PhoneType::Mobile, // 0.55
++        55..=89 => PhoneType::Work,  // 0.35
++        _ => PhoneType::Home,        // 0.10
++    }
++}
++
+```
+
+This refactoring has to be applied uniformly for every field and methods which compose nested fields. The diff below shows how the property-testing runner is replaced with a simple for loop. In this refactoring we completely eliminate the `proptest` dependency.
+
+```diff
+diff --git a/Cargo.lock b/Cargo.lock
+index 626375c..a6b06a8 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2322,7 +2322,7 @@ dependencies = [
+  "log",
+  "parquet",
+  "parquet-common",
+- "proptest",
++ "rand 0.9.1",
+  "rayon",
+ ]
+
+diff --git a/crates/parquet-parallel-nested/src/main.rs b/crates/parquet-parallel-nested/src/main.rs
+index f6d8610..0fa2083 100644
+--- a/crates/parquet-parallel-nested/src/main.rs
++++ b/crates/parquet-parallel-nested/src/main.rs
++
++fn generate_contacts_chunk(size: usize, seed: u64) -> Vec<PartialContact> {
++    let mut rng = StdRng::seed_from_u64(seed);
++    let mut contacts = Vec::with_capacity(size);
++    let mut name_buf = String::with_capacity(32);
++
++    for _ in 0..size {
++        contacts.push(generate_partial_contact(&mut rng, &mut name_buf));
++    }
++
++    contacts
+ }
+-
+-fn generate_contacts_chunk(size: usize, seed: u64) -> Vec<PartialContact> {
+-    let mut runner = TestRunner::new(Config {
+-        rng_seed: RngSeed::Fixed(seed),
+-        ..Config::default()
+-    });
+-
+-    let strategy = proptest::collection::vec(contact_strategy(), size);
+-    strategy
+-        .new_tree(&mut runner)
+-        .expect("Failed to generate chunk of partial contacts")
+-        .current()
+-}
+```
+
+The pipeline is now 2.3x faster. The total runtime decreased from 2.70s to 1.18s (~1.5s). The IPC (instructions per cycle) nearly doubled, from 1.05 to 2.02. Every other stat shows similar improvements.
+
+This is a strong result. The program speed increased, and it is also now more efficient in core utilization.
+
+### 07: Increase Parquet Writer Threads
+
+The Parquet encoding step remains a bottleneck as the data generators outpace the two writer threads. A simple test is to see the effect of doubling the writers again.
+
+```diff
+-    if chunk_index % 2 == 0 {
+-            tx1.send(record_batch).unwrap();
+-        } else {
+-            tx2.send(record_batch).unwrap();
+-        }
+-    });
++    let record_batch =
+        to_record_batch(parquet_schema.clone(), &phone_id_counter, partial_contac
+ts)
++       .expect("Failed to create RecordBatch");
++
++    match chunk_index % 4 {
++        0 => s1.send(record_batch).expect("Failed to send to rx1"),
++        1 => s2.send(record_batch).expect("Failed to send to rx2"),
++        2 => s3.send(record_batch).expect("Failed to send to rx3"),
++        _ => s4.send(record_batch).expect("Failed to send to rx4"),
++    }
+```
+
+The total runtime drops below a second, to 0.8s for the very first time. This was an easy win.
+
+### 08: Introduce Thread-Local State
+
+The flamegraph profile now shows that around 20% of the time is spend in resizing vectors, and cloning strings. This is
+
+```diff
++struct GeneratorState {
++    schema: SchemaRef,
++    name: StringBuilder,
++    phone_number_buf: String,
++    counter: Arc<AtomicUsize>,
++    phones: ListBuilder<StructBuilder>,
++    current_chunks: usize,
++}
++
++enum GeneratorStateError {
++    NotEnoughChunks { current: usize, required: usize },
++    TryFlushZeroChunks,
++}
++
+@@ -411,38 +351,95 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
+         .num_threads(num_producers)
+         .build()
+         .unwrap();
+-
+     pool.install(|| {
+         let chunk_count = target_contacts.div_ceil(BASE_CHUNK_SIZE);
+         let parquet_schema = get_contact_schema();
+
++        (0..num_producers).into_par_iter().for_each(|producer_id| {
++            // Each thread gets its own state and a clone of the senders.
++            let mut generator_state =
++                GeneratorState::new(parquet_schema.clone(), phone_id_counter.clone());
+```
+
+### Measuring Impact
 
 ![Flamegraph montage from run 04 to run 08](img/flamegraph_montage_phase2.png)
 ![Hyperfine box plots from run 04 to run 08](img/hyperfine_boxplot_grid_phase2.png)
