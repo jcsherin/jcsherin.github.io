@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1757075311004">
+    <link rel="stylesheet" href="/css/custom.css?v=1757076169157">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -90,11 +90,15 @@
     </li>
     <li>
         <a href="#phase-3:-a-performance-regression">Phase 3: A Performance Regression</a>
+        <ul>
+            <li><a href="#09:-global-string-interning">09: Global String Interning</a></li>
+            <li><a href="#10:-revert">10: Revert</a></li>
+        </ul>
     </li>
     <li>
         <a href="#phase-4:-micro-optimizations">Phase 4: Micro-Optimizations</a>
     </li>
-</ol>
+  </ol>
 </nav>
 <h2 id="background" tabindex="-1">Background <a class="direct-link" href="#background" aria-hidden="true">#</a></h2>
 <p>The program is a CLI tool for generating a target number of rows of nested data structures and then written to disk in Parquet format.</p>
@@ -181,6 +185,9 @@
 <img src="img/perf_stats_phase2.png" alt="Perf stats from run 04 to run 08">
 <img src="img/ipc_trend_phase2.png" alt="IPC trend from run 04 to run 08"></p>
 <h2 id="phase-3:-a-performance-regression" tabindex="-1">Phase 3: A Performance Regression <a class="direct-link" href="#phase-3:-a-performance-regression" aria-hidden="true">#</a></h2>
+<h3 id="09:-global-string-interning" tabindex="-1">09: Global String Interning <a class="direct-link" href="#09:-global-string-interning" aria-hidden="true">#</a></h3>
+<pre class="language-diff"><code class="language-diff"><span class="token deleted-sign deleted"><span class="token prefix deleted">-</span><span class="token line">  let name = Some(name_buf.clone());<br></span></span><span class="token inserted-sign inserted"><span class="token prefix inserted">+</span><span class="token line">  let name = if let Some(interned) = interner.get(name_buf) {<br></span><span class="token prefix inserted">+</span><span class="token line">      interned.clone()<br></span><span class="token prefix inserted">+</span><span class="token line">  } else {<br></span><span class="token prefix inserted">+</span><span class="token line">      let new_arc = Arc::new(name_buf.clone());<br></span><span class="token prefix inserted">+</span><span class="token line">      interner.insert(name_buf.clone(), new_arc.clone());<br></span><span class="token prefix inserted">+</span><span class="token line">      new_arc<br></span><span class="token prefix inserted">+</span><span class="token line">  };<br></span><span class="token prefix inserted">+</span><span class="token line"></code></pre>
+<h3 id="10:-revert" tabindex="-1">10: Revert <a class="direct-link" href="#10:-revert" aria-hidden="true">#</a></h3>
 <p><img src="img/flamegraph_montage_phase3.png" alt="Flamegraph montage from run 08 to run 10">
 <img src="img/hyperfine_boxplot_grid_phase3.png" alt="Hyperfine box plots from run 08 to run 10">
 <img src="img/perf_stats_phase3.png" alt="Perf stats from run 08 to run 10">
