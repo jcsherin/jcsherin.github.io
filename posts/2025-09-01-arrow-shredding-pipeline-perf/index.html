@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1757076169157">
+    <link rel="stylesheet" href="/css/custom.css?v=1757254608357">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -180,23 +180,36 @@
 <p>This reduces the runtime by another 25% (~800ms to ~600ms). We have also regained IPC and it is at an all time high of 2.21. Every efficiency parameter has improved.</p>
 <p>Yet another significant improvement both in speedup and efficiency of the program's execution.</p>
 <h3 id="measuring-impact" tabindex="-1">Measuring Impact <a class="direct-link" href="#measuring-impact" aria-hidden="true">#</a></h3>
-<p><img src="img/flamegraph_montage_phase2.png" alt="Flamegraph montage from run 04 to run 08">
-<img src="img/hyperfine_boxplot_grid_phase2.png" alt="Hyperfine box plots from run 04 to run 08">
-<img src="img/perf_stats_phase2.png" alt="Perf stats from run 04 to run 08">
-<img src="img/ipc_trend_phase2.png" alt="IPC trend from run 04 to run 08"></p>
+<p>We improved the total pipeline throughput by increasing the writers. The data generator got lighter, and faster. Finally, we increased the <code>RecordBatch</code> size.</p>
+<p>All of the above optimizations to the pipeline has resulted in a 6X speedup, with the runtime dropping from 3.61s to 0.58s.</p>
+<p><img src="img/hyperfine_boxplot_grid_phase2.png" alt="Hyperfine box plots from run 04 to run 08"></p>
+<p>The cores are now being utilized more efficiently, with every stats we tracked improving significantly.</p>
+<p><img src="img/perf_stats_phase2.png" alt="Perf stats from run 04 to run 08"></p>
+<p>The IPC improved from 1.18 to 2.21 (an 87% increase).</p>
+<p><img src="img/ipc_trend_phase2.png" alt="IPC trend from run 04 to run 08"></p>
+<p>The final flamegraph shows a concentrated workload which is evenly divided. The data generator (producer) threads profile occupies the left side, while the parquet writer (consumer) threads profile occupies to the right side. The transition to the final flamegraph, shows a clear improvement from a fragmented hotspots to more efficient pipeline execution.</p>
+<p><img src="img/flamegraph_montage_phase2.png" alt="Flamegraph montage from run 04 to run 08"></p>
 <h2 id="phase-3:-a-performance-regression" tabindex="-1">Phase 3: A Performance Regression <a class="direct-link" href="#phase-3:-a-performance-regression" aria-hidden="true">#</a></h2>
+<p>The generated <code>name</code> field is <code>NULL</code> 20% of the time. When generating 10 million rows, we therefore expect the <code>name</code> column to contain roughly 8 million name strings. To my surprise, the total no. of unique names were only ~1.4 million.</p>
+<p>When generating millions of <code>fake</code> names, the chance of a collision becomes very high. The <code>fake</code> implementation is most likely sampling first name, last name pairing with replacement. Since we are generating a large number of names, the collisions become more frequent. This is also known as the <a href="https://en.wikipedia.org/wiki/Birthday_problem">Birthday problem</a>.</p>
+<p>It looks like we can minimize string allocations by 82.5% because only ~1.4 million unique names are generated for a run of total size 10 million.</p>
 <h3 id="09:-global-string-interning" tabindex="-1">09: Global String Interning <a class="direct-link" href="#09:-global-string-interning" aria-hidden="true">#</a></h3>
-<pre class="language-diff"><code class="language-diff"><span class="token deleted-sign deleted"><span class="token prefix deleted">-</span><span class="token line">  let name = Some(name_buf.clone());<br></span></span><span class="token inserted-sign inserted"><span class="token prefix inserted">+</span><span class="token line">  let name = if let Some(interned) = interner.get(name_buf) {<br></span><span class="token prefix inserted">+</span><span class="token line">      interned.clone()<br></span><span class="token prefix inserted">+</span><span class="token line">  } else {<br></span><span class="token prefix inserted">+</span><span class="token line">      let new_arc = Arc::new(name_buf.clone());<br></span><span class="token prefix inserted">+</span><span class="token line">      interner.insert(name_buf.clone(), new_arc.clone());<br></span><span class="token prefix inserted">+</span><span class="token line">      new_arc<br></span><span class="token prefix inserted">+</span><span class="token line">  };<br></span><span class="token prefix inserted">+</span><span class="token line"></code></pre>
+<p>When a new name is generated, we check to see if it is unique in a global hashmap. If it is new and unique it is added to the hashmap. If it already exists in the hashmap, we reuse the allocated string stored within the hashmap.</p>
+<pre class="language-diff"><code class="language-diff"><span class="token deleted-sign deleted"><span class="token prefix deleted">-</span><span class="token line">  let name = Some(name_buf.clone());<br></span></span><span class="token inserted-sign inserted"><span class="token prefix inserted">+</span><span class="token line">  let name = if let Some(interned) = interner.get(name_buf) {<br></span><span class="token prefix inserted">+</span><span class="token line">      interned.clone()<br></span><span class="token prefix inserted">+</span><span class="token line">  } else {<br></span><span class="token prefix inserted">+</span><span class="token line">      let new_arc = Arc::new(name_buf.clone());<br></span><span class="token prefix inserted">+</span><span class="token line">      interner.insert(name_buf.clone(), new_arc.clone());<br></span><span class="token prefix inserted">+</span><span class="token line">      new_arc<br></span><span class="token prefix inserted">+</span><span class="token line">  };<br></span><span class="token prefix inserted">+</span><span class="token line"><br></span><span class="token prefix inserted">+</span><span class="token line">  // clear the name buffer for next use<br></span></span><span class="token unchanged"><span class="token prefix unchanged"> </span><span class="token line">  name_buf.clear();<br></span></span><br><span class="token deleted-sign deleted"><span class="token prefix deleted">-</span><span class="token line">  name<br></span></span><span class="token inserted-sign inserted"><span class="token prefix inserted">+</span><span class="token line">  Some(name)</code></pre>
+<p>The savings are realized when we finally add the generated name when constructing the <code>RecordBatch</code>.</p>
+<pre class="language-diff"><code class="language-diff"><span class="token deleted-sign deleted"><span class="token prefix deleted">-</span><span class="token line">            name.append_option(generate_name(rng, &amp;mut name_buf));<br></span></span><span class="token inserted-sign inserted"><span class="token prefix inserted">+</span><span class="token line">            name.append_option(generate_name(rng, &amp;mut name_buf, &amp;self.interner).as_deref());</code></pre>
+<p>An extra allocation is avoided by directly passing a reference to the interned string.</p>
 <h3 id="10:-revert" tabindex="-1">10: Revert <a class="direct-link" href="#10:-revert" aria-hidden="true">#</a></h3>
-<p><img src="img/flamegraph_montage_phase3.png" alt="Flamegraph montage from run 08 to run 10">
-<img src="img/hyperfine_boxplot_grid_phase3.png" alt="Hyperfine box plots from run 08 to run 10">
-<img src="img/perf_stats_phase3.png" alt="Perf stats from run 08 to run 10">
-<img src="img/ipc_trend_phase3.png" alt="IPC trend from run 08 to run 10"></p>
-<h2 id="phase-4:-micro-optimizations" tabindex="-1">Phase 4: Micro-optimizations <a class="direct-link" href="#phase-4:-micro-optimizations" aria-hidden="true">#</a></h2>
-<p><img src="img/flamegraph_montage_phase4.png" alt="Flamegraph montage from run 10 to run 12">
-<img src="img/hyperfine_boxplot_grid_phase4.png" alt="Hyperfine box plots from run 10 to run 12">
-<img src="img/perf_stats_phase4.png" alt="Perf stats from run 10 to run 12">
-<img src="img/ipc_trend_phase4.png" alt="IPC trend from run 10 to run 12"></p>
+<p>The benchmarks shows a runtime regression of 65%, from 583ms to 965ms. The IPC halved from 2.21 to 1.10. The cache misses increased to 22% from 10%. The measurements leaves no doubt, this is a clear performance regression.</p>
+<p>But why did string interning not work?</p>
+<p>The data generator threads are generating at a rapid pace, and the names are being inserted into the same internal buckets. These may fit into a cache line, and shared across cores. But the high volume writes are constantly invalidating the cache lines, and this points to a cache coherency issue. A data generator thread can invalidate the cache line when another data generator thread is attempting to access the same cache line to get a reference to the interned string. This causes the CPU to stall, and wait for the new cache line to be fetched. Both problems are visible in the lower IPC and higher cache miss rate.</p>
+<p>While reverting the code I noticed that the earlier version, was cloning the name string buffer before passing it the <code>name</code> field builder. This is not necessary, as we can pass the reference directly without cloning, as Arrow will make a copy internally. So an extra clone was removed in the end.</p>
+<p>The median runtime is now 533ms from 584ms, shaving off another 51ms from the final runtime.</p>
+<p><img src="img/hyperfine_boxplot_grid_phase3.png" alt="Hyperfine box plots from run 08 to run 10"></p>
+<p>The changes in hardware performance counters are negligible in most cases, but the total instructions, and branch instructions have reduced significantly. This could be attributed to removing the unnecessary cloning of the mutable buffer.</p>
+<p><img src="img/perf_stats_phase3.png" alt="Perf stats from run 08 to run 10"></p>
+<h2 id="theoretical-limit:-a-bote-estimation" tabindex="-1">Theoretical Limit: A BotE estimation <a class="direct-link" href="#theoretical-limit:-a-bote-estimation" aria-hidden="true">#</a></h2>
+<h2 id="configuration-for-best-performance" tabindex="-1">Configuration for Best Performance <a class="direct-link" href="#configuration-for-best-performance" aria-hidden="true">#</a></h2>
 
 
       </main>
