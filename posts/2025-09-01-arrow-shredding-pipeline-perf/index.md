@@ -477,7 +477,17 @@ The final flamegraph shows a concentrated workload which is evenly divided. The 
 
 ## Phase 3: A Performance Regression
 
+The generated `name` field is `NULL` 20% of the time. When generating 10 million rows, we therefore expect the `name` column to contain roughly 8 million name strings. To my surprise, the total no. of unique names were only ~1.4 million.
+
+When generating millions of `fake` names, the chance of a collision becomes very high. The `fake` implementation is most likely sampling first name, last name pairing with replacement. Since we are generating a large number of names, the collisions become more frequent. This is also known as the [Birthday problem].
+
+[Birthday problem]: https://en.wikipedia.org/wiki/Birthday_problem
+
+It looks like we can minimize string allocations by 82.5% because only ~1.4 million unique names are generated for a run of total size 10 million.
+
 ### 09: Global String Interning
+
+When a new name is generated, we check to see if it is unique in a global hashmap. If it is new and unique it is added to the hashmap. If it already exists in the hashmap, we reuse the allocated string stored within the hashmap.
 
 ```diff
 -  let name = Some(name_buf.clone());
@@ -489,11 +499,40 @@ The final flamegraph shows a concentrated workload which is evenly divided. The 
 +      new_arc
 +  };
 +
++  // clear the name buffer for next use
+   name_buf.clear();
+
+-  name
++  Some(name)
 ```
+
+The savings are realized when we finally add the generated name when constructing the `RecordBatch`.
+
+```diff
+-            name.append_option(generate_name(rng, &mut name_buf));
++            name.append_option(generate_name(rng, &mut name_buf, &self.interner).as_deref());
+```
+
+An extra allocation is avoided by directly passing a reference to the interned string.
 
 ### 10: Revert
 
-![Flamegraph montage from run 08 to run 10](img/flamegraph_montage_phase3.png)
+The benchmarks shows a runtime regression of 65%, from 583ms to 965ms. The IPC halved from 2.21 to 1.10. The cache misses increased to 22% from 10%. The measurements leaves no doubt, this is a clear performance regression.
+
+But why did string interning not work?
+
+The data generator threads are generating at a rapid pace, and the names are being inserted into the same internal buckets. These may fit into a cache line, and shared across cores. But the high volume writes are constantly invalidating the cache lines, and this points to a cache coherency issue. A data generator thread can invalidate the cache line when another data generator thread is attempting to access the same cache line to get a reference to the interned string. This causes the CPU to stall, and wait for the new cache line to be fetched. Both problems are visible in the lower IPC and higher cache miss rate.
+
+While reverting the code I noticed that the earlier version, was cloning the name string buffer before passing it the `name` field builder. This is not necessary, as we can pass the reference directly without cloning, as Arrow will make a copy internally. So an extra clone was removed in the end.
+
+The median runtime is now 533ms from 584ms, shaving off another 51ms from the final runtime.
+
 ![Hyperfine box plots from run 08 to run 10](img/hyperfine_boxplot_grid_phase3.png)
+
+The changes in hardware performance counters are negligible in most cases, but the total instructions, and branch instructions have reduced significantly. This could be attributed to removing the unnecessary cloning of the mutable buffer.
+
 ![Perf stats from run 08 to run 10](img/perf_stats_phase3.png)
-![IPC trend from run 08 to run 10](img/ipc_trend_phase3.png)
+
+## Theoretical Limit: A BotE estimation
+
+## Configuration for Best Performance
