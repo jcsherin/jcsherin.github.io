@@ -497,10 +497,3 @@ The final flamegraph shows a concentrated workload which is evenly divided. The 
 ![Hyperfine box plots from run 08 to run 10](img/hyperfine_boxplot_grid_phase3.png)
 ![Perf stats from run 08 to run 10](img/perf_stats_phase3.png)
 ![IPC trend from run 08 to run 10](img/ipc_trend_phase3.png)
-
-## Phase 4: Micro-optimizations
-
-![Flamegraph montage from run 10 to run 12](img/flamegraph_montage_phase4.png)
-![Hyperfine box plots from run 10 to run 12](img/hyperfine_boxplot_grid_phase4.png)
-![Perf stats from run 10 to run 12](img/perf_stats_phase4.png)
-![IPC trend from run 10 to run 12](img/ipc_trend_phase4.png)
