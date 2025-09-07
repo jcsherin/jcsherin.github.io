@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Speeding Up a Parquet Shredding Pipeline by ~8x</title>
+    <title>A 6X Speedup for a Parquet Shredding Pipeline</title>
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1757254608357">
+    <link rel="stylesheet" href="/css/custom.css?v=1757254863287">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,12 +46,12 @@
   </aside>
 
 
-<h1>Speeding Up a Parquet Shredding Pipeline by ~8x</h1>
+<h1>A 6X Speedup for a Parquet Shredding Pipeline</h1>
 
 <time datetime="2025-09-02">02 Sep 2025</time>
 
 <p>Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution of shredded data. For this, I implemented a data generator which follows a <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipfian-like</a> distribution. The generated data is staged in-memory as <a href="https://arrow.apache.org/rust/parquet/arrow/index.html">Arrow RecordBatches</a>, and then written to disk as Parquet files.</p>
-<p>The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~440ms (8x speedup).</p>
+<p>The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~533ms (6x speedup).</p>
 <p><img src="img/hyperfine_trend_plot.png" alt="Performance Trend Across Runs"></p>
 <figcaption>Fig 1. The performance trend across a sequence of code optimizations, measured using <code>hyperfine</code>. The black line indicates the median runtime in seconds, while the shaded area indicates the range between min and max runtime.</figcaption>
 <p><img src="img/ipc_trend_plot.png" alt="IPC Trend Across Runs"></p>
@@ -210,6 +210,9 @@
 <p><img src="img/perf_stats_phase3.png" alt="Perf stats from run 08 to run 10"></p>
 <h2 id="theoretical-limit:-a-bote-estimation" tabindex="-1">Theoretical Limit: A BotE estimation <a class="direct-link" href="#theoretical-limit:-a-bote-estimation" aria-hidden="true">#</a></h2>
 <h2 id="configuration-for-best-performance" tabindex="-1">Configuration for Best Performance <a class="direct-link" href="#configuration-for-best-performance" aria-hidden="true">#</a></h2>
+<p><img src="img/performance_heatmap_10M_mem_throughput_gb_sec.png" alt="Memory Throughput Analysis">
+<img src="img/performance_heatmap_10M_record_throughput_m_sec.png" alt="Record Throughput Analysis">
+<img src="img/performance_heatmap_10M_total_time_ms.png" alt="Total Runtime Analysis"></p>
 
 
       </main>
