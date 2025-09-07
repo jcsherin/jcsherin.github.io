@@ -457,10 +457,23 @@ Yet another significant improvement both in speedup and efficiency of the progra
 
 ### Measuring Impact
 
-![Flamegraph montage from run 04 to run 08](img/flamegraph_montage_phase2.png)
+We improved the total pipeline throughput by increasing the writers. The data generator got lighter, and faster. Finally, we increased the `RecordBatch` size.
+
+All of the above optimizations to the pipeline has resulted in a 6X speedup, with the runtime dropping from 3.61s to 0.58s.
+
 ![Hyperfine box plots from run 04 to run 08](img/hyperfine_boxplot_grid_phase2.png)
+
+The cores are now being utilized more efficiently, with every stats we tracked improving significantly.
+
 ![Perf stats from run 04 to run 08](img/perf_stats_phase2.png)
+
+The IPC improved from 1.18 to 2.21 (an 87% increase).
+
 ![IPC trend from run 04 to run 08](img/ipc_trend_phase2.png)
+
+The final flamegraph shows a concentrated workload which is evenly divided. The data generator (producer) threads profile occupies the left side, while the parquet writer (consumer) threads profile occupies to the right side. The transition to the final flamegraph, shows a clear improvement from a fragmented hotspots to more efficient pipeline execution.
+
+![Flamegraph montage from run 04 to run 08](img/flamegraph_montage_phase2.png)
 
 ## Phase 3: A Performance Regression
 
