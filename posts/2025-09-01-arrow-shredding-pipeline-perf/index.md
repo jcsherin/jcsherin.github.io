@@ -1,5 +1,5 @@
 ---
-title: 'Speeding Up a Parquet Shredding Pipeline by ~8x'
+title: 'A 6X Speedup for a Parquet Shredding Pipeline'
 date: 2025-09-02
 summary: >
   placeholder.
@@ -12,7 +12,7 @@ Lately, I've been poking around record shredding and needed a dataset of nested 
 [Zipfian-like]: https://en.wikipedia.org/wiki/Zipf%27s_law
 [Arrow RecordBatches]: https://arrow.apache.org/rust/parquet/arrow/index.html
 
-The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~440ms (8x speedup).
+The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~533ms (6x speedup).
 
 ![Performance Trend Across Runs](img/hyperfine_trend_plot.png)
 
@@ -536,3 +536,7 @@ The changes in hardware performance counters are negligible in most cases, but t
 ## Theoretical Limit: A BotE estimation
 
 ## Configuration for Best Performance
+
+![Memory Throughput Analysis](img/performance_heatmap_10M_mem_throughput_gb_sec.png)
+![Record Throughput Analysis](img/performance_heatmap_10M_record_throughput_m_sec.png)
+![Total Runtime Analysis](img/performance_heatmap_10M_total_time_ms.png)
