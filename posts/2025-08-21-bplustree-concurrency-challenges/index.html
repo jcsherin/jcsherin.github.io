@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1757328092249">
+    <link rel="stylesheet" href="/css/custom.css?v=1757330294164">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -132,7 +132,7 @@ require tens of instructions only, usually with no additional cache faults since
 <p>The fix here is to correctly implement crab latching in the iterator code. A shared lock should not be released before <code>TrySharedLock()</code> is attempted on the sibling node. Doing so results in race conditions which are impossible to track down. This requires careful programming discipline.</p>
 
 <hr>
-<ul><li>Previous: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li>
+<ul><li>Next: <a href="/posts/2025-09-01-arrow-shredding-pipeline-perf/">A 6X Speedup for a Parquet Shredding Pipeline</a></li><li>Previous: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li>
 </ul>
 
       </main>
