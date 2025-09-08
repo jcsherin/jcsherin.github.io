@@ -4,7 +4,7 @@ date: 2025-09-02
 summary: >
   placeholder.
 layout: layouts/post.njk
-draft: true
+draft: false
 ---
 
 Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution of shredded data. For this, I implemented a data generator which follows a [Zipfian-like] distribution. The generated data is staged in-memory as [Arrow RecordBatches], and then written to disk as Parquet files.
@@ -560,10 +560,45 @@ For future improvements, the single-core efficiency has to be improved, but wher
 
 The flamegraph shows a equal split of work distribution between the data generation threads and writer threads. The next bottleneck appears as the overhead of Rayon in dividing the work between the data generation threads. The data generator is extremely fast that the overhead of distributing work is greater.
 
-For a run of 10 million rows, with a record batch size of 8192, we now generate 1221 small batches for Rayon to distribute in parallel to cores running the data generator threads. A single batch completes in 1.2ms, so Rayon has to do constantly schedule tasks to cores at the rate of 833 tasks/second.
+For a run of 10 million rows, with a record batch size of 8192, we now generate 1221 small batches for Rayon to distribute in parallel to cores running the data generator threads. A single batch completes in 1.2ms, so Rayon has to do constantly schedule tasks to cores at the rate of 833 tasks/second. The next optimization should target reducing this overhead.
 
 ## Fine-tuning Configuration for Optimal Performance
 
-![Memory Throughput Analysis](img/performance_heatmap_10M_mem_throughput_gb_sec.png)
+Keeping the target rows constant at 10 million, we can execute the pipeline a range of record batch sizes, writer threads to compare record throughput (million records/second) and total runtime.
+
+```text
+$ ./target/release/parquet-nested-parallel --help
+A tool for generating and writing nested Parquet data in parallel
+
+Usage: parquet-nested-parallel [OPTIONS]
+
+Options:
+      --target-records <TARGET_RECORDS>
+          The target number of records to generate [default: 10000000]
+      --record-batch-size <RECORD_BATCH_SIZE>
+          The size of each record batch [default: 4096]
+      --num-writers <NUM_WRITERS>
+          The number of parallel writers [default: 4]
+      --output-dir <OUTPUT_DIR>
+          The output directory for the Parquet files
+      --output-filename <OUTPUT_FILENAME>
+          The base filename for the output Parquet files
+      --dry-run
+          Do not execute the pipeline
+  -h, --help
+          Print help
+  -V, --version
+          Print version
+```
+
+In the micro-benchmark comparison from earlier, the single-core performance of the data generator and writer threads are comparable. So a best performance was predicted to come from a 1:1 allocation of CPU cores between the data generation and writer threads.
+
+Below we can see that 8 writers, 8 producers produces the highest observed throughput of 23 million records/second. A higher record batch size has little to no effect beyond 10K. With 6 writers, 10 producers, the throughput is above 20 million record/second, but is not optimal because of the imbalanced allocation.
+
 ![Record Throughput Analysis](img/performance_heatmap_10M_record_throughput_m_sec.png)
+
+No surprises here as well. The lowest recorded runtime is when we have a 1:1 allocation, with 8 writers and 8 producer threads.
+
 ![Total Runtime Analysis](img/performance_heatmap_10M_total_time_ms.png)
+
+To recap, future optimizations should target reducing the Rayon threadpool overhead to improve single-core efficiency. The current pipeline achieves a high-level of parallelism by being able to fully utilize 11 out of 16 available cores. There is close to ~3X headroom remaining for improving the current ~2.6 million records/per/core throughput, to a maximum possible ~7 million records/per/core throughput. Since the bottleneck changes after each optimization, it is therefore important to continue with a data-driven approach.
