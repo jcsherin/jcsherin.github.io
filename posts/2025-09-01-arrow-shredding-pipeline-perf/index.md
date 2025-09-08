@@ -63,8 +63,12 @@ All benchmarks were run on a Linux machine with the following configuration:
         </ul>
     </li>
     <li>
-        <a href="#phase-4:-micro-optimizations">Phase 4: Micro-Optimizations</a>
+        <a href="#a-back-of-the-envelope-estimation">A Back of the Envelope Estimation</a>
     </li>
+    <li>
+        <a href="#fine-tuning-configuration-for-optimal-performance">Fine-tuning Configuration for Optimal Performance</a>
+    </li>
+
   </ol>
 </nav>
 
@@ -533,9 +537,32 @@ The changes in hardware performance counters are negligible in most cases, but t
 
 ![Perf stats from run 08 to run 10](img/perf_stats_phase3.png)
 
-## Theoretical Limit: A BotE estimation
+## A Back of the Envelope Estimation
 
-## Configuration for Best Performance
+The pipeline throughput is dependent on its slowest stage. In micro-benchmarks, where the data generator and writer throughput is measured on a single core, the performance is comparable.
+
+| Record Batch Size | Data Generation Time per Record (ns) | Write Time per Record (ns) |
+| ----------------- | ------------------------------------ | -------------------------- |
+| 1024              | 140.89                               | 135.30                     |
+| 2048              | 145.76                               | 133.05                     |
+| 4096              | 149.08                               | 131.51                     |
+| 8192              | 149.66                               | 129.82                     |
+
+Therefore for this workload, the optimal ratio of producers to consumers is close to 1:1. On the 16-core machine used for end-end benchmarking, we should see the best performance when using 8 generator threads paired together with 8 writer threads.
+
+From the table we can calculate, the theoretical ceiling for throughput which comes to ~7 million records/second/core. Our highest observed throughput value is 21 millions/records/second on 16 cores with 8-writers, which is ~2.6 million records/second/core.
+
+On 16-cores, the user time is 4.82s and system time is 0.71s for a combined 5.53s. The total wall clock time is 0.51s. This means we are effectively using 11 cores (5.53s / 0.51s) of the total available 16 cores. This is a high-level of parallelism, where for the duration of the pipelines execution 11 cores are fully busy.
+
+For future improvements, the single-core efficiency has to be improved, but where?
+
+![Flamegraph of latest version after all optimizations are applied](img/flamegraph-8w-8192rb.png)
+
+The flamegraph shows a equal split of work distribution between the data generation threads and writer threads. The next bottleneck appears as the overhead of Rayon in dividing the work between the data generation threads. The data generator is extremely fast that the overhead of distributing work is greater.
+
+For a run of 10 million rows, with a record batch size of 8192, we now generate 1221 small batches for Rayon to distribute in parallel to cores running the data generator threads. A single batch completes in 1.2ms, so Rayon has to do constantly schedule tasks to cores at the rate of 833 tasks/second.
+
+## Fine-tuning Configuration for Optimal Performance
 
 ![Memory Throughput Analysis](img/performance_heatmap_10M_mem_throughput_gb_sec.png)
 ![Record Throughput Analysis](img/performance_heatmap_10M_record_throughput_m_sec.png)
