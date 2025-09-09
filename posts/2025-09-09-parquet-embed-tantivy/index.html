@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faster LIKE Queries In Parquet Without an External Index</title>
+    <meta name="description" content="On database building blocks.">
+    <meta name="generator" content="Eleventy v1.0.1">
+    <link rel="stylesheet" href="/css/prism-okaidia.css">
+    <link rel="stylesheet" href="/css/custom.css?v=1757430380535">
+    <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
+    <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inria+Serif:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap" rel="stylesheet">
+    <script>document.documentElement.classList.remove("no-js");</script>
+  </head>
+  <body>
+    <div class="page-wrapper">
+      <header>
+        <hgroup>
+        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p>On database building blocks.</p>
+      </hgroup>
+        <ul class="nav">
+          <li class="nav-item"><a href="/">posts</a></li>
+          <li class="nav-item"><a href="/about/">whoami</a></li>
+        </ul>
+      </header>
+
+      <main class="tmpl-post">
+        
+
+<h1>Faster LIKE Queries In Parquet Without an External Index</h1>
+
+<time datetime="2025-09-02">02 Sep 2025</time>
+
+<p>The query:</p>
+<pre class="language-sql"><code class="language-sql"><span class="token keyword">SELECT</span> <span class="token operator">*</span><br>  <span class="token keyword">FROM</span> <span class="token string">'foo.parquet'</span><br> <span class="token keyword">WHERE</span> title <span class="token operator">LIKE</span> <span class="token string">'%Diary%'</span><span class="token punctuation">;</span></code></pre>
+<p>The default query plan for <code>LIKE</code> queries in <a href="https://datafusion.apache.org/">Apache DataFusion</a>.</p>
+<pre class="language-text"><code class="language-text">+---------------+-------------------------------+<br>| plan_type     | plan                          |<br>+---------------+-------------------------------+<br>| physical_plan | ┌───────────────────────────┐ |<br>|               | │    CoalesceBatchesExec    │ |<br>|               | │    --------------------   │ |<br>|               | │     target_batch_size:    │ |<br>|               | │            8192           │ |<br>|               | └─────────────┬─────────────┘ |<br>|               | ┌─────────────┴─────────────┐ |<br>|               | │         FilterExec        │ |<br>|               | │    --------------------   │ |<br>|               | │         predicate:        │ |<br>|               | │     title LIKE %Diary%    │ |<br>|               | └─────────────┬─────────────┘ |<br>|               | ┌─────────────┴─────────────┐ |<br>|               | │      RepartitionExec      │ |<br>|               | │    --------------------   │ |<br>|               | │ partition_count(in->out): │ |<br>|               | │          1 -> 12          │ |<br>|               | │                           │ |<br>|               | │    partitioning_scheme:   │ |<br>|               | │    RoundRobinBatch(12)    │ |<br>|               | └─────────────┬─────────────┘ |<br>|               | ┌─────────────┴─────────────┐ |<br>|               | │       DataSourceExec      │ |<br>|               | │    --------------------   │ |<br>|               | │          files: 1         │ |<br>|               | │      format: parquet      │ |<br>|               | │                           │ |<br>|               | │         predicate:        │ |<br>|               | │     title LIKE %Diary%    │ |<br>|               | └───────────────────────────┘ |<br>|               |                               |<br>+---------------+-------------------------------+<br>1 row(s) fetched.<br>Elapsed 0.016 seconds.<br></code></pre>
+<p>The optimized query plan where an embedded Tantivy full-text index embedded within the Parquet file is used.</p>
+<pre class="language-text"><code class="language-text">+---------------+-------------------------------+<br>| plan_type     | plan                          |<br>+---------------+-------------------------------+<br>| physical_plan | ┌───────────────────────────┐ |<br>|               | │       DataSourceExec      │ |<br>|               | │    --------------------   │ |<br>|               | │          files: 1         │ |<br>|               | │      format: parquet      │ |<br>|               | │                           │ |<br>|               | │         predicate:        │ |<br>|               | │        id IN (3, 2)       │ |<br>|               | └───────────────────────────┘ |<br>|               |                               |<br>+---------------+-------------------------------+</code></pre>
+<p>The Tantivy full-text index is embedded within Parquet as a sequence of bytes.</p>
+<p>File format specification:</p>
+<pre class="language-text"><code class="language-text">+=================================================================+<br>|                              Header                             |<br>|-----------------------------------------------------------------|<br>| MAGIC_BYTES ('FTEP')                            |   (4 bytes)   |<br>|-------------------------------------------------+---------------|<br>| version                                         |   (1 byte)    |<br>|-------------------------------------------------+---------------|<br>| file_count                                      |   (4 bytes)   |<br>|-------------------------------------------------+---------------|<br>| total_data_block_size                           |   (8 bytes)   |<br>|-------------------------------------------------+---------------|<br>| file_metadata_size                              |   (4 bytes)   |<br>|-------------------------------------------------+---------------|<br>| file_metadata_crc32                             |   (4 bytes)   |<br>|-----------------------------------------------------------------|<br>|                  file_metadata_list (variable size)             |<br>|                  (A series of FileMetadata entries)             |<br>|                                                                 |<br>| +-------------------------------------------------------------+ |<br>| | FileMetadata Entry 1 (e.g., for "meta.json")                | |<br>| |-------------------------------------------------------------| |<br>| | data_offset (points to start of file in Data Block) | (8 B) | | ------+<br>| | data_content_len                                    | (8 B) | |       |<br>| | data_footer_len (0 for meta.json)                   | (1 B) | |       |<br>| | path_len                                            | (1 B) | |       |<br>| | path ("meta.json")                                  |(~9 B) | |       |<br>| +-------------------------------------------------------------+ |       |<br>| | FileMetadata Entry 2 (e.g., for ".fast")                    | |       |<br>| |-------------------------------------------------------------| |       |<br>| | data_offset (points to start of file in Data Block) | (8 B) | | ----+ |<br>| | ... (other fields) ...                                      | |     | |<br>| +-------------------------------------------------------------+ |     | |<br>| |                             ...                             | |     | |<br>+=================================================================+     | |<br>|                            DataBlock                            |     | |<br>|                 (Size = total_data_block_size)                  |     | |<br>|-----------------------------------------------------------------| <---+ |<br>|                                                                 |       |<br>|             Contents of "meta.json" (raw bytes)                 |       |<br>|                                                                 |       |<br>|-----------------------------------------------------------------| <-----+<br>|                                                                 |<br>|               Contents of ".fast" file (raw bytes)              |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|        Reconstructed `TantivyFooterHack` for ".fast" file       |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|              Contents of ".fieldnorm" file (raw bytes)          |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|      Reconstructed `TantivyFooterHack` for ".fieldnorm" file    |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|      ... and so on for all other Tantivy index files            |<br>|              (.idx, .pos, .term, .store, etc.)                  |<br>|                                                                 |<br>+-----------------------------------------------------------------+</code></pre>
+
+<hr>
+<ul><li>Previous: <a href="/posts/2025-09-01-arrow-shredding-pipeline-perf/">A 6X Speedup for a Parquet Shredding Pipeline</a></li>
+</ul>
+
+      </main>
+
+      <footer></footer>
+
+      <!-- Current page: /posts/2025-09-09-parquet-embed-tantivy/ -->
+    </body>
+  </div>
+</html>
