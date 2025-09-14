@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1757430380535">
+    <link rel="stylesheet" href="/css/custom.css?v=1757833704883">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -247,7 +247,7 @@
 <p>To recap, future optimizations should target reducing the Rayon threadpool overhead to improve single-core efficiency. The current pipeline achieves a high-level of parallelism by being able to fully utilize 11 out of 16 available cores. There is close to ~3X headroom remaining for improving the current ~2.6 million records/per/core throughput, to a maximum possible ~7 million records/per/core throughput. Since the bottleneck changes after each optimization, it is therefore important to continue with a data-driven approach.</p>
 
 <hr>
-<ul><li>Next: <a href="/posts/2025-09-09-parquet-embed-tantivy/">Faster LIKE Queries In Parquet Without an External Index</a></li><li>Previous: <a href="/posts/2025-08-21-bplustree-concurrency-challenges/">Practical Hurdles In Crab Latching Concurrency</a></li>
+<ul><li>Previous: <a href="/posts/2025-08-21-bplustree-concurrency-challenges/">Practical Hurdles In Crab Latching Concurrency</a></li>
 </ul>
 
       </main>
