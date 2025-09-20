@@ -2,7 +2,7 @@
 title: 'A 6X Speedup for a Parquet Shredding Pipeline'
 date: 2025-09-02
 summary: >
-  placeholder.
+  A sequence of data driven performance optimizations applied to a Parquet nested dataset generator. Each optimization step is guided by profiling, and capturing hardware performance counters, and coarse-grained benchmarks. It reinforces the importance of measuring perf changes, to verify that if it resulted in a speedup (or a slowdown). Sometimes an optimization makes it efficient at utilizing the underlying CPU cores, rather than making it faster.
 layout: layouts/post.njk
 draft: false
 ---
