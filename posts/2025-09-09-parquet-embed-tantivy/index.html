@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758380373215">
+    <link rel="stylesheet" href="/css/custom.css?v=1758380416323">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,6 +59,100 @@
 <p>The Tantivy full-text index is embedded within Parquet as a sequence of bytes.</p>
 <p>File format specification:</p>
 <pre class="language-text"><code class="language-text">+=================================================================+<br>|                              Header                             |<br>|-----------------------------------------------------------------|<br>| MAGIC_BYTES ('FTEP')                            |   (4 bytes)   |<br>|-------------------------------------------------+---------------|<br>| version                                         |   (1 byte)    |<br>|-------------------------------------------------+---------------|<br>| file_count                                      |   (4 bytes)   |<br>|-------------------------------------------------+---------------|<br>| total_data_block_size                           |   (8 bytes)   |<br>|-------------------------------------------------+---------------|<br>| file_metadata_size                              |   (4 bytes)   |<br>|-------------------------------------------------+---------------|<br>| file_metadata_crc32                             |   (4 bytes)   |<br>|-----------------------------------------------------------------|<br>|                  file_metadata_list (variable size)             |<br>|                  (A series of FileMetadata entries)             |<br>|                                                                 |<br>| +-------------------------------------------------------------+ |<br>| | FileMetadata Entry 1 (e.g., for "meta.json")                | |<br>| |-------------------------------------------------------------| |<br>| | data_offset (points to start of file in Data Block) | (8 B) | | ------+<br>| | data_content_len                                    | (8 B) | |       |<br>| | data_footer_len (0 for meta.json)                   | (1 B) | |       |<br>| | path_len                                            | (1 B) | |       |<br>| | path ("meta.json")                                  |(~9 B) | |       |<br>| +-------------------------------------------------------------+ |       |<br>| | FileMetadata Entry 2 (e.g., for ".fast")                    | |       |<br>| |-------------------------------------------------------------| |       |<br>| | data_offset (points to start of file in Data Block) | (8 B) | | ----+ |<br>| | ... (other fields) ...                                      | |     | |<br>| +-------------------------------------------------------------+ |     | |<br>| |                             ...                             | |     | |<br>+=================================================================+     | |<br>|                            DataBlock                            |     | |<br>|                 (Size = total_data_block_size)                  |     | |<br>|-----------------------------------------------------------------| <---+ |<br>|                                                                 |       |<br>|             Contents of "meta.json" (raw bytes)                 |       |<br>|                                                                 |       |<br>|-----------------------------------------------------------------| <-----+<br>|                                                                 |<br>|               Contents of ".fast" file (raw bytes)              |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|        Reconstructed `TantivyFooterHack` for ".fast" file       |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|              Contents of ".fieldnorm" file (raw bytes)          |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|      Reconstructed `TantivyFooterHack` for ".fieldnorm" file    |<br>|                                                                 |<br>|-----------------------------------------------------------------|<br>|                                                                 |<br>|      ... and so on for all other Tantivy index files            |<br>|              (.idx, .pos, .term, .store, etc.)                  |<br>|                                                                 |<br>+-----------------------------------------------------------------+</code></pre>
+<p>Histogram of control phrases in generated Parquet file.</p>
+<pre><code>DataFusion CLI v49.0.0
+&gt; SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 12905516          | 4999816       | 2500033        | 498659              | 250832        | 49910             |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 11.176 seconds.
+
+</code></pre>
+<p>Target size = 50 million rows. Command used:</p>
+<pre class="language-text"><code class="language-text">RUST_LOG=trace,tantivy=off cargo run --bin parquet_gen -- -t 50000000</code></pre>
+<p>2.5 GB on disk.</p>
+<pre class="language-text"><code class="language-text">❯ ls -l output/titles.parquet<br>-rw-r--r--  1 jcsherin  staff  2701649192 14 Sep 12:40 output/titles.parquet</code></pre>
+<h2 id="1-million-rows" tabindex="-1">1 million rows <a class="direct-link" href="#1-million-rows" aria-hidden="true">#</a></h2>
+<pre class="language-text"><code class="language-text">-rw-r--r--  1 jcsherin  staff    96M 14 Sep 14:22 output/titles_with_fts_index.parquet<br>-rw-r--r--  1 jcsherin  staff    52M 14 Sep 14:22 output/titles.parquet</code></pre>
+<p>Histogram for</p>
+<pre><code>&gt; SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles_with_fts_index.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 258749            | 99804         | 49940          | 9949                | 4903          | 987               |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 1.611 seconds.
+
+&gt; SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 258749            | 99804         | 49940          | 9949                | 4903          | 987               |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 1.652 seconds.
+</code></pre>
+<h2 id="10-million-rows" tabindex="-1">10 million rows <a class="direct-link" href="#10-million-rows" aria-hidden="true">#</a></h2>
+<pre><code>-rw-r--r--@ 1 jcsherin  staff   926M 14 Sep 14:32 output/titles_with_fts_index.parquet
+-rw-r--r--@ 1 jcsherin  staff   515M 14 Sep 14:31 output/titles.parquet
+</code></pre>
+<pre><code>&gt; SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 2580730           | 1000423       | 499792         | 99072               | 49798         | 9865              |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 2.497 seconds.
+
+&gt; SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles_with_fts_index.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 2580730           | 1000423       | 499792         | 99072               | 49798         | 9865              |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 3.867 seconds.
+</code></pre>
 
 
       </main>
