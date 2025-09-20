@@ -147,3 +147,122 @@ File format specification:
 |                                                                 |
 +-----------------------------------------------------------------+
 ```
+
+Histogram of control phrases in generated Parquet file.
+
+```
+DataFusion CLI v49.0.0
+> SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 12905516          | 4999816       | 2500033        | 498659              | 250832        | 49910             |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 11.176 seconds.
+
+```
+
+Target size = 50 million rows. Command used:
+
+```text
+RUST_LOG=trace,tantivy=off cargo run --bin parquet_gen -- -t 50000000
+```
+
+2.5 GB on disk.
+
+```text
+❯ ls -l output/titles.parquet
+-rw-r--r--  1 jcsherin  staff  2701649192 14 Sep 12:40 output/titles.parquet
+```
+
+## 1 million rows
+
+```text
+-rw-r--r--  1 jcsherin  staff    96M 14 Sep 14:22 output/titles_with_fts_index.parquet
+-rw-r--r--  1 jcsherin  staff    52M 14 Sep 14:22 output/titles.parquet
+```
+
+Histogram for
+
+```
+> SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles_with_fts_index.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 258749            | 99804         | 49940          | 9949                | 4903          | 987               |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 1.611 seconds.
+
+> SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 258749            | 99804         | 49940          | 9949                | 4903          | 987               |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 1.652 seconds.
+```
+
+## 10 million rows
+
+```
+-rw-r--r--@ 1 jcsherin  staff   926M 14 Sep 14:32 output/titles_with_fts_index.parquet
+-rw-r--r--@ 1 jcsherin  staff   515M 14 Sep 14:31 output/titles.parquet
+```
+
+```
+> SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 2580730           | 1000423       | 499792         | 99072               | 49798         | 9865              |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 2.497 seconds.
+
+> SELECT
+    COUNT(CASE WHEN title LIKE '%concurrency%' THEN 1 END) AS concurrency_count,
+    COUNT(CASE WHEN title LIKE '%runtime%' THEN 1 END) AS runtime_count,
+    COUNT(CASE WHEN title LIKE '%indexing%' THEN 1 END) AS indexing_count,
+    COUNT(CASE WHEN title LIKE '%normalization%' THEN 1 END) AS normalization_count,
+    COUNT(CASE WHEN title LIKE '%atomics%' THEN 1 END) AS atomics_count,
+    COUNT(CASE WHEN title LIKE '%idempotency%' THEN 1 END) AS idempotency_count
+FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles_with_fts_index.parquet';
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| concurrency_count | runtime_count | indexing_count | normalization_count | atomics_count | idempotency_count |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+| 2580730           | 1000423       | 499792         | 99072               | 49798         | 9865              |
++-------------------+---------------+----------------+---------------------+---------------+-------------------+
+1 row(s) fetched.
+Elapsed 3.867 seconds.
+```
