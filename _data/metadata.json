@@ -4,7 +4,7 @@
   "language": "en",
   "description": "On database building blocks.",
   "feed": {
-    "subtitle": "jcsherin writes about programming",
+    "subtitle": "Jacob Sherin writes about database internals.",
     "filename": "feed.xml",
     "path": "/feed/feed.xml",
     "id": "https://example.com/"
@@ -14,8 +14,8 @@
     "url": "https://example.com/feed/feed.json"
   },
   "author": {
-    "name": "Your Name Here",
-    "email": "youremailaddress@example.com",
-    "url": "https://example.com/about-me/"
+    "name": "Jacob Sherin",
+    "email": "jacob@protoship.io",
+    "url": "https://jacobsherin.com/about/"
   }
 }
