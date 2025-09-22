@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 	<title>Jacob&#39;s blog</title>
-	<subtitle>jcsherin writes about programming</subtitle>
+	<subtitle>Jacob Sherin writes about database internals.</subtitle>
 	
 	<link href="https://jacobsherin.com/feed/feed.xml" rel="self"/>
 	<link href="https://jacobsherin.com/"/>
 	<updated>2025-08-18T00:00:00Z</updated>
 	<id>https://example.com/</id>
 	<author>
-		<name>Your Name Here</name>
-		<email>youremailaddress@example.com</email>
+		<name>Jacob Sherin</name>
+		<email>jacob@protoship.io</email>
 	</author>
 	
 	<entry>

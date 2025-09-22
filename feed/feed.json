@@ -6,8 +6,8 @@
   "feed_url": "https://example.com/feed/feed.json",
   "description": "On database building blocks.",
   "author": {
-    "name": "Your Name Here",
-    "url": "https://example.com/about-me/"
+    "name": "Jacob Sherin",
+    "url": "https://jacobsherin.com/about/"
   },
   "items": [{
       "id": "https://jacobsherin.com/posts/2025-08-18-bplustree-struct-hack/",
