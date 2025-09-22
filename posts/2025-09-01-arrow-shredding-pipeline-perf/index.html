@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A 6X Speedup for a Parquet Shredding Pipeline</title>
+    <title>Performance Tuning a Nested Data Generator for Parquet</title>
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758380416323">
+    <link rel="stylesheet" href="/css/custom.css?v=1758525399896">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,8 +30,23 @@
 
       <main class="tmpl-post">
         
+  <style>
+    .draft-notice {
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
 
-<h1>A 6X Speedup for a Parquet Shredding Pipeline</h1>
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+
+
+<h1>Performance Tuning a Nested Data Generator for Parquet</h1>
 
 <time datetime="2025-09-02">02 Sep 2025</time>
 
@@ -246,9 +261,6 @@
 <p><img src="img/performance_heatmap_10M_total_time_ms.png" alt="Total Runtime Analysis"></p>
 <p>To recap, future optimizations should target reducing the Rayon threadpool overhead to improve single-core efficiency. The current pipeline achieves a high-level of parallelism by being able to fully utilize 11 out of 16 available cores. There is close to ~3X headroom remaining for improving the current ~2.6 million records/per/core throughput, to a maximum possible ~7 million records/per/core throughput. Since the bottleneck changes after each optimization, it is therefore important to continue with a data-driven approach.</p>
 
-<hr>
-<ul><li>Previous: <a href="/posts/2025-08-21-bplustree-concurrency-challenges/">Practical Hurdles In Crab Latching Concurrency</a></li>
-</ul>
 
       </main>
 
