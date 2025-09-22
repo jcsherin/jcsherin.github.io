@@ -1,10 +1,10 @@
 ---
-title: 'A 6X Speedup for a Parquet Shredding Pipeline'
+title: 'Performance Tuning a Nested Data Generator for Parquet'
 date: 2025-09-02
 summary: >
   A sequence of data driven performance optimizations applied to a Parquet nested dataset generator. Each optimization step is guided by profiling, and capturing hardware performance counters, and coarse-grained benchmarks. It reinforces the importance of measuring perf changes, to verify that if it resulted in a speedup (or a slowdown). Sometimes an optimization makes it efficient at utilizing the underlying CPU cores, rather than making it faster.
 layout: layouts/post.njk
-draft: false
+draft: true
 ---
 
 Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution of shredded data. For this, I implemented a data generator which follows a [Zipfian-like] distribution. The generated data is staged in-memory as [Arrow RecordBatches], and then written to disk as Parquet files.
