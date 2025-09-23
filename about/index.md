@@ -6,12 +6,9 @@ eleventyNavigation:
   order: 2
 ---
 
-My name is Jacob, and here I write about posts related to projects I am working on. My interests lie in OLAP query execution engines,
-columnar file formats and database internals.
+My interests lie in OLAP query execution engines, columnar file formats, and database internals.
 
-You can find me on:
+*   [github.com/jcsherin](https://github.com/jcsherin)
+*   [x.com/jcsherin](https://x.com/jcsherin)
 
-*   [Github](https://github.com/jcsherin)
-*   [Twitter](https://x.com/jcsherin)
-
-You can reach me at jacob@protoship.io.
+You can also reach me at jacob@protoship.io.
