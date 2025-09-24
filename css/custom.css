@@ -102,53 +102,9 @@ hgroup p {
   margin-top: 0;
 }
 
-/*body {
-  font-family: 'Inria Serif', serif;
-  font-size: 18px;
-  font-weight: 400;
-}
-*/
-
 body {
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
   font-size: 22px;
   font-weight: 300;
   line-height: 1.4;
-}
-
-.inria-serif-light {
-  font-family: 'Inria Serif', serif;
-  font-weight: 300;
-  font-style: normal;
-}
-
-.inria-serif-regular {
-  font-family: 'Inria Serif', serif;
-  font-weight: 400;
-  font-style: normal;
-}
-
-.inria-serif-bold {
-  font-family: 'Inria Serif', serif;
-  font-weight: 700;
-  font-style: normal;
-}
-
-.inria-serif-light-italic,
-blockquote {
-  font-family: 'Inria Serif', serif;
-  font-weight: 300;
-  font-style: italic;
-}
-
-.inria-serif-regular-italic {
-  font-family: 'Inria Serif', serif;
-  font-weight: 400;
-  font-style: italic;
-}
-
-.inria-serif-bold-italic {
-  font-family: 'Inria Serif', serif;
-  font-weight: 700;
-  font-style: italic;
 }
