@@ -50,22 +50,26 @@ This page is a test bed for all the markdown and HTML elements used in this blog
 This is a Heading 2 (the post title is H1).
 
 ### Heading 3
+
 This is a Heading 3. It's used for sub-sections.
 
 #### Heading 4
+
 This is a Heading 4.
 
 ##### Heading 5
+
 This is a Heading 5.
 
 ###### Heading 6
+
 This is a Heading 6.
 
 ---
 
 ## Paragraphs and Text Formatting
 
-This is a standard paragraph of text. It contains **bold text**, _italic text using underscores_, and *italic text using asterisks*. You can also have `inline code` which is useful for mentioning variables or filenames.
+This is a standard paragraph of text. It contains **bold text**, _italic text using underscores_, and _italic text using asterisks_. You can also have `inline code` which is useful for mentioning variables or filenames.
 
 Another paragraph follows, demonstrating the flow of text. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
 
@@ -85,13 +89,15 @@ Here is a [reference-style link to the Eleventy docs][11ty].
 ## Lists
 
 ### Unordered List
-*   Item 1
-*   Item 2
-    *   Nested Item 2a
-    *   Nested Item 2b
-*   Item 3
+
+- Item 1
+- Item 2
+  - Nested Item 2a
+  - Nested Item 2b
+- Item 3
 
 ### Ordered List
+
 1.  First item
 2.  Second item
     1.  Nested item 2.1
@@ -100,18 +106,20 @@ Here is a [reference-style link to the Eleventy docs][11ty].
 
 ## Images
 
-This is an SVG image using the old syntax:
-![An SVG image](/posts/2025-07-23-shredding-nested-data-in-parquet/img/figure-1.svg)
-<figcaption>Fig 1. An SVG image that should scale correctly.</figcaption>
+This is an SVG image using the new `figure` shortcode:
+{% figure "/posts/2025-07-23-shredding-nested-data-in-parquet/img/figure-1.svg", "An SVG image" %}
+Fig 1. An SVG image that should scale correctly.
+{% endfigure %}
 
 This is a PNG image using our new `figure` shortcode:
 {% figure "/posts/2025-09-01-arrow-shredding-pipeline-perf/img/flamegraph_grid_numbered.png", "A flamegraph grid" %}
-  Fig 2. A PNG image that may need styling to prevent overflow on mobile.
+Fig 2. A PNG image that may need styling to prevent overflow on mobile.
 {% endfigure %}
 
 ## Code Blocks
 
 Here is a `text` code block:
+
 ```text
 Some plain text inside a code block.
 No syntax highlighting is applied here.
@@ -119,9 +127,11 @@ No syntax highlighting is applied here.
 | NAME                        | COMMENT                                |
 +-----------------------------+----------------------------------------+
 ```
+
 <figcaption>A caption for a text code block.</figcaption>
 
 A `rust` code block with syntax highlighting:
+
 ```rust
 fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     println!("Hello, World!");
@@ -131,12 +141,14 @@ fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 ## Tables
 
 ### Markdown Table
+
 | Header 1 | Header 2 | Header 3 |
-|----------|----------|----------|
+| -------- | -------- | -------- |
 | Cell 1-1 | Cell 1-2 | Cell 1-3 |
 | Cell 2-1 | Cell 2-2 | Cell 2-3 |
 
 ### HTML Table
+
 <table>
   <thead>
     <tr>

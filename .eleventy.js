@@ -77,7 +77,7 @@ module.exports = function (eleventyConfig) {
     slugify: eleventyConfig.getFilter('slug'),
   });
 
-  eleventyConfig.addPairedShortcode("figure", (caption, src, alt = "") => {
+  eleventyConfig.addPairedShortcode('figure', (caption, src, alt = '') => {
     return `<figure>
               <img src="${src}" alt="${alt}">
               <figcaption>${caption.trim()}</figcaption>
