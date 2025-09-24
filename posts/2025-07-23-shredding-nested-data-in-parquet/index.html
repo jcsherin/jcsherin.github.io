@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
+    <link rel="stylesheet" href="/css/custom.css?v=1758739505086">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,15 +48,15 @@
 
 <div class="post-title-group">
   <h1>The Layman&#39;s Guide to Nested Record Shredding</h1>
-  <time datetime="2025-07-30">30 Jul 2025</time>
+  <time datetime="2025-07-30">30-Jul-2025</time>
 </div>
 
-<h3 id="intro-1" tabindex="-1">Intro 1 <a class="direct-link" href="#intro-1" aria-hidden="true">#</a></h3>
+<h3 id="intro-1" tabindex="-1">Intro 1 <a class="direct-link" href="#intro-1" aria-hidden="true"></a></h3>
 <p>In modern analytical query engines can compute complex aggregates by scanning billions of nested data structures in an instant.</p>
 <p>This is the performance available on a single node (your laptop).</p>
 <p>This works for SQL queries which contains many aggregates, groups and sort orders.</p>
 <p>The performance gap between querying nested data and flat relational data is often negligible.</p>
-<h3 id="intro-2" tabindex="-1">Intro 2 <a class="direct-link" href="#intro-2" aria-hidden="true">#</a></h3>
+<h3 id="intro-2" tabindex="-1">Intro 2 <a class="direct-link" href="#intro-2" aria-hidden="true"></a></h3>
 <p>The magic lies in a process known as &quot;shredding&quot;.</p>
 <p>At its core shredding is a process for breaking up nested data structures into a flat, columnar format.</p>
 <ul>
@@ -73,7 +73,7 @@ a nested Contact schema">
 <p>The massive map-reduce jobs used to take multiple hours to complete even after running compute over thousands of servers in parallel.</p>
 <p>The same computation now finished in under 10s when the nested data structure was encoded using the Dremel shredding technique.</p>
 <p>It is an understatement to state that the performance impact was significant.</p>
-<h3 id="intro-3" tabindex="-1">Intro 3 <a class="direct-link" href="#intro-3" aria-hidden="true">#</a></h3>
+<h3 id="intro-3" tabindex="-1">Intro 3 <a class="direct-link" href="#intro-3" aria-hidden="true"></a></h3>
 <p>The novelty of Dremel record shredding lay in directly representing nested data structures in a flat, columnar format.</p>
 <p>This is achieved by introducing two key concepts: <strong>definition levels</strong> and <strong>repetition levels</strong>.</p>
 <p>This is an ingenious representation which manages to encode the original heirarchical structure of the nested data as two integer values.</p>
@@ -85,14 +85,14 @@ a nested Contact schema">
 final shredded representation with complete definition and repetition level values"/>
 	<figcaption>Figure 2: Shows three nested list of integers and its final representation after shredding is completed. The structure of the original nested records are encoded in the definition and repetition levels corresponding to the list item in the value column.</figcaption>
 </figure>
-<h3 id="intro-4" tabindex="-1">Intro 4 <a class="direct-link" href="#intro-4" aria-hidden="true">#</a></h3>
+<h3 id="intro-4" tabindex="-1">Intro 4 <a class="direct-link" href="#intro-4" aria-hidden="true"></a></h3>
 <p>The Dremel encoding technique influenced the design of the next generation of file formats and proprietary storage engines of analytical systems which were being built in the early 2010s.</p>
 <p>Apache Parquet is the most well known and open source implementation to directly adopt the principles of definition levels and repetition levels to represent nested data structure in its file format.</p>
 <p>In Apache Arrow in-memory columnar format the validity bitmap and offset buffers are conceputally similar to the definition and repetition levels in Dremel encoding.</p>
 <p>The widespread adoption of the principles from the Dremel encoding for nested data structures proves its effectiveness for analytical workloads.</p>
-<h3 id="intro-exit" tabindex="-1">Intro Exit <a class="direct-link" href="#intro-exit" aria-hidden="true">#</a></h3>
+<h3 id="intro-exit" tabindex="-1">Intro Exit <a class="direct-link" href="#intro-exit" aria-hidden="true"></a></h3>
 <p>Before we dive into shredding let us first see the problems which come up when we try to store and retrieve nested data without shredding.</p>
-<h3 id="the-opaque-binary-blob-strawman" tabindex="-1">The Opaque Binary Blob Strawman <a class="direct-link" href="#the-opaque-binary-blob-strawman" aria-hidden="true">#</a></h3>
+<h3 id="the-opaque-binary-blob-strawman" tabindex="-1">The Opaque Binary Blob Strawman <a class="direct-link" href="#the-opaque-binary-blob-strawman" aria-hidden="true"></a></h3>
 <p>The direct method is to serialize a nested data structure and then store it as a sequence of bytes.</p>
 <p>But now, every time you want to read it back you first load the entire bytes back into memory and deserialize it.</p>
 <p>The cost of deserialization alone will dominate query execution time.</p>
@@ -114,7 +114,7 @@ final shredded representation with complete definition and repetition level valu
 <p>There is a deserialization cost associated with brining each value into memory before being able to begin performing any computation relevant to the query.</p>
 <p>The majority of the work performed is not in service of computing the results of the query, but rather for accessing the values.</p>
 <p>However the nested representation produced by shredding using the Dremel encoding technique manages to successfully avoid the pitfalls of the opaque binary blob representation.</p>
-<h3 id="nested-schema" tabindex="-1">Nested Schema <a class="direct-link" href="#nested-schema" aria-hidden="true">#</a></h3>
+<h3 id="nested-schema" tabindex="-1">Nested Schema <a class="direct-link" href="#nested-schema" aria-hidden="true"></a></h3>
 <p>Shredding depends on the schema to encode nested data into column values.</p>
 <p>Here are a few valid instances of a <code>contact</code> nested data structure:</p>
 <pre class="language-protobuf"><code class="language-protobuf"><span class="token comment">// All properties are defined</span><br><span class="token punctuation">{</span> name<span class="token punctuation">:</span> <span class="token string">"Alice"</span><span class="token punctuation">,</span><br>  phones<span class="token punctuation">:</span> <span class="token punctuation">[</span><br>	<span class="token punctuation">{</span> number<span class="token punctuation">:</span> <span class="token string">"555-1234"</span><span class="token punctuation">,</span> phone_type<span class="token punctuation">:</span> <span class="token string">"Home"</span> <span class="token punctuation">}</span><span class="token punctuation">,</span><br>	<span class="token punctuation">{</span> number<span class="token punctuation">:</span> <span class="token string">"555-5678"</span><span class="token punctuation">,</span> phone_type<span class="token punctuation">:</span> <span class="token string">"Work"</span> <span class="token punctuation">}</span><span class="token punctuation">]</span><span class="token punctuation">}</span><br><br><span class="token comment">// The `phones` list is empty.</span><br><span class="token punctuation">{</span> name<span class="token punctuation">:</span> <span class="token string">"Bob"</span><span class="token punctuation">,</span> phones<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token punctuation">]</span> <span class="token punctuation">}</span><br><br><span class="token comment">// The `phones` property is missing.</span><br><span class="token punctuation">{</span> name<span class="token punctuation">:</span> <span class="token string">"Charlie"</span> <span class="token punctuation">}</span><br><br><span class="token comment">// The `names` property is missing.</span><br><span class="token punctuation">{</span> phones<span class="token punctuation">:</span> <span class="token punctuation">[</span><span class="token punctuation">{</span>number<span class="token punctuation">:</span> null<span class="token punctuation">,</span> phone_type<span class="token punctuation">:</span> <span class="token string">"Home"</span><span class="token punctuation">}</span><span class="token punctuation">]</span> <span class="token punctuation">}</span></code></pre>
@@ -153,7 +153,7 @@ final shredded representation with complete definition and repetition level valu
 <blockquote>
 <p>The decoupling of the logical and physical representations is a common technique used in database engineering to reduce code complexity and improve the internal implementation without introducing breaking changes to the public interface.</p>
 </blockquote>
-<h3 id="definition-levels" tabindex="-1">Definition Levels <a class="direct-link" href="#definition-levels" aria-hidden="true">#</a></h3>
+<h3 id="definition-levels" tabindex="-1">Definition Levels <a class="direct-link" href="#definition-levels" aria-hidden="true"></a></h3>
 <p>The definition level encodes the path structure of the nested data.</p>
 <p>Let us see this in action for a path in the schema which contains both <code>OPTIONAL</code> and <code>REPEATED</code> fields like <code>phones.list.item.number</code>.</p>
 <pre class="language-text"><code class="language-text">message contact {<br>  OPTIONAL BINARY name (STRING);<br>  OPTIONAL group phones (LIST) {<br>    REPEATED group list {<br>      OPTIONAL group item {<br>        OPTIONAL BINARY number (STRING);<br>        OPTIONAL BINARY phone_type (STRING);<br>      }<br>    }<br>  }<br>}</code></pre>
@@ -233,7 +233,7 @@ final shredded representation with complete definition and repetition level valu
 </tr>
 </tbody>
 </table>
-<h3 id="repetition-levels" tabindex="-1">Repetition Levels <a class="direct-link" href="#repetition-levels" aria-hidden="true">#</a></h3>
+<h3 id="repetition-levels" tabindex="-1">Repetition Levels <a class="direct-link" href="#repetition-levels" aria-hidden="true"></a></h3>
 <p>The repetition level encodes the list boundaries and the offset of an item in a list.</p>
 <p>The repetition level count starts at zero for every path.</p>
 <p>It is incremented only for <code>REPEATED</code> paths in a field.</p>
@@ -327,7 +327,7 @@ final shredded representation with complete definition and repetition level valu
 <p>The last three values are NULL and all of them have a zero repetition level.</p>
 <p>We know a new record started, nothing more.</p>
 <p>But by inspecting the definition levels we know exactly at which point the path terminated, and what the data state it represents.</p>
-<h3 id="data-layout" tabindex="-1">Data Layout <a class="direct-link" href="#data-layout" aria-hidden="true">#</a></h3>
+<h3 id="data-layout" tabindex="-1">Data Layout <a class="direct-link" href="#data-layout" aria-hidden="true"></a></h3>
 <p>After shredding, the <code>NULL</code> values are not stored in physical storage.</p>
 <p>This is primarily done to save space and an optimization for large nested schemas which are sparesely populated.</p>
 <p>Missing values do not take up additional storage space.</p>
@@ -338,7 +338,7 @@ rep: 	[0, 1, 0, 0, 0]
 </code></pre>
 <p>The maximum definition level of this path is four.</p>
 <p>Therefore we can infer that the last three values are null because the definition level is a value less than four.</p>
-<h3 id="comparison-with-opaque-binary-blob" tabindex="-1">Comparison with Opaque Binary Blob <a class="direct-link" href="#comparison-with-opaque-binary-blob" aria-hidden="true">#</a></h3>
+<h3 id="comparison-with-opaque-binary-blob" tabindex="-1">Comparison with Opaque Binary Blob <a class="direct-link" href="#comparison-with-opaque-binary-blob" aria-hidden="true"></a></h3>
 <p>Can we selectively read only those columns which are required for the query in the shredded representation?</p>
 <p>Yes.</p>
 <p>Do we have to deserialize column values?</p>
@@ -348,7 +348,7 @@ rep: 	[0, 1, 0, 0, 0]
 <p>In the binary blob representation a lot of preprocessing work is required to access the right values before the query processing could even begin.</p>
 <p>The nested representation using Dremel encoding is already in a columnar format, which allows direct access to columns which are used in the query.</p>
 <p>The query execution can begin as soon as the column values are read from disk and materialized into memory.</p>
-<h3 id="limitation:-point-lookup-queries" tabindex="-1">Limitation: Point Lookup Queries <a class="direct-link" href="#limitation:-point-lookup-queries" aria-hidden="true">#</a></h3>
+<h3 id="limitation:-point-lookup-queries" tabindex="-1">Limitation: Point Lookup Queries <a class="direct-link" href="#limitation:-point-lookup-queries" aria-hidden="true"></a></h3>
 <p>A point lookup query is a highly-selective query which returns only a small set of rows.</p>
 <p>Say we want to access the 55th non-null value in the nested representation of <code>phones.phone_number</code> which also contains <code>NULL</code> values.</p>
 <p>To find the 55th non-null value we have to sequentially scan the definition levels array to skip the <code>NULL</code> values and map it to the correct physical row offset.</p>
@@ -356,7 +356,7 @@ rep: 	[0, 1, 0, 0, 0]
 <p>We cannot jump directly to the value without first counting all the preceding non-null entries.</p>
 <p>Neverthless though slightly inefficient this is not disastrous for query performance.</p>
 <p>Columnar file formats like Parquet are capable of high-level pruning using metadata statistics which reduces the linear scanning to small chunks of the stored nested data.</p>
-<h4 id="limitation:-heterogenous-column-values" tabindex="-1">Limitation: Heterogenous Column Values <a class="direct-link" href="#limitation:-heterogenous-column-values" aria-hidden="true">#</a></h4>
+<h4 id="limitation:-heterogenous-column-values" tabindex="-1">Limitation: Heterogenous Column Values <a class="direct-link" href="#limitation:-heterogenous-column-values" aria-hidden="true"></a></h4>
 <p>The data type of the leaf node of a path, and therefore a shredded column is fixed.</p>
 <p>If the value contains a different data type it is runtime error which is schema data type mismatch error.</p>
 <p>This makes the Dremel encoding unsuitable for direct use with semi-structured data like JSON where often the same path can store values as different data types depending on some context.</p>
@@ -368,7 +368,7 @@ rep: 	[0, 1, 0, 0, 0]
 <p>The first value will produce a schema mismatch error and cannot be shredded.</p>
 <p>A core limitation of shredding is that it only works with values which conforms to the defined schema.</p>
 <p>A workaround here is to write custom code which will coerce the <code>Integer</code> value 5551234 into a formatted <code>String</code> value like &quot;555-1234&quot;.</p>
-<h4 id="limitation:-no-selective-shredding-support" tabindex="-1">Limitation: No Selective Shredding Support <a class="direct-link" href="#limitation:-no-selective-shredding-support" aria-hidden="true">#</a></h4>
+<h4 id="limitation:-no-selective-shredding-support" tabindex="-1">Limitation: No Selective Shredding Support <a class="direct-link" href="#limitation:-no-selective-shredding-support" aria-hidden="true"></a></h4>
 <p>The clickstream data contains fields which are strongly-typed: <code>event</code>, <code>user_id</code> &amp; <code>timestamp</code> and also a user-generated <code>tags</code> field which is dynamically typed.</p>
 <p>Defining a rigid schema for <code>tags</code> is impractical because it removes the flexibility available to the user to add custom properties to the event log without any code changes.</p>
 <ul>
@@ -378,19 +378,19 @@ rep: 	[0, 1, 0, 0, 0]
 <p>This makes it a poor fit for shredding which requires a pre-defined schema.</p>
 <p>Therefore it is not possible to apply shredding for the <code>tags</code> field.</p>
 <p>The best option here is to treat <code>tags</code> as an opaque binary blob field in the clickstream data.</p>
-<h3 id="a-practical-implementation" tabindex="-1">A Practical Implementation <a class="direct-link" href="#a-practical-implementation" aria-hidden="true">#</a></h3>
+<h3 id="a-practical-implementation" tabindex="-1">A Practical Implementation <a class="direct-link" href="#a-practical-implementation" aria-hidden="true"></a></h3>
 <p>To see these concepts translated into code, I built <a href="https://github.com/jcsherin/denester">denester</a>, a project that implements the Dremel shredding algorithm.</p>
 <p>The core shredding implementation is roughly 300 SLOC and can be directly found in <a href="https://github.com/jcsherin/denester/blob/8d1ef7ff62627591e8952ef0b2efbcbd386de9ba/src/parser.rs#L733-L1033">src/parser.rs</a>.</p>
-<h3 id="a-parallel-shredding-implementation" tabindex="-1">A Parallel Shredding Implementation <a class="direct-link" href="#a-parallel-shredding-implementation" aria-hidden="true">#</a></h3>
+<h3 id="a-parallel-shredding-implementation" tabindex="-1">A Parallel Shredding Implementation <a class="direct-link" href="#a-parallel-shredding-implementation" aria-hidden="true"></a></h3>
 <p>To find out the upper limits of shredding performance, I built a second parallel implementation: <a href="https://github.com/jcsherin/datablok/tree/main/crates/parquet-parallel-nested">parquet-parallel-nested</a>.</p>
 <p>This version is optimized for speed and uses the Rust Arrow (<a href="https://docs.rs/arrow/latest/arrow/index.html">https://docs.rs/arrow/latest/arrow/index.html</a>) library to directly write to Parquet format.</p>
 <p>It also includes custom tooling for generating synthetic, skewed nested data for more realistic benchmarking.</p>
 <p>On a 16-core AMD Ryzen 7 Pro, it can generate, shred and write 10 million nested documents in approximately 450ms.</p>
-<h3 id="key-takeaways" tabindex="-1">Key Takeaways <a class="direct-link" href="#key-takeaways" aria-hidden="true">#</a></h3>
+<h3 id="key-takeaways" tabindex="-1">Key Takeaways <a class="direct-link" href="#key-takeaways" aria-hidden="true"></a></h3>
 <p>The genius of the Dremel encoding lies in its ability to encode the structure of nested data into two integer value arrays.</p>
 <p>This eliminates the penalty of deserialization when reading data from storage and also provide an incredibly CPU-friendly cache layout for maximizing query performance.</p>
 <p>While there are limitations and trade-offs it remains an integral technique in modern file formats like Apache Parquet for the modern data stack for analyzing nested data at scale.</p>
-<h3 id="references" tabindex="-1">References <a class="direct-link" href="#references" aria-hidden="true">#</a></h3>
+<h3 id="references" tabindex="-1">References <a class="direct-link" href="#references" aria-hidden="true"></a></h3>
 <ul>
 <li>
 <p><a href="https://research.google/pubs/pub36632/">Dremel: Interactive Analysis of Web-Scale Datasets</a> - The original 2010 paper that introduced the Dremel shredding algorithm.</p>

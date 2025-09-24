@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
+    <link rel="stylesheet" href="/css/custom.css?v=1758739505086">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,7 +33,7 @@
 
 <div class="post-title-group">
   <h1>A B+Tree Node Underflows: Merge or Borrow?</h1>
-  <time datetime="2025-08-16">16 Aug 2025</time>
+  <time datetime="2025-08-16">16-Aug-2025</time>
 </div>
 
 <p>A B+Tree's stable algorithmic performance relies on a single invariant: the path from its root to any leaf is always the same length. However, a delete operation can cause a node to underflow (falling below its minimum occupancy), triggering a rebalancing procedure to maintain this critical invariant.</p>
@@ -61,13 +61,13 @@
     </li>
   </ol>
 </nav>
-<h2 id="fixing-node-underflow" tabindex="-1">Fixing Node Underflow <a class="direct-link" href="#fixing-node-underflow" aria-hidden="true">#</a></h2>
+<h2 id="fixing-node-underflow" tabindex="-1">Fixing Node Underflow <a class="direct-link" href="#fixing-node-underflow" aria-hidden="true"></a></h2>
 <p>A node underflow happens when the used space (or occupancy) within a node falls below a minimum threshold. This is a possibility after removing an entry from the node. A viable solution is to do nothing. By doing nothing, a tree balancing procedure is never activated. The major downside though is index bloat. A failure to garbage collect the unused memory results in the nodes becoming progressively sparse as entries continue to be added and removed.</p>
 <blockquote>
 <p>In contrast, a node overflow will always trigger a tree rebalancing because it creates a new node whose reference needs to be inserted in the parent node. Here, doing nothing is not even an available option.</p>
 </blockquote>
 <p>The two basic strategies for fixing node underflow both involve merging and borrowing. They differ by which operation is executed first: a merge or a borrow. The merge-first approach prioritizes immediate garbage collection of unused space. It trades-off write speed for more efficient utilization of space. In contrast, the borrow-first approach prioritizes write throughput through redistribution of keys within existing nodes avoiding a merge whenever possible, trading-off long term space-efficiency for short-term write speed.</p>
-<h3 id="the-merge-first-approach" tabindex="-1">The Merge-First Approach <a class="direct-link" href="#the-merge-first-approach" aria-hidden="true">#</a></h3>
+<h3 id="the-merge-first-approach" tabindex="-1">The Merge-First Approach <a class="direct-link" href="#the-merge-first-approach" aria-hidden="true"></a></h3>
 <p>For a merge to work, the combined entries in the underflowing node and the target sibling node must fit within a single node. After merging two nodes into one, the memory belonging to the underflowing node can be garbage collected.</p>
 <blockquote>
 <p>An efficient implementation will avoid allocation for a new node, and reuse the memory of the sibling node.</p>
@@ -80,13 +80,13 @@
 </blockquote>
 <p>In optimistic (crab latching) concurrency, if removing an entry will cause a node to underflow it is categorized as an &quot;unsafe&quot; node. The optimistic approach is abandoned and we restart traversal back from the root. It involves acquiring a chain of exclusive latches along the search path to safely complete the operation. This significantly slower path blocks other readers and writers from accessing the latched nodes until the rebalancing operation completes.</p>
 <p>The merge-first approach compresses nodes and therefore more keys are stored within the minimum amount of nodes. This occupies less space on disk and therefore requires less read I/O to be performed. For range scans then a minimum number of nodes needs to be read from disk for a given key range. The higher node density also results in better cache locality and this further improves compute performance.</p>
-<h3 id="the-borrow-first-approach" tabindex="-1">The Borrow-First Approach <a class="direct-link" href="#the-borrow-first-approach" aria-hidden="true">#</a></h3>
+<h3 id="the-borrow-first-approach" tabindex="-1">The Borrow-First Approach <a class="direct-link" href="#the-borrow-first-approach" aria-hidden="true"></a></h3>
 <p>For borrowing to work, removing the entries from the sibling node must not result in an underflow. Since there is no change in nodes the tree rebalancing is guaranteed not to cascade and therefore completes faster. If borrowing will cause a node underflow, we fallback to merging nodes.</p>
 <p>The concurrency aspects are similar to the merge-first approach. In comparison, it is reasonable to expect that the exclusive latches held on the nodes in the search path segment, will be for a relatively shorter duration. It is still orders of magnitude slower than the optimistic approach.</p>
 <p>This approach prioritizes faster writes and predictable latency by avoiding merging nodes unless strictly necessary. The downside is that node density is lower. The range scans now require more node I/O because the same key range is now spread over a wide span of leaf nodes.</p>
-<h2 id="in-oltp-systems" tabindex="-1">In OLTP Systems <a class="direct-link" href="#in-oltp-systems" aria-hidden="true">#</a></h2>
+<h2 id="in-oltp-systems" tabindex="-1">In OLTP Systems <a class="direct-link" href="#in-oltp-systems" aria-hidden="true"></a></h2>
 <p>The discussion so far is confined to a stand-alone thread-safe B+Tree implementation. We are looking at behavior and performance at the data structure level. In major OLTP database management systems, the B+Tree index is also tightly integrated with the transaction manager, write ahead log and recovery manager. So the scope of the design decisions are not limited to the data structure level, rather how it impacts the overall systems performance.</p>
-<h3 id="background-merge-in-mysql-innodb" tabindex="-1">Background Merge In MySQL InnoDB <a class="direct-link" href="#background-merge-in-mysql-innodb" aria-hidden="true">#</a></h3>
+<h3 id="background-merge-in-mysql-innodb" tabindex="-1">Background Merge In MySQL InnoDB <a class="direct-link" href="#background-merge-in-mysql-innodb" aria-hidden="true"></a></h3>
 <p>In MYSQL's InnoDB, node underflow is handling through merging. Rather than performing an online tree balancing, it is offloaded as a separate asynchronous process in the background. The minimum occupancy of a node is configurable through the <a href="https://dev.mysql.com/doc/refman/8.4/en/index-page-merge-threshold.html">MERGE_THRESHOLD</a> parameter.</p>
 <blockquote>
 <p>If the “page-full” percentage for an index page falls below the MERGE_THRESHOLD value when a row is deleted or when a row is shortened by an UPDATE operation, InnoDB attempts to merge the index page with a neighboring index page. The default MERGE_THRESHOLD value is 50, which is the previously hard-coded value. The minimum MERGE_THRESHOLD value is 1 and the maximum value is 50.</p>
@@ -102,7 +102,7 @@
 <p>A MERGE_THRESHOLD setting that is too small could result in large data files due to an excessive amount of empty page space.</p>
 </blockquote>
 <p>This results in index bloat, which directly harms read efficiency. The same key space instead of being densely packed, is now spread over a larger number of sparse nodes, requiring more I/O for range scans, and takes up more buffer pool capacity to keep the index in memory.</p>
-<h3 id="do-nothing-strategy-in-postgresql" tabindex="-1">Do Nothing Strategy In PostgreSQL <a class="direct-link" href="#do-nothing-strategy-in-postgresql" aria-hidden="true">#</a></h3>
+<h3 id="do-nothing-strategy-in-postgresql" tabindex="-1">Do Nothing Strategy In PostgreSQL <a class="direct-link" href="#do-nothing-strategy-in-postgresql" aria-hidden="true"></a></h3>
 <p>In PostgreSQL deleting an index entry happens in two separate phases: a logical deletion followed by a physical deletion. The logical deletion creates a tombstone marker, and is lightweight. The physical deletion is more expensive, and happens in the background.</p>
 <p>When a node underflows, PostgreSQL does nothing to rectify the situation. The only time it attempts to reclaim space is when all the entries are removed from a leaf node and it becomes empty.</p>
 <blockquote>
@@ -131,7 +131,7 @@ to detect and then recover from concurrent deletions (which are rather
 like concurrent page splits to searchers).</p>
 </blockquote>
 <p><a href="https://github.com/postgres/postgres/blob/master/src/backend/access/nbtree/README">Source</a>: <code>src/backend/access/nbtree/README</code></p>
-<h2 id="key-takeaways" tabindex="-1">Key Takeaways <a class="direct-link" href="#key-takeaways" aria-hidden="true">#</a></h2>
+<h2 id="key-takeaways" tabindex="-1">Key Takeaways <a class="direct-link" href="#key-takeaways" aria-hidden="true"></a></h2>
 <p>Fixing a node underflow is presented as a binary choice between a merge-first or borrow-first approach for tree rebalancing at the data structure level. For a concurrent implementation, when a node underflow happens the pessimistic (slower) path is preferred for correctness and protecting the integrity of the B+Tree. For non-OLTP use cases, neither merge-first nor borrow-first is inherently better than the other.</p>
 <p>In MySQL the rebalancing is offline, and happens in the background. While in PostgreSQL, rebalancing is not undertaken for node underflows. The priority is higher concurrency by avoiding rebalancing. The trade-off in both systems is accumulating index bloat. The burden of managing index bloat now falls upon the operator.</p>
 <p>Two brilliant lessons we can learn from these OLTP systems to improve concurrency are: offline (asynchronous) rebalancing, and separating the deletion of entries, and nodes into logical and physical phases.</p>

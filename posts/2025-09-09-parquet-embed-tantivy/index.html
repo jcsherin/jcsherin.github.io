@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
+    <link rel="stylesheet" href="/css/custom.css?v=1758739505086">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,7 +48,7 @@
 
 <div class="post-title-group">
   <h1>Faster LIKE Queries In Parquet Without an External Index</h1>
-  <time datetime="2025-09-02">02 Sep 2025</time>
+  <time datetime="2025-09-02">02-Sep-2025</time>
 </div>
 
 <p>The query:</p>
@@ -83,7 +83,7 @@ Elapsed 11.176 seconds.
 <pre class="language-text"><code class="language-text">RUST_LOG=trace,tantivy=off cargo run --bin parquet_gen -- -t 50000000</code></pre>
 <p>2.5 GB on disk.</p>
 <pre class="language-text"><code class="language-text">❯ ls -l output/titles.parquet<br>-rw-r--r--  1 jcsherin  staff  2701649192 14 Sep 12:40 output/titles.parquet</code></pre>
-<h2 id="1-million-rows" tabindex="-1">1 million rows <a class="direct-link" href="#1-million-rows" aria-hidden="true">#</a></h2>
+<h2 id="1-million-rows" tabindex="-1">1 million rows <a class="direct-link" href="#1-million-rows" aria-hidden="true"></a></h2>
 <pre class="language-text"><code class="language-text">-rw-r--r--  1 jcsherin  staff    96M 14 Sep 14:22 output/titles_with_fts_index.parquet<br>-rw-r--r--  1 jcsherin  staff    52M 14 Sep 14:22 output/titles.parquet</code></pre>
 <p>Histogram for</p>
 <pre><code>&gt; SELECT
@@ -118,7 +118,7 @@ FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles.parquet';
 1 row(s) fetched.
 Elapsed 1.652 seconds.
 </code></pre>
-<h2 id="10-million-rows" tabindex="-1">10 million rows <a class="direct-link" href="#10-million-rows" aria-hidden="true">#</a></h2>
+<h2 id="10-million-rows" tabindex="-1">10 million rows <a class="direct-link" href="#10-million-rows" aria-hidden="true"></a></h2>
 <pre><code>-rw-r--r--@ 1 jcsherin  staff   926M 14 Sep 14:32 output/titles_with_fts_index.parquet
 -rw-r--r--@ 1 jcsherin  staff   515M 14 Sep 14:31 output/titles.parquet
 </code></pre>
