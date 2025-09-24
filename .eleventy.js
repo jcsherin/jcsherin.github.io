@@ -76,6 +76,14 @@ module.exports = function (eleventyConfig) {
     }),
     slugify: eleventyConfig.getFilter('slug'),
   });
+
+  eleventyConfig.addPairedShortcode("figure", (caption, src, alt = "") => {
+    return `<figure>
+              <img src="${src}" alt="${alt}">
+              <figcaption>${caption.trim()}</figcaption>
+            </figure>`;
+  });
+
   eleventyConfig.setLibrary('md', markdownLibrary);
 
   // Override Browsersync defaults (used only with --serve)
