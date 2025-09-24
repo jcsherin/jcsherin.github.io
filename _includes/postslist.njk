@@ -1,14 +1,11 @@
 <div class="post-list">
   {% for post in postslist %}
     <article class="post-list-item">
-      <h2 class="post-list-title">
-        <a href="{{ post.url | url }}">{{ post.data.title }}</a>
-      </h2>
       <div class="post-list-meta">
         <time datetime="{{ post.date | htmlDateString }}">{{ post.date | readableDate }}</time>
-        {% if post.data.draft %}
-        <span class="draft-label">Draft: Work In Progress</span>
-        {% endif %}
+        <h2 class="post-list-title">
+          <a href="{{ post.url | url }}">{{ post.data.title }}</a>
+        </h2>
       </div>
       {% if post.data.summary %}
         <p class="post-list-summary">

@@ -34,6 +34,10 @@ h6 {
 
 /* --- End Typographic Scale --- */
 
+/* --- 
+Components
+--- */
+
 .post-title-group > h1 {
   margin-bottom: 0;
 }
@@ -120,6 +124,27 @@ blockquote {
   list-style-type: none;
 }
 
+.post-list-item {
+  margin-bottom: 2rem;
+}
+
+.post-list-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 1ch;
+  margin-bottom: 0.5rem;
+}
+
+.post-list-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* --- 
+Layout
+--- */
+
 .page-wrapper {
   max-width: 70rem;
   margin-left: auto;
@@ -169,6 +194,10 @@ pre {
   font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
+/* --- 
+Media Queries
+--- */
+
 @media (max-width: 425px) {
   body {
     font-size: 1.125rem;
@@ -206,5 +235,11 @@ pre {
   .post-title-group > time {
     margin-bottom: 2em;
     display: block;
+  }
+
+  .post-list-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
 }

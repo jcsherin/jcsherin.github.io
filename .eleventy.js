@@ -50,16 +50,22 @@ module.exports = function (eleventyConfig) {
     return Math.min.apply(null, numbers);
   });
 
-  // Create a collection of posts, excluding drafts in production
-  eleventyConfig.addCollection('posts', function (collectionApi) {
+  eleventyConfig.addCollection('published_posts', function (collectionApi) {
+    return collectionApi
+      .getFilteredByTag('posts')
+      .filter((item) => !item.data.draft)
+      .reverse();
+  });
+
+  eleventyConfig.addCollection('draft_posts', function (collectionApi) {
     const isProduction = process.env.ELEVENTY_ENV === 'production';
-    const posts = collectionApi.getFilteredByTag('posts');
-
     if (isProduction) {
-      return posts.filter((item) => !item.data.draft);
+      return [];
     }
-
-    return posts;
+    return collectionApi
+      .getFilteredByTag('posts')
+      .filter((item) => item.data.draft)
+      .reverse();
   });
 
   // Customize Markdown library and settings:

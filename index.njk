@@ -5,5 +5,11 @@ eleventyNavigation:
   order: 1
 ---
 
-{% set postslist = collections.posts | reverse %}
+{% set postslist = collections.published_posts %}
 {% include "postslist.njk" %}
+
+{% if collections.draft_posts.length %}
+  <h2>Drafts</h2>
+  {% set postslist = collections.draft_posts %}
+  {% include "postslist.njk" %}
+{% endif %}
