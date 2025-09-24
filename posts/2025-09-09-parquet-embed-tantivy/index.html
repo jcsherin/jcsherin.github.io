@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758642824284">
+    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
     <div class="page-wrapper">
       <header>
         <hgroup>
-        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p><a href="/">Jacob&#39;s blog</a></p>
         <p>On database building blocks.</p>
       </hgroup>
         <ul class="nav">
@@ -46,9 +46,10 @@
   </aside>
 
 
-<h1>Faster LIKE Queries In Parquet Without an External Index</h1>
-
-<time datetime="2025-09-02">02 Sep 2025</time>
+<div class="post-title-group">
+  <h1>Faster LIKE Queries In Parquet Without an External Index</h1>
+  <time datetime="2025-09-02">02 Sep 2025</time>
+</div>
 
 <p>The query:</p>
 <pre class="language-sql"><code class="language-sql"><span class="token keyword">SELECT</span> <span class="token operator">*</span><br>  <span class="token keyword">FROM</span> <span class="token string">'foo.parquet'</span><br> <span class="token keyword">WHERE</span> title <span class="token operator">LIKE</span> <span class="token string">'%Diary%'</span><span class="token punctuation">;</span></code></pre>
@@ -154,6 +155,9 @@ FROM '/Users/jcsherin/Projects/rusty-doodles/output/titles_with_fts_index.parque
 Elapsed 3.867 seconds.
 </code></pre>
 
+<hr>
+<ul><li>Next: <a href="/posts/test-page/">Test Page: All Markdown Patterns</a></li><li>Previous: <a href="/posts/2025-09-01-arrow-shredding-pipeline-perf/">Performance Tuning a Nested Data Generator for Parquet</a></li>
+</ul>
 
       </main>
 

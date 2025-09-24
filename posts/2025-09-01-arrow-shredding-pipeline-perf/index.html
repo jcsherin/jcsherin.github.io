@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758642824284">
+    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
     <div class="page-wrapper">
       <header>
         <hgroup>
-        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p><a href="/">Jacob&#39;s blog</a></p>
         <p>On database building blocks.</p>
       </hgroup>
         <ul class="nav">
@@ -46,9 +46,10 @@
   </aside>
 
 
-<h1>Performance Tuning a Nested Data Generator for Parquet</h1>
-
-<time datetime="2025-09-02">02 Sep 2025</time>
+<div class="post-title-group">
+  <h1>Performance Tuning a Nested Data Generator for Parquet</h1>
+  <time datetime="2025-09-02">02 Sep 2025</time>
+</div>
 
 <p>Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution of shredded data. For this, I implemented a data generator which follows a <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipfian-like</a> distribution. The generated data is staged in-memory as <a href="https://arrow.apache.org/rust/parquet/arrow/index.html">Arrow RecordBatches</a>, and then written to disk as Parquet files.</p>
 <p>The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~533ms (6x speedup).</p>
@@ -261,6 +262,9 @@
 <p><img src="img/performance_heatmap_10M_total_time_ms.png" alt="Total Runtime Analysis"></p>
 <p>To recap, future optimizations should target reducing the Rayon threadpool overhead to improve single-core efficiency. The current pipeline achieves a high-level of parallelism by being able to fully utilize 11 out of 16 available cores. There is close to ~3X headroom remaining for improving the current ~2.6 million records/per/core throughput, to a maximum possible ~7 million records/per/core throughput. Since the bottleneck changes after each optimization, it is therefore important to continue with a data-driven approach.</p>
 
+<hr>
+<ul><li>Next: <a href="/posts/2025-09-09-parquet-embed-tantivy/">Faster LIKE Queries In Parquet Without an External Index</a></li><li>Previous: <a href="/posts/2025-08-21-bplustree-concurrency-challenges/">Practical Hurdles In Crab Latching Concurrency</a></li>
+</ul>
 
       </main>
 

@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758642824284">
+    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
     <div class="page-wrapper">
       <header>
         <hgroup>
-        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p><a href="/">Jacob&#39;s blog</a></p>
         <p>On database building blocks.</p>
       </hgroup>
         <ul class="nav">
@@ -46,9 +46,10 @@
   </aside>
 
 
-<h1>Practical Hurdles In Crab Latching Concurrency</h1>
-
-<time datetime="2025-08-21">21 Aug 2025</time>
+<div class="post-title-group">
+  <h1>Practical Hurdles In Crab Latching Concurrency</h1>
+  <time datetime="2025-08-21">21 Aug 2025</time>
+</div>
 
 <p>An implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring during concurrent operations. This is distinct from deadlock detection and resolution which is a runtime mechanism.</p>
 <p>Deadlock avoidance is guaranteed by design through careful programming of critical sections in the code. Any mistakes here will result in deadlocks. Even worse, a data race which silently corrupts the index.</p>
@@ -146,6 +147,9 @@ require tens of instructions only, usually with no additional cache faults since
 <p>If latches acquisition is not crafted carefully in the iterator code, the following situation creates a race condition which is very hard to even detect, or reproduce.</p>
 <p>The fix here is to correctly implement crab latching in the iterator code. A shared lock should not be released before <code>TrySharedLock()</code> is attempted on the sibling node. Doing so results in race conditions which are impossible to track down. This requires careful programming discipline.</p>
 
+<hr>
+<ul><li>Next: <a href="/posts/2025-09-01-arrow-shredding-pipeline-perf/">Performance Tuning a Nested Data Generator for Parquet</a></li><li>Previous: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li>
+</ul>
 
       </main>
 

@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758642824284">
+    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
     <div class="page-wrapper">
       <header>
         <hgroup>
-        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p><a href="/">Jacob&#39;s blog</a></p>
         <p>On database building blocks.</p>
       </hgroup>
         <ul class="nav">
@@ -31,9 +31,10 @@
       <main class="tmpl-post">
         
 
-<h1>A B+Tree Node Underflows: Merge or Borrow?</h1>
-
-<time datetime="2025-08-16">16 Aug 2025</time>
+<div class="post-title-group">
+  <h1>A B+Tree Node Underflows: Merge or Borrow?</h1>
+  <time datetime="2025-08-16">16 Aug 2025</time>
+</div>
 
 <p>A B+Tree's stable algorithmic performance relies on a single invariant: the path from its root to any leaf is always the same length. However, a delete operation can cause a node to underflow (falling below its minimum occupancy), triggering a rebalancing procedure to maintain this critical invariant.</p>
 <p>Modern B+Trees use fast, optimistic latching protocols which operate under the assumption that rebalancing happens rarely. The mere possibility of an underflow can force the rebalancing into the slow, pessimistic path, acquiring exclusive locks that stall other operations.</p>
@@ -136,7 +137,7 @@ like concurrent page splits to searchers).</p>
 <p>Two brilliant lessons we can learn from these OLTP systems to improve concurrency are: offline (asynchronous) rebalancing, and separating the deletion of entries, and nodes into logical and physical phases.</p>
 
 <hr>
-<ul><li>Next: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li>
+<ul><li>Next: <a href="/posts/2025-08-18-bplustree-struct-hack/">Cache-Friendly B+Tree Nodes With Dynamic Fanout</a></li><li>Previous: <a href="/posts/shredding/">Working title</a></li>
 </ul>
 
       </main>

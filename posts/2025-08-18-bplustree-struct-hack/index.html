@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758642824284">
+    <link rel="stylesheet" href="/css/custom.css?v=1758719081582">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,7 +19,7 @@
     <div class="page-wrapper">
       <header>
         <hgroup>
-        <h3 class="home"><a href="/">Jacob&#39;s blog</a></h3>
+        <p><a href="/">Jacob&#39;s blog</a></p>
         <p>On database building blocks.</p>
       </hgroup>
         <ul class="nav">
@@ -31,9 +31,10 @@
       <main class="tmpl-post">
         
 
-<h1>Cache-Friendly B+Tree Nodes With Dynamic Fanout</h1>
-
-<time datetime="2025-08-18">18 Aug 2025</time>
+<div class="post-title-group">
+  <h1>Cache-Friendly B+Tree Nodes With Dynamic Fanout</h1>
+  <time datetime="2025-08-18">18 Aug 2025</time>
+</div>
 
 <p>For a high-performance B+Tree, the memory layout of each node must be a single contiguous block. This improves locality of reference, increasing the likelihood that the node's contents reside in the CPU cache.</p>
 <p>In C++, achieving this means forgoing the use of <code>std::vector</code>, as it introduces a layer of indirection through a separate memory allocation. The solution to this problem though inevitably increases the implementation complexity and is mired with hidden drawbacks. Nevertheless, this is still a necessary trade-off for unlocking high performance.</p>
@@ -118,7 +119,7 @@
 <p>However, this fine-grained control comes at a steep cost. We must abandon idiomatic C++, manually manage memory, give up inheritance, and enforce hidden data type constraints. This is the fundamental trade-off: we sacrifice simplicity and safety for raw performance.</p>
 
 <hr>
-<ul><li>Previous: <a href="/posts/2025-08-16-bplustree-compare-borrow-merge/">A B+Tree Node Underflows: Merge or Borrow?</a></li>
+<ul><li>Next: <a href="/posts/2025-08-21-bplustree-concurrency-challenges/">Practical Hurdles In Crab Latching Concurrency</a></li><li>Previous: <a href="/posts/2025-08-16-bplustree-compare-borrow-merge/">A B+Tree Node Underflows: Merge or Borrow?</a></li>
 </ul>
 
       </main>
