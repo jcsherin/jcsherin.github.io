@@ -25,7 +25,7 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPlugin(pluginNavigation);
 
   eleventyConfig.addFilter('readableDate', (dateObj) => {
-    return DateTime.fromJSDate(dateObj, { zone: 'utc' }).toFormat('dd LLL yyyy');
+    return DateTime.fromJSDate(dateObj, { zone: 'utc' }).toFormat('dd-LLL-yyyy');
   });
 
   // https://html.spec.whatwg.org/multipage/common-microsyntaxes.html#valid-date-string
@@ -77,8 +77,8 @@ module.exports = function (eleventyConfig) {
     permalink: markdownItAnchor.permalink.ariaHidden({
       placement: 'after',
       class: 'direct-link',
-      symbol: '#',
-      level: [1, 2, 3, 4],
+      symbol: '',
+      level: [1, 2, 3, 4, 5, 6],
     }),
     slugify: eleventyConfig.getFilter('slug'),
   });

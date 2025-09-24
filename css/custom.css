@@ -18,25 +18,28 @@ h1 {
 } /* 32px */
 h2 {
   font-size: 1.75rem;
+  margin-top: 2.5rem;
 } /* 28px */
 h3 {
   font-size: 1.5rem;
+  margin-top: 2rem;
 } /* 24px */
 h4 {
   font-size: 1.25rem;
+  margin-top: 1.75rem;
 } /* 20px */
 h5 {
   font-size: 1.125rem;
+  margin-top: 1.5rem;
 } /* 18px */
 h6 {
   font-size: 1.125rem;
+  margin-top: 1.5rem;
 } /* 18px */
 
 /* --- End Typographic Scale --- */
 
-/* --- 
-Components
---- */
+/* --- Components --- */
 
 .post-title-group > h1 {
   margin-bottom: 0;
@@ -131,19 +134,31 @@ blockquote {
 .post-list-meta {
   display: flex;
   align-items: baseline;
-  gap: 1ch;
+  gap: 3ch;
   margin-bottom: 0.5rem;
+}
+
+.post-list-meta time {
+  white-space: nowrap; /* Prevent date from wrapping */
+  flex-shrink: 0; /* Prevent date from shrinking */
+  display: block; /* Treat as block-level flex item */
+  flex-basis: auto; /* Let content determine initial size */
 }
 
 .post-list-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
+  flex-grow: 1; /* Allow it to grow */
+  flex-shrink: 1; /* Allow it to shrink */
+  flex-basis: 0; /* Shrink to 0 before growing */
 }
 
-/* --- 
-Layout
---- */
+.post-list-summary {
+  font-size: 1.125rem;
+}
+
+/* --- Layout --- */
 
 .page-wrapper {
   max-width: 70rem;
@@ -157,7 +172,7 @@ header {
   justify-content: space-between;
   align-items: flex-start;
   padding-top: 1rem;
-  padding-bottom: 1rem;
+  padding-bottom: 2.5rem;
 }
 
 header .nav {
@@ -168,6 +183,10 @@ header .nav {
 header .nav li {
   list-style-type: none;
   margin-left: 1em;
+}
+
+.nav-item-active {
+  font-weight: 700;
 }
 
 hgroup h3 {
@@ -194,9 +213,7 @@ pre {
   font-family: 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
-/* --- 
-Media Queries
---- */
+/* --- Media Queries --- */
 
 @media (max-width: 425px) {
   body {
@@ -210,7 +227,7 @@ Media Queries
   header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.25rem;
+    gap: 1rem;
   }
 
   header .nav {
@@ -226,6 +243,24 @@ Media Queries
 
   h1 {
     margin-top: 1rem;
+    font-size: 1.75rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
+
+  h4 {
+    font-size: 1.125rem;
+  }
+
+  h5,
+  h6 {
+    font-size: 1rem;
   }
 
   .post-title-group {
@@ -241,5 +276,9 @@ Media Queries
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
+  }
+
+  pre[class*='language-'] {
+    font-size: 0.8rem;
   }
 }

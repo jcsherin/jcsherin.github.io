@@ -43,8 +43,6 @@ This page is a test bed for all the markdown and HTML elements used in this blog
   </ol>
 </nav>
 
----
-
 ## Headings
 
 This is a Heading 2 (the post title is H1).
@@ -64,8 +62,6 @@ This is a Heading 5.
 ###### Heading 6
 
 This is a Heading 6.
-
----
 
 ## Paragraphs and Text Formatting
 

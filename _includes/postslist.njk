@@ -3,9 +3,9 @@
     <article class="post-list-item">
       <div class="post-list-meta">
         <time datetime="{{ post.date | htmlDateString }}">{{ post.date | readableDate }}</time>
-        <h2 class="post-list-title">
+        <p class="post-list-title">
           <a href="{{ post.url | url }}">{{ post.data.title }}</a>
-        </h2>
+        </p>
       </div>
       {% if post.data.summary %}
         <p class="post-list-summary">
