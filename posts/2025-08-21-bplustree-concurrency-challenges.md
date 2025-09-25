@@ -2,9 +2,9 @@
 title: 'Practical Hurdles In Crab Latching Concurrency'
 date: 2025-08-21
 summary: >
-  Concurrency models (not limited to crab latching) prove that concurrent operations on a B+Tree index are possible with fine-grained latching. This contributes significantly to performance at the same time guaranteeing correctness and safety. However real-world implementations have to bridge a gap between the model and implementing useful features which directly conflicts with its safety properties. For instance, a naive bi-directional range scan implementation will introduce data races and create deadlocks.
+  For high performance, concurrency protocols must keep critical sections short by holding node latches for a minimal duration. For correctness, these protocols (like crab latching) enforce a strict order for acquiring and releasing latches. However, features like bi-directional range scans conflict with this strict ordering and are not covered by the base protocols. Supporting them requires workarounds to maintain safety without sacrificing performance, but this often comes at the cost of a more complex API.
 layout: layouts/post.njk
-draft: true
+draft: false
 ---
 
 An implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring during concurrent operations. This is distinct from deadlock detection and resolution which is a runtime mechanism.
