@@ -7,9 +7,24 @@ layout: layouts/post.njk
 draft: true
 ---
 
+I built [a CLI for procedurally generating nested Parquet data] where the values follow a [Zipfian-like] distribution.
+
+[a CLI for procedurally generating nested Parquet data]: https://github.com/jcsherin/datablok/blob/main/crates/parquet-nested-parallel/README.md
+[Zipfian-like]: https://en.wikipedia.org/wiki/Zipf%27s_law
+
+```text
+
+  ┌─────────────────┬───────┬──────────────────┬───────────────────────────┐
+  │ Version         │ Time  │ Total Throughput │ Avg. Per-Core Throughput* │
+  ├─────────────────┼───────┼──────────────────┼───────────────────────────┤
+  │ Initial Version │ 3.7s  │ ~2.70 M rows/s   │ ~0.17 M rows/s            │
+  │ Final Version   │ 0.44s │ ~22.73 M rows/s  │ ~1.42 M rows/s            │
+  └─────────────────┴───────┴──────────────────┴───────────────────────────┘
+
+```
+
 Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution of shredded data. For this, I implemented a data generator which follows a [Zipfian-like] distribution. The generated data is staged in-memory as [Arrow RecordBatches], and then written to disk as Parquet files.
 
-[Zipfian-like]: https://en.wikipedia.org/wiki/Zipf%27s_law
 [Arrow RecordBatches]: https://arrow.apache.org/rust/parquet/arrow/index.html
 
 The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~533ms (6x speedup).
