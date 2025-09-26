@@ -18,6 +18,7 @@ module.exports = function (eleventyConfig) {
 
   eleventyConfig.addPassthroughCopy('posts/2025-07-23-shredding-nested-data-in-parquet/img');
   eleventyConfig.addPassthroughCopy('posts/2025-09-01-arrow-shredding-pipeline-perf/img');
+  eleventyConfig.addPassthroughCopy('posts/2025-08-21-bplustree-concurrency-challenges/img');
 
   // Add plugins
   eleventyConfig.addPlugin(pluginRss);

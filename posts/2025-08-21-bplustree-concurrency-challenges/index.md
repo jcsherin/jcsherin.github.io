@@ -25,9 +25,9 @@ Therefore, an implementation has to come up with practical methods to avoid seri
     <li>
       <a href="#an-overview-of-crab-latching">An Overview Of Crab Latching</a>
       <ul>
-        <li><a href="#how-do-deadlocks-happen">How Do Deadlocks Happen?</a></li>
-        <li><a href="#how-are-deadlocks-prevented">How Are Deadlocks Prevented?</a></li>
-        <li><a href="#efficient-fine-grained-crab-latching">Efficient Fine-Grained Crab Latching</a></li>
+        <li><a href="#the-classic-deadlock-scenario">The Classic Deadlock Scenario</a></li>
+        <li><a href="#crab-latching-is-efficient">Crab Latching is Efficient</a></li>
+        <li><a href="#optimistic-concurrency">Optimistic Concurrency</a></li>
       </ul>
     </li>
     <li>
@@ -44,37 +44,46 @@ Therefore, an implementation has to come up with practical methods to avoid seri
 
 ## An Overview Of Crab Latching
 
+A thread can acquire either a shared read-only latch (s-latch) or an exclusive write latch (x-latch). A thread holding an x-latch blocks other threads until it completes its mutation of the node. Multiple reader threads holding an s-latch can concurrently access a node but are prevented from mutating the node itself. This is a basic single writer, multiple readers concurrency pattern.
+
+In the crab latching protocol, during traversal a thread holding a latch on a B+Tree node attempts to acquire a latch on the next node. It must release the latch on the previous node only after it has acquired the latch on the next node. The name likely comes from how this mimics the latching movement of a crab.
+
+### The Classic Deadlock Scenario
+
+A deadlock occurs when two threads attempt to crab latch going in opposing directions. Consider a simple scenario with a parent Node-P and a child Node-C:
+
+1. Thread-1 traverses _top-down_ from Node-P to Node-C to insert a new element.
+2. Thread-2 moves _bottom-up_, from Node-C to update a pivot key in its parent Node-P.
+
+Remember that in crab latching protocol, a thread has to first acquire the latch on the next node before it can release the existing latch it holds on the current node. Also, an x-latch allows access to only a single writer thread. Therefore both write operations will block each other indefinitely as they cross paths, creating a deadlock as shown below.
+
+{% figure "img/btree-deadlock-wait.svg", "circular wait deadlock" %}
+Figure 1. Thread-1 has acquired an exclusive write latch (x-latch) on Node-P and it is blocked waiting to acquire an x-latch on Node-C. Thread-2 already holds an x-latch on Node-C and it is blocked waiting to acquire an x-latch on Node P.
+{% endfigure %}
+
+A simple rule prevents this situation: acquire latches moving in only one direction. Since all B+Tree operations begin with a top-down traversals, enforcing a top-down order is the natural way to prevent deadlocks from occurring by design.
+
+### Crab Latching is Efficient
+
 > Latches are held only during a critical section, that is, while a data structure is read or updated. Deadlocks are avoided by appropriate coding disciplines, for example, requesting multiple latches in carefully designed sequences. Deadlock resolution requires a facility to rollback prior actions, whereas deadlock avoidance does not. Thus, deadlock avoidance is more appropriate for latches, which are designed for minimal overhead
 > and maximal performance and scalability. Latch acquisition and release may
 > require tens of instructions only, usually with no additional cache faults since a latch can be embedded in the data structure it protects.
 >
-> Goetz Graefe, "A Survey of B-Tree Locking Techniques" (2010)
+> Goetz Graefe, [A Survey of B-Tree Locking Techniques (2010)]
 
-[Graefe (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
+[A Survey of B-Tree Locking Techniques (2010)]: https://15721.courses.cs.cmu.edu/spring2016/papers/a16-graefe.pdf
 
-### How Do Deadlocks Happen?
+As Graefe notes, latches are designed for performance. By embedding a latch within each B+Tree node and holding it only for the brief duration of the operation, the protocol achieves fine-grained latching. This approach minimizes contention between threads and maximizes throughput for concurrent operations.
 
-(`Thread 1`) Holds an exclusive (write) latch on `Node P`. It now wants to acquire an exclusive latch on it's child `Node C` for inserting an element.
+### Optimistic Concurrency
 
-(`Thread 2`) Already holds an exclusive latch on `Node C`. It is waiting to acquire an exclusive latch on it's parent `Node P`, so that the pivot key can be updated.
+Crab latching is a pessimistic concurrency protocol. During a write, a node may split or merge, cascading changes up to the root. In this approach, a thread acquires an x-latch along the entire path from root to leaf. A single writer holding the root's x-latch blocks all other threads, effectively reducing concurrency to sequential execution.
 
-This creates a deadlock, where neither threads can make any progress. This could have been prevented if a strict ordering of the direction in which latches are acquired existed. A top-down ordering is better because all traversals begin at the root node to reach a leaf node.
+The optimistic approach takes advantage of the fact that, in practice, node splits and merges are rare. In this "fast path", the writer thread traverses the tree using s-latches, only upgrading to an x-latch on the final leaf node to perform the modification.
 
-### How Are Deadlocks Prevented?
+This requires minimal overhead to check if a child node is "safe" or "unsafe". A node is unsafe if the write will cause a split or merge. If it encounters an unsafe node, the thread abandons the optimistic approach. It upgrades its latch on the parent to an x-latch and then acquires x-latches for the rest of the path segment. This "slow path" ensures rebalancing operations can proceed safely.
 
-The ordering requirement implies that only a parent node can acquire an exclusive latch on a child node. The implementation of `Thread 2` becomes an invalid state and should not be possible. So instead the exclusive latch on `Node P` is never released when traversing down to the child `Node C`. Since only one writer can hold the exclusive (write) latch at a time, this will not create a deadlock with `Thread 1`. The first thread to acquire the exclusive latch on `Node P`, will block the second thread.
-
-Even though latches are light-weight and held only for a short duration of time, it is not a good idea to hold latches which are strictly not necessary. It will create contention in hot paths which is bad news for throughput. This is where the crab latching protocol shines with its efficiency.
-
-### Efficient Fine-Grained Crab Latching
-
-In crab latching, a child node is considered "unsafe" if the current operation will cause it to either split (overflow) or merge (underflow). An "unsafe" node may also end up modifying it's parent like `Thread 2`. So exclusive latches are held for the entire path segment, which contains "unsafe" nodes.
-
-But we know that a node split or merge is going to be rare. More often an insert or delete will be local to a leaf node and does not have cascading changes which recurse back to the root node. Such nodes are considered to be "safe"
-
-In the common scenario, when crab latching sees that a child node is "safe", it first acquires a shared (read-only) latch on the child node and then release it's shared (read-only) latch on the parent. Hence the "crab latching" terminology. A shared latch does not block other threads. An exclusive latch is only acquired on the leaf node at the time of an insertion or deletion.
-
-This fine-grained latching is efficient and allows other concurrent readers and only makes writers to wait, improving overall throughput. This is the optimistic approach which assumes will happen in the general case. We fallback to the pessimistic approach only if leaf node will underflow or overflow after an operation.
+A notable benefit, even in the slow path, is that the x-latch path segment may be held on only a subsection of the tree, not extending all the way back to the root. This allows other operations to concurrently access different parts of the B+Tree.
 
 ## Concurrent Index Scans
 
