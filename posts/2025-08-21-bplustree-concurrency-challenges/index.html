@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758984156359">
+    <link rel="stylesheet" href="/css/custom.css?v=1758984214498">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -30,6 +30,21 @@
 
       <main class="tmpl-post">
         
+  <style>
+    .draft-notice {
+      padding: 0.75rem 0; /* Adds needed spacing */      
+      border-block: 2px dashed; 
+      font-style: italic;
+    }
+    .draft-notice p {
+      margin: 0; /* Removes default paragraph margin */
+    }
+  </style>
+
+  <aside class="draft-notice">
+    <p>This is a draft preview. To publish, remove <code>draft: true</code> from the front matter.</p>
+  </aside>
+
 
 <div class="post-title-group">
   <h1>Practical Hurdles In Crab Latching Concurrency</h1>
