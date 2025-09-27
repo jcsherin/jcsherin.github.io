@@ -4,7 +4,7 @@ date: 2025-08-21
 summary: >
   For high performance, concurrency protocols must keep critical sections short by holding node latches for a minimal duration. For correctness, these protocols (like crab latching) enforce a strict order for acquiring and releasing latches. However, features like bi-directional range scans conflict with this strict ordering and are not covered by the base protocols. Supporting them requires workarounds to maintain safety without sacrificing performance, but this often comes at the cost of a more complex API.
 layout: layouts/post.njk
-draft: false
+draft: true
 ---
 
 An implementation of the crab latching protocol enforces a strict top-down order for acquiring latches on a B+Tree node. This avoid deadlocks from ever occurring during concurrent operations. This is distinct from deadlock detection and resolution which is a runtime mechanism.
