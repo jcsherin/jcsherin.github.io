@@ -1,3 +1,7 @@
+html {
+  overflow-y: scroll;
+}
+
 /* --- Typographic Scale & Spacing --- */
 
 h1,
@@ -127,6 +131,12 @@ blockquote {
   list-style-type: none;
 }
 
+.toc a {
+  display: inline-block;
+  padding: 0.25rem;
+  margin: 0 -0.25rem;
+}
+
 .post-list-item {
   margin-bottom: 2rem;
 }
@@ -204,7 +214,7 @@ p {
 body {
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
   font-size: 1.25rem;
-  font-weight: 300;
+  /*font-weight: 300;*/
   line-height: 1.4;
 }
 

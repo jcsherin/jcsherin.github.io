@@ -7,7 +7,7 @@
     <meta name="description" content="On database building blocks.">
     <meta name="generator" content="Eleventy v1.0.1">
     <link rel="stylesheet" href="/css/prism-okaidia.css">
-    <link rel="stylesheet" href="/css/custom.css?v=1758739505086">
+    <link rel="stylesheet" href="/css/custom.css?v=1758984156359">
     <link rel="alternate" href="/feed/feed.xml" type="application/atom+xml" title="">
     <link rel="alternate" href="/feed/feed.json" type="application/json" title="">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -51,6 +51,8 @@
   <time datetime="2025-09-02">02-Sep-2025</time>
 </div>
 
+<p>I built <a href="https://github.com/jcsherin/datablok/blob/main/crates/parquet-nested-parallel/README.md">a CLI for procedurally generating nested Parquet data</a> where the values follow a <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipfian-like</a> distribution.</p>
+<pre class="language-text"><code class="language-text"><br>  ┌─────────────────┬───────┬──────────────────┬───────────────────────────┐<br>  │ Version         │ Time  │ Total Throughput │ Avg. Per-Core Throughput* │<br>  ├─────────────────┼───────┼──────────────────┼───────────────────────────┤<br>  │ Initial Version │ 3.7s  │ ~2.70 M rows/s   │ ~0.17 M rows/s            │<br>  │ Final Version   │ 0.44s │ ~22.73 M rows/s  │ ~1.42 M rows/s            │<br>  └─────────────────┴───────┴──────────────────┴───────────────────────────┘<br></code></pre>
 <p>Lately, I've been poking around record shredding and needed a dataset of nested data structures for tracing query execution of shredded data. For this, I implemented a data generator which follows a <a href="https://en.wikipedia.org/wiki/Zipf%27s_law">Zipfian-like</a> distribution. The generated data is staged in-memory as <a href="https://arrow.apache.org/rust/parquet/arrow/index.html">Arrow RecordBatches</a>, and then written to disk as Parquet files.</p>
 <p>The baseline version I wrote is a simple pipeline using Rust MPSC which connects multiple data generation (producer) threads to a single Parquet writer (consumer) thread. For a nested dataset of 10 million rows, it ~3.7s to complete. In this post, we'll see how a sequence of performance optimizations, reduced the total runtime to ~533ms (6x speedup).</p>
 <p><img src="img/hyperfine_trend_plot.png" alt="Performance Trend Across Runs"></p>
